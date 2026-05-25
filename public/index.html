@@ -1,79 +1,148 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-950">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logistics Gateway — Unified Scandinavian Fulfillment Engine</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <title>Logistics Gateway v1 | Unified Scandinavian Logistics API</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        :root {
+            --primary: #2563eb;
+            --bg: #f8fafc;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--bg);
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        header {
+            text-align: center;
+            padding: 4rem 0;
+            background: white;
+            border-bottom: 1px solid var(--border);
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle {
+            font-size: 1.25rem;
+            color: #64748b;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+        .card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            margin-top: 0;
+            color: var(--primary);
+        }
+        .api-section {
+            margin-top: 4rem;
+        }
+        .api-route {
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: monospace;
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        .method {
+            font-weight: bold;
+            color: #38bdf8;
+        }
+        footer {
+            text-align: center;
+            padding: 4rem 0;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        .btn {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 1rem;
+        }
     </style>
 </head>
-<body class="min-h-full text-slate-100 flex flex-col bg-slate-950 selection:bg-indigo-500/30 selection:text-indigo-200">
+<body>
 
-    <header class="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/50 backdrop-blur px-6 sticky top-0 z-50">
-        <div class="flex items-center gap-4">
-            <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 font-bold text-white shadow-md shadow-indigo-500/10 tracking-wider text-sm">LG</div>
-            <div>
-                <h1 class="text-sm font-semibold tracking-tight text-white">Logistics Gateway</h1>
-                <p class="text-[11px] text-slate-400">Stateless Freight Middleware</p>
-            </div>
-        </div>
-        <div class="flex items-center gap-6 text-xs font-medium text-slate-400">
-            <a href="/api/v1/docs" class="hover:text-white transition">Core REST API Docs</a>
-            <a href="/status" class="text-indigo-400 hover:text-indigo-300 transition font-semibold">Interactive Sandbox</a>
-            <div class="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400 border border-emerald-500/20">
-                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Operational
-            </div>
+    <header>
+        <div class="container">
+            <h1>Logistics Gateway <span style="color: var(--primary);">v1</span></h1>
+            <p class="subtitle">A stateless, schema-first middleware for Scandinavian fulfillment.</p>
+            <a href="/api/v1/docs" class="btn">View API Documentation</a>
         </div>
     </header>
 
-    <main class="flex-1 max-w-6xl w-full mx-auto px-6 py-16 lg:py-24 space-y-20">
-        
-        <section class="max-w-3xl space-y-6">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium">
-                Production Release v1.0 is Live
+    <div class="container">
+        <section class="grid">
+            <div class="card">
+                <h3>Unified Booking</h3>
+                <p>Single JSON contract for multi-colli bookings across PostNord, GLS, DAO, and Bring. Integrate once, ship everywhere [2, 5, 6].</p>
             </div>
-            <h2 class="text-4xl sm:text-5xl font-bold tracking-tight text-white leading-none">
-                One Gateway. Every Scandinavian Carrier.
-            </h2>
-            <p class="text-lg text-slate-400 leading-relaxed">
-                Logistics Gateway is a stateless, cloud-native middleware engine that unifies multi-carrier operations into a single developer experience. Abstract carrier-specific legacy REST or XML APIs behind a predictable, schema-enforced transaction boundary.
-            </p>
-            <div class="pt-4 flex flex-wrap gap-4">
-                <a href="/status" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium text-xs py-3 px-6 rounded-xl shadow-lg shadow-indigo-600/10 transition uppercase tracking-wider cursor-pointer">
-                    Launch EDI & JSON Sandbox
-                </a>
-                <a href="/api/v1/docs" class="border border-slate-700 hover:border-slate-600 bg-slate-900 text-slate-300 font-medium text-xs py-3 px-6 rounded-xl transition uppercase tracking-wider cursor-pointer">
-                    Explore API Specs
-                </a>
+            <div class="card">
+                <h3>Trade Compliance</h3>
+                <p>Automated validation for Non-EU shipments. Strict enforcement of HS Codes and Customs data based on DDP/DAP Incoterms [7, 8].</p>
+            </div>
+            <div class="card">
+                <h3>Reverse Logistics</h3>
+                <p>Built-in support for labelless B2C returns via mobile QR code streaming and "Return of Goods" customs protection [6, 9].</p>
             </div>
         </section>
 
-        <hr class="border-slate-800">
-
-        <section class="space-y-8">
-            <div>
-                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest">Architectural Pillars</h3>
-                <p class="text-xl font-semibold text-slate-200 mt-1">Engineered for Next-Gen E-Commerce & ERP Systems</p>
+        <section class="api-section">
+            <h2>Core API Endpoints</h2>
+            <div class="api-route">
+                <span><span class="method">POST</span> /api/v1/bookings</span>
+                <span>Create shipment</span>
             </div>
+            <div class="api-route">
+                <span><span class="method">GET</span> /api/v1/tracking/:id</span>
+                <span>Normalized tracking</span>
+            </div>
+            <div class="api-route">
+                <span><span class="method">GET</span> /api/v1/service-points</span>
+                <span>Carrier shop lookup</span>
+            </div>
+            <div class="api-route">
+                <span><span class="method">GET</span> /api/v1/status</span>
+                <span>System health</span>
+            </div>
+        </section>
+    </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-3">
-                    <div class="h-10 w-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm">01</div>
-                    <h4 class="font-semibold text-base text-white">Unified Multi-Colli Bookings</h4>
-                    <p class="text-xs text-slate-400 leading-relaxed">
-                        Say goodbye to varied endpoint configurations. Handle individual package shop dispatches and complex B2B multi-package freight consignments through the exact same JSON array layout.
-                    </p>
-                </div>
-                <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-3">
-                    <div class="h-10 w-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-sm">02</div>
-                    <h4 class="font-semibold text-base text-white">Automated Customs Compliance</h4>
-                    <p class="text-xs text-slate-400 leading-relaxed">
-                        The engine automatically intercepts border routes (e.g., shipments to Norway or USA). It strictly enforces missing HS Commodity Codes and values at the edge before carrier transmission.
-                    </p>
-                </div>
-                <div class="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-3">
-                    <div class="h-10 w-10 rounded-xl bg-indigo-500/
+    <footer>
+        <div class="container">
+            <p>&copy; 2026 Logistics Gateway. All code documentation and variables are authored in English [4].</p>
+            <p><a href="/status">System Status Dashboard</a> | <a href="https://github.com/kristiannissen/logistics-gateway">GitHub Repository</a></p>
+        </div>
+    </footer>
+
+</body>
+</html>
