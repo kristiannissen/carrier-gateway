@@ -1,4 +1,5 @@
-package handler
+package api
+// api/docs.go
 
 import (
 	"fmt"
