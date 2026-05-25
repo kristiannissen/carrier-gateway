@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LogisticsGatewayBookingRequest",
+  "description": "Schema for validating a v1 Booking Request for the Logistics Gateway MVP (PostNord focus)",
+  "type": "object",
+  "properties": {
+    "carrier": {
+      "type": "string",
+      "enum": ["postnord"],
+      "description": "The shipping carrier to use for this specific booking."
+    },
+    "sender_name": { "type": "string", "minLength": 1 },
+    "sender_address": { "type": "string", "minLength": 1 },
+    "sender_zip": { "type": "string", "pattern": "^[0-9]{4}$", "description": "Danish 4-digit zip code" },
+    "sender_city": { "type": "string", "minLength": 1 },
+    "receiver_name": { "type": "string", "minLength": 1 },
+    "receiver_address": { "type": "string", "minLength": 1 },
+    "receiver_zip": { "type": "string", "pattern": "^[0-9]{4}$", "description": "Danish 4-digit zip code" },
+    "receiver_city": { "type": "string", "minLength": 1 },
+    "weight_kg": {
+      "type": "number",
+      "minimum": 0.01,
+      "description": "The total weight of the package in kilograms."
+    }
+  },
+  "required": [
+    "carrier",
+    "sender_name",
+    "sender_address",
+    "sender_zip",
+    "sender_city",
+    "receiver_name",
+    "receiver_address",
+    "receiver_zip",
+    "receiver_city",
+    "weight_kg"
+  ]
+}
