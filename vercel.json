@@ -1,7 +1,7 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/*.go", "use": "@vercel/go" },
+    { "src": "api/**/*.go", "use": "@vercel/go" },
     { "src": "public/**/*", "use": "@vercel/static" }
   ],
   "routes": [
@@ -13,6 +13,8 @@
     { "src": "/api/v1/docs/(?<method>[^/]+)", "methods": ["GET"], "dest": "/api/docs.go?method=$method" },
     { "src": "/api/v1/docs", "methods": ["GET"], "dest": "/api/docs.go" },
     { "src": "/api/v1/status", "methods": ["GET"], "dest": "/api/status.go" },
-    { "src": "/status", "dest": "/public/status.html" }
+    { "src": "/status", "dest": "/public/status.html" },
+    
+    { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }
