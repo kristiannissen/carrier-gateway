@@ -1,250 +1,92 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-slate-950">
+<html lang="da">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logistics Gateway — Live Developer Sandbox</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-        code, pre { font-family: 'JetBrains Mono', monospace; }
-    </style>
+    <title>Logistics Gateway - System Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: { gatewayPink: '#ff007f', gatewayDark: '#110b15', gatewayCard: '#1a1220' } } }
+        }
+    </script>
 </head>
-<body class="h-full text-slate-100 flex flex-col selection:bg-indigo-500/30 selection:text-indigo-200">
-
-    <header class="flex h-16 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900 px-6 shadow-sm sticky top-0 z-50">
-        <div class="flex items-center gap-4">
-            <a href="/" class="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 font-bold text-white shadow-md tracking-wider text-sm">LG</a>
-            <div>
-                <h1 class="text-sm font-semibold tracking-tight text-white flex items-center gap-2">
-                    Live Sandbox Dashboard <span class="text-[10px] font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">Console v1.0</span>
-                </h1>
-                <p class="text-[11px] text-slate-400">Stateless Ingestion Testing Pipeline</p>
+<body class="bg-gatewayDark text-gray-100 min-h-screen font-sans">
+    <nav class="border-b border-gatewayPink/30 bg-gatewayCard/50 backdrop-blur p-4">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <span class="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white to-gatewayPink">LOGISTICS<span class="text-gatewayPink">.</span>GW</span>
+            <div class="space-x-6 text-sm font-semibold">
+                <a href="/docs" class="hover:text-gatewayPink transition">Docs</a>
+                <a href="/sandbox" class="hover:text-gatewayPink transition">Sandbox</a>
+                <a href="/status" class="text-gatewayPink border-b-2 border-gatewayPink pb-1">Status</a>
             </div>
         </div>
-        <div class="flex items-center gap-4">
-            <nav class="flex items-center gap-6 text-xs font-medium text-slate-400">
-                <a href="/" class="hover:text-slate-200 transition">Home</a>
-                <a href="/api/v1/docs" class="hover:text-slate-200 transition">REST Core Contract</a>
-            </nav>
-            <div class="h-4 w-px bg-slate-800"></div>
-            <div class="flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400 border border-emerald-500/20">
-                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Operational
+    </nav>
+
+    <main class="max-w-3xl mx-auto px-4 py-16 text-center">
+        <h1 class="text-4xl font-black mb-8 tracking-tight">SYSTEM STATUS</h1>
+        
+        <div class="bg-gatewayCard border border-gatewayPink/10 rounded-2xl p-8 shadow-2xl mb-6 inline-block w-full max-w-md">
+            <div class="flex justify-center mb-6">
+                <div id="statusDot" class="w-16 h-16 rounded-full bg-gatewayPink animate-pulse flex items-center justify-center shadow-lg shadow-gatewayPink/50">
+                    <span class="text-2xl">⚡</span>
+                </div>
+            </div>
+            <h2 id="statusTitle" class="text-2xl font-black uppercase tracking-wide">Indlæser...</h2>
+            <p id="statusDesc" class="text-gray-400 mt-2 text-sm">Henter live helbredsstatus fra vores europæiske noder.</p>
+        </div>
+
+        <div class="max-w-md mx-auto bg-gatewayCard/40 border border-gray-800 rounded-xl p-4 text-left space-y-3 font-mono text-xs">
+            <div class="flex justify-between border-b border-gray-800 pb-2">
+                <span class="text-gray-400">Gateway API Engine:</span>
+                <span id="engStatus" class="text-gatewayPink font-bold">CHECKING...</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-400">PostNord API Bridge:</span>
+                <span id="pnStatus" class="text-gatewayPink font-bold">CHECKING...</span>
             </div>
         </div>
-    </header>
-
-    <div class="flex flex-1 flex-col lg:flex-row overflow-hidden">
-        
-        <main class="flex-1 overflow-y-auto bg-slate-900 p-6 lg:p-10 space-y-8 border-r border-slate-800">
-            
-            <div class="space-y-2 max-w-xl">
-                <h2 class="text-2xl font-bold tracking-tight text-white">Ingress Payload Playground</h2>
-                <p class="text-xs text-slate-400 leading-relaxed">
-                    Test your system integrations in real time. Submit either standard native JSON booking schemas or raw legacy EDIFACT segments to view how our adapter engine standardizes data structures natively.
-                </p>
-            </div>
-
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-2xl">
-                <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-                    <p class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Gateway Latency</p>
-                    <p class="mt-0.5 text-base font-semibold text-slate-200 font-mono">&lt; 42ms</p>
-                </div>
-                <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-                    <p class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Edge Uptime</p>
-                    <p class="mt-0.5 text-base font-semibold text-slate-200 font-mono">100.00%</p>
-                </div>
-                <div class="rounded-xl border border-slate-800 bg-slate-950/40 p-4 col-span-2 sm:col-span-1">
-                    <p class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Environment</p>
-                    <p class="mt-0.5 text-xs font-medium text-indigo-400 font-mono flex items-center gap-1.5">
-                        SANDBOX-V1
-                    </p>
-                </div>
-            </div>
-
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Ingress Control Console</h3>
-                    <div class="flex rounded-lg bg-slate-950 p-1 border border-slate-800">
-                        <button onclick="switchTab('json')" id="tab-json" class="rounded-md px-3 py-1 text-xs font-medium bg-slate-800 text-white cursor-pointer transition">Standard JSON</button>
-                        <button onclick="switchTab('edi')" id="tab-edi" class="rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer transition">Legacy EDIFACT</button>
-                    </div>
-                </div>
-
-                <div class="relative rounded-xl border border-slate-800 bg-slate-950 overflow-hidden focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition">
-                    <div class="flex items-center justify-between px-4 py-2 bg-slate-900/50 border-b border-slate-800/80 text-[11px] font-mono text-slate-500">
-                        <span id="editor-format-label">POST /api/v1/bookings — Application/JSON</span>
-                        <span id="customs-indicator" class="hidden text-amber-500/90 font-medium animate-pulse">✈️ Non-EU Border Logistics Node Triggered</span>
-                    </div>
-                    <textarea id="payloadInput" oninput="checkInputContext()" class="w-full min-h-[260px] bg-transparent p-4 font-mono text-xs text-indigo-300 placeholder-slate-600 focus:outline-none resize-none leading-relaxed" spellcheck="false"></textarea>
-                </div>
-
-                <button onclick="executeSandboxPayload()" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-medium text-xs py-3 px-4 rounded-xl shadow-lg shadow-indigo-600/10 transition flex items-center justify-center gap-2 group cursor-pointer tracking-wide uppercase">
-                    <span>Process Gateway Request</span>
-                    <svg class="w-4 h-4 transform group-hover:translate-x-0.5 transition text-indigo-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-                </button>
-            </div>
-        </main>
-        
-        <aside class="w-full lg:w-[45%] xl:w-[40%] bg-slate-950 flex flex-col overflow-hidden">
-            <div class="flex items-center justify-between border-b border-slate-800 bg-slate-900/40 px-4 h-12 shrink-0">
-                <div class="flex items-center gap-2">
-                    <span id="responseStatusNode" class="h-2 w-2 rounded-full bg-slate-700"></span>
-                    <span class="font-mono text-xs text-slate-400 font-medium">Egress Engine Stream Output</span>
-                </div>
-                <div id="responseStatusBadge" class="text-[10px] uppercase font-mono tracking-wider font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-500 border border-slate-700">
-                    IDLE
-                </div>
-            </div>
-            
-            <div class="flex-1 p-6 overflow-auto bg-slate-950/80 leading-relaxed select-all">
-                <pre id="engineOutputContainer" class="text-xs text-slate-600 whitespace-pre-wrap font-mono">Gateway engine output buffer is currently empty. Awaiting pipeline ingestion trace logs from the active sandbox controller environment...</pre>
-            </div>
-        </aside>
-
-    </div>
+    </main>
 
     <script>
-        let currentActiveFormatMode = 'json';
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/api/v1/status');
+                const data = await response.json();
+                
+                const dot = document.getElementById('statusDot');
+                const title = document.getElementById('statusTitle');
+                const eng = document.getElementById('engStatus');
+                const pn = document.getElementById('pnStatus');
 
-        const rawMockJSONTemplate = `{
-  "carrier_code": "gls",
-  "destination": {
-    "type": "service_point",
-    "service_point_id": "98765"
-  },
-  "incoterm": "DAP",
-  "colli": [
-    {
-      "weight": 2.5,
-      "dimensions": { "l": 30, "w": 20, "h": 15 },
-      "content_description": "Running Shoes"
-    }
-  ],
-  "include_return_label": true
-}`;
-
-        const rawMockEDITemplate = `UNB+UNOA:2+SENDER_ERP+LOGISTICS_GATEWAY+260525:1912+00001'
-UNH+1+IFTMIN:D:96A:UN'
-BGM+610+BOOKING-99410+9'
-NAD+CN+++Mads Jensen+Bagsværd Hovedgade 100+Bagsværd++2880+DK'
-MEA+WT++KGM+2.5'
-DIM+1+CMT:30:20:15'
-FTX+AAA+++Running Shoes'
-CNT+2:1'
-UNT+9+1'
-UNZ+1+00001'`;
-
-        document.getElementById('payloadInput').value = rawMockJSONTemplate;
-
-        function switchTab(targetFormatType) {
-            currentActiveFormatMode = targetFormatType;
-            const tabJSON = document.getElementById('tab-json');
-            const tabEDI = document.getElementById('tab-edi');
-            const label = document.getElementById('editor-format-label');
-            const txtarea = document.getElementById('payloadInput');
-
-            if (targetFormatType === 'json') {
-                tabJSON.className = "rounded-md px-3 py-1 text-xs font-medium bg-slate-800 text-white cursor-pointer transition";
-                tabEDI.className = "rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer transition";
-                label.textContent = "POST /api/v1/bookings — Application/JSON";
-                txtarea.value = rawMockJSONTemplate;
-            } else {
-                tabEDI.className = "rounded-md px-3 py-1 text-xs font-medium bg-slate-800 text-white cursor-pointer transition";
-                tabJSON.className = "rounded-md px-3 py-1 text-xs font-medium text-slate-400 hover:text-slate-200 cursor-pointer transition";
-                label.textContent = "POST /api/v1/bookings/edi-ingest — Text/Plain (EDIFACT Stream)";
-                txtarea.value = rawMockEDITemplate;
-            }
-            checkInputContext();
-        }
-
-        function checkInputContext() {
-            const val = document.getElementById('payloadInput').value.toUpperCase();
-            const indicator = document.getElementById('customs-indicator');
-            if (val.includes('NORGE') || val.includes('USA') || val.includes('NORWAY') || val.includes('DDP')) {
-                indicator.classList.remove('hidden');
-            } else {
-                indicator.classList.add('hidden');
-            }
-        }
-
-        function executeSandboxPayload() {
-            const input = document.getElementById('payloadInput').value.trim();
-            const output = document.getElementById('engineOutputContainer');
-            const node = document.getElementById('responseStatusNode');
-            const badge = document.getElementById('responseStatusBadge');
-
-            if (!input) {
-                output.innerHTML = `<span class="text-amber-500 font-medium">Pipeline Error: Request payload buffers must contain transmission data.</span>`;
-                return;
-            }
-
-            output.textContent = ">> INGESTION HOOK DETECTED: Opening stateless connection pool...\n>> SCHEMA VALIDATION: Compiling rules using gojsonschema framework...\n>> ADAPTER ENGINE: Querying underlying micro-mapping modules...";
-            output.className = "text-xs text-slate-400 font-mono whitespace-pre";
-
-            setTimeout(() => {
-                const upperText = input.toUpperCase();
-                if (upperText.includes('NORGE') || upperText.includes('USA') || upperText.includes('NORWAY')) {
-                    node.className = "h-2 w-2 rounded-full bg-rose-500 shadow-md shadow-rose-500/50";
-                    badge.className = "text-[10px] uppercase font-mono tracking-wider font-semibold px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20";
-                    badge.textContent = "422 UNPROCESSABLE ENTITY";
-
-                    output.innerHTML = `<span class="text-rose-400 font-semibold">❌ [CRITICAL ENGINE REJECTION] INCOTERM_COMPLIANCE_FAILED</span>
-<span class="text-slate-400">The gateway has intercepted an international outbound ledger route outside the borders of the European Union. Under strict DDP (Delivered Duty Paid) business execution flows, a complete structural customs declaration schema array must explicitly accompany the transaction.</span>
-
-<span class="text-slate-300 font-medium">Target Context Violation Field:</span> <span class="text-amber-400">colli[0].hs_code</span>
-<span class="text-slate-300 font-medium">Validation Constraint Error:</span> Global HS Commodity Tariff Code dataset matrix is missing, empty, or fails the strict alphanumeric regex length rules (6+ digits minimum constraint).
-
-<span class="text-indigo-400 font-medium">Guided Trade Self-Correction Protocol:</span> Please map the appropriate custom tariff indexes before re-submitting. Developers can look up official legal global commodity metrics directly at: 
-<a href="https://www.tariffnumber.com" target="_blank" class="text-indigo-400 underline hover:text-indigo-300 font-medium">https://www.tariffnumber.com</a>`;
-                    return;
+                if(data.gateway === "healthy") {
+                    dot.className = "w-16 h-16 rounded-full bg-green-500 flex items-center justify-center shadow-lg shadow-green-500/30";
+                    title.innerText = "Alle systemer kører";
+                    title.className = "text-2xl font-black uppercase tracking-wide text-green-400";
+                    eng.innerText = "OPERATIONAL";
+                    eng.className = "text-green-400 font-bold";
+                } else {
+                    throw new Error("Gateway unhealthy");
                 }
 
-                node.className = "h-2 w-2 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50";
-                badge.className = "text-[10px] uppercase font-mono tracking-wider font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-                badge.textContent = "200 OK (TRANSACTION SECURED)";
+                if(data.integrations && data.integrations.postnord.includes("operational")) {
+                    pn.innerText = data.integrations.postnord.toUpperCase();
+                    pn.className = "text-green-400 font-bold";
+                } else {
+                    pn.innerText = "ERROR / DOWN";
+                    pn.className = "text-red-500 font-bold";
+                    dot.className = "w-16 h-16 rounded-full bg-red-500 flex items-center justify-center shadow-lg shadow-red-500/30";
+                    title.innerText = "Problemer registreret";
+                    title.className = "text-2xl font-black uppercase tracking-wide text-red-500";
+                }
 
-                const mockResponse = {
-                    "gateway_meta": {
-                        "api_transaction_id": "tx_booking_8874192_dk",
-                        "stateless_processing_ms": 14,
-                        "upstream_carrier_routing": "gls-scandinavia-rest-v3"
-                    },
-                    "booking_results": {
-                        "status": "PROCESSED_AND_NORMALIZED",
-                        "consignment_id": "GLS-DK-994820194",
-                        "master_tracking_number": "003570221498741029",
-                        "assets": {
-                            "outbound_label_url": "/api/v1/bookings/tx_booking_8874192_dk/label",
-                            "return_assets": {
-                                "return_label_url": "/api/v1/bookings/tx_booking_8874192_dk/return-label",
-                                "labelless_qr_metadata_url": "/api/v1/bookings/tx_booking_8874192_dk/return-label?format=qr"
-                            }
-                        },
-                        "normalized_payload": {
-                            "carrier_code": "gls",
-                            "destination": {
-                                "type": "service_point",
-                                "service_point_id": "98765"
-                            },
-                            "incoterm": "DAP",
-                            "colli_count": 1,
-                            "colli_manifest": [
-                                {
-                                    "weight_kg": 2.5,
-                                    "description": "Running Shoes (Mapped via Gateway Core Adapter Node Layer)"
-                                }
-                            ]
-                        }
-                    }
-                };
-
-                output.textContent = JSON.stringify(mockResponse, null, 2);
-                output.className = "text-xs text-emerald-400 font-mono whitespace-pre select-all";
-            }, 550);
+            } catch (err) {
+                document.getElementById('statusDot').className = "w-16 h-16 rounded-full bg-red-600 flex items-center justify-center shadow-lg shadow-red-600/50";
+                document.getElementById('statusTitle').innerText = "Gateway utilgængelig";
+                document.getElementById('statusTitle').className = "text-2xl font-black text-red-500";
+            }
         }
+        window.onload = fetchStatus;
     </script>
 </body>
 </html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logistics Gateway - API Docs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gatewayPink: '#ff007f',
+                        gatewayDark: '#110b15',
+                        gatewayCard: '#1a1220'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gatewayDark text-gray-100 min-h-screen font-sans">
+    <nav class="border-b border-gatewayPink/30 bg-gatewayCard/50 backdrop-blur p-4">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <span class="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-white to-gatewayPink">LOGISTICS<span class="text-gatewayPink">.</span>GW</span>
+            <div class="space-x-6 text-sm font-semibold">
+                <a href="/docs" class="text-gatewayPink border-b-2 border-gatewayPink pb-1">Docs</a>
+                <a href="/sandbox" class="hover:text-gatewayPink transition">Sandbox</a>
+                <a href="/status" class="hover:text-gatewayPink transition">Status</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-4xl mx-auto px-4 py-12">
+        <h1 class="text-4xl font-black mb-2 tracking-tight">API DOKUMENTATION</h1>
+        <p class="text-gray-400 mb-8">Data hentes live fra vores kernesystem, så du altid ser de nyeste specifikationer.</p>
+
+        <div id="docs-container" class="space-y-6">
+            <div class="animate-pulse flex space-x-4">
+                <div class="flex-1 space-y-4 py-1">
+                    <div class="h-4 bg-gatewayCard rounded w-3/4"></div>
+                    <div class="space-y-2">
+                        <div class="h-4 bg-gatewayCard rounded"></div>
+                        <div class="h-4 bg-gatewayCard rounded w-5/6"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function loadDocs() {
+            try {
+                const response = await fetch('/api/v1/docs');
+                const data = await response.json();
+                const container = document.getElementById('docs-container');
+                container.innerHTML = '';
+
+                for (const method of data.available_docs) {
+                    const detailRes = await fetch(`/api/v1/docs?method=${method}`);
+                    const detail = await detailRes.json();
+                    
+                    const card = document.createElement('div');
+                    card.className = "bg-gatewayCard border border-gatewayPink/10 rounded-xl p-6 shadow-xl hover:border-gatewayPink/40 transition duration-300";
+                    
+                    const badgeColor = detail.method === 'POST' ? 'bg-gatewayPink text-white' : 'bg-purple-600 text-white';
+                    
+                    card.innerHTML = `
+                        <div class="flex items-center space-x-3 mb-4">
+                            <span class="${badgeColor} text-xs font-bold px-2.5 py-1 rounded-md tracking-wider">${detail.method || 'GET'}</span>
+                            <code class="text-md font-mono text-pink-400 font-bold">${detail.endpoint}</code>
+                        </div>
+                        <p class="text-gray-300 mb-2">${detail.description || 'Ingen beskrivelse tilgængelig.'}</p>
+                    `;
+                    container.appendChild(card);
+                }
+            } catch (error) {
+                document.getElementById('docs-container').innerHTML = `<p class="text-red-500 font-bold">Fejl ved hentning af dokumentation live fra API'et.</p>`;
+            }
+        }
+        window.onload = loadDocs;
+    </script>
+</body>
+</html>

@@ -14,7 +14,9 @@
     { "src": "/api/v1/docs", "methods": ["GET"], "dest": "/api/docs.go" },
     { "src": "/api/v1/status", "methods": ["GET"], "dest": "/api/status.go" },
     { "src": "/status", "dest": "/public/status.html" },
-    
+    { "src": "/docs", "dest": "/public/docs/index.html" },
+    { "src": "/sandbox", "dest": "/public/sandbox/index.html" },
+    { "src": "/status", "dest": "/public/status.html" },
     { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }

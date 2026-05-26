@@ -1,148 +1,131 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="da">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logistics Gateway v1 | Unified Scandinavian Logistics API</title>
+    <title>Logistics Gateway - Professional API Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        gatewayPink: '#ff007f',
+                        gatewayDark: '#0a050d',
+                        gatewayCard: '#150a1a'
+                    },
+                    boxShadow: {
+                        neon: '0 0 20px rgba(255, 0, 127, 0.3)',
+                        neonStrong: '0 0 40px rgba(255, 0, 127, 0.5)',
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        :root {
-            --primary: #2563eb;
-            --bg: #f8fafc;
-            --text: #1e293b;
-            --border: #e2e8f0;
+        .pink-glow-text {
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.5);
         }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            line-height: 1.6;
-            color: var(--text);
-            background: var(--bg);
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        header {
-            text-align: center;
-            padding: 4rem 0;
-            background: white;
-            border-bottom: 1px solid var(--border);
-        }
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-        .subtitle {
-            font-size: 1.25rem;
-            color: #64748b;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-top: 3rem;
-        }
-        .card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .card h3 {
-            margin-top: 0;
-            color: var(--primary);
-        }
-        .api-section {
-            margin-top: 4rem;
-        }
-        .api-route {
-            background: #1e293b;
-            color: #f8fafc;
-            padding: 1rem;
-            border-radius: 6px;
-            font-family: monospace;
-            margin-bottom: 1rem;
-            display: flex;
-            justify-content: space-between;
-        }
-        .method {
-            font-weight: bold;
-            color: #38bdf8;
-        }
-        footer {
-            text-align: center;
-            padding: 4rem 0;
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-        .btn {
-            display: inline-block;
-            background: var(--primary);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: bold;
-            margin-top: 1rem;
+        .bg-grid {
+            background-image: radial-gradient(circle, #ff007f 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.05;
         }
     </style>
 </head>
-<body>
+<body class="bg-gatewayDark text-gray-100 min-h-screen font-sans selection:bg-gatewayPink selection:text-white">
+    
+    <div class="fixed inset-0 bg-grid pointer-events-none"></div>
+    <div class="fixed top-0 -left-4 w-72 h-72 bg-gatewayPink rounded-full mix-blend-multiply filter blur-[120px] opacity-10 animate-blob"></div>
+    <div class="fixed bottom-0 -right-4 w-96 h-96 bg-purple-600 rounded-full mix-blend-multiply filter blur-[150px] opacity-10 animate-blob animation-delay-2000"></div>
 
-    <header>
-        <div class="container">
-            <h1>Logistics Gateway <span style="color: var(--primary);">v1</span></h1>
-            <p class="subtitle">A stateless, schema-first middleware for Scandinavian fulfillment.</p>
-            <a href="/api/v1/docs" class="btn">View API Documentation</a>
+    <nav class="sticky top-0 z-50 border-b border-gatewayPink/20 bg-gatewayDark/80 backdrop-blur-md p-5">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 bg-gatewayPink rounded flex items-center justify-center shadow-neon">
+                    <span class="text-gatewayDark font-black text-xs">L.GW</span>
+                </div>
+                <span class="text-2xl font-black tracking-tighter pink-glow-text">LOGISTICS<span class="text-gatewayPink">.</span>GW</span>
+            </div>
+            <div class="hidden md:flex space-x-8 text-sm font-bold uppercase tracking-widest">
+                <a href="/docs" class="hover:text-gatewayPink transition-colors">Dokumentation</a>
+                <a href="/sandbox" class="hover:text-gatewayPink transition-colors">Sandkasse</a>
+                <a href="/status" class="hover:text-gatewayPink transition-colors">Status</a>
+            </div>
+            <a href="/sandbox" class="bg-gatewayPink/10 border border-gatewayPink/50 text-gatewayPink px-4 py-2 rounded-lg text-xs font-black hover:bg-gatewayPink hover:text-white transition-all duration-300">GET STARTED</a>
         </div>
-    </header>
+    </nav>
 
-    <div class="container">
-        <section class="grid">
-            <div class="card">
-                <h3>Unified Booking</h3>
-                <p>Single JSON contract for multi-colli bookings across PostNord, GLS, DAO, and Bring. Integrate once, ship everywhere [2, 5, 6].</p>
-            </div>
-            <div class="card">
-                <h3>Trade Compliance</h3>
-                <p>Automated validation for Non-EU shipments. Strict enforcement of HS Codes and Customs data based on DDP/DAP Incoterms [7, 8].</p>
-            </div>
-            <div class="card">
-                <h3>Reverse Logistics</h3>
-                <p>Built-in support for labelless B2C returns via mobile QR code streaming and "Return of Goods" customs protection [6, 9].</p>
-            </div>
-        </section>
-
-        <section class="api-section">
-            <h2>Core API Endpoints</h2>
-            <div class="api-route">
-                <span><span class="method">POST</span> /api/v1/bookings</span>
-                <span>Create shipment</span>
-            </div>
-            <div class="api-route">
-                <span><span class="method">GET</span> /api/v1/tracking/:id</span>
-                <span>Normalized tracking</span>
-            </div>
-            <div class="api-route">
-                <span><span class="method">GET</span> /api/v1/service-points</span>
-                <span>Carrier shop lookup</span>
-            </div>
-            <div class="api-route">
-                <span><span class="method">GET</span> /api/v1/status</span>
-                <span>System health</span>
-            </div>
-        </section>
-    </div>
-
-    <footer>
-        <div class="container">
-            <p>&copy; 2026 Logistics Gateway. All code documentation and variables are authored in English [4].</p>
-            <p><a href="/status">System Status Dashboard</a> | <a href="https://github.com/kristiannissen/logistics-gateway">GitHub Repository</a></p>
+    <main class="relative z-10 max-w-7xl mx-auto px-6 pt-20 pb-32">
+        
+        <div class="text-center mb-24">
+            <h1 class="text-6xl md:text-8xl font-black tracking-tighter mb-6 leading-none">
+                BYG FREMTIDENS <br>
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-white via-gatewayPink to-purple-500 pink-glow-text">LOGISTIK FLOW</span>
+            </h1>
+            <p class="max-w-2xl mx-auto text-gray-400 text-xl font-medium leading-relaxed">
+                Den hurtigste vej til PostNord integration. Vores Gateway abstraherer kompleksiteten væk, så du kan fokusere på at sende pakker.
+            </p>
         </div>
-    </footer>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-32">
+            
+            <a href="/docs" class="group bg-gatewayCard border border-white/5 p-8 rounded-3xl hover:border-gatewayPink/50 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
+                    <svg class="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                </div>
+                <h3 class="text-gatewayPink font-black tracking-widest text-xs uppercase mb-4">Integrationsguide</h3>
+                <h2 class="text-3xl font-black mb-4">DOKUMENTATION</h2>
+                <p class="text-gray-400 font-medium">Læs om alle vores endpoints og se hvordan du mapper dine data live fra vores API-kald.</p>
+                <div class="mt-8 flex items-center text-gatewayPink font-bold space-x-2">
+                    <span>Læs mere</span>
+                    <span class="group-hover:translate-x-2 transition-transform">→</span>
+                </div>
+            </a>
+
+            <a href="/sandbox" class="group bg-gatewayCard border border-white/5 p-8 rounded-3xl hover:border-gatewayPink/50 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden shadow-neon">
+                <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
+                    <svg class="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                </div>
+                <h3 class="text-gatewayPink font-black tracking-widest text-xs uppercase mb-4">Test Miljø</h3>
+                <h2 class="text-3xl font-black mb-4">SANDBOX</h2>
+                <p class="text-gray-400 font-medium">Affyr interaktive API-kald direkte fra browseren og se JSON-responsen fra gatewayen med det samme.</p>
+                <div class="mt-8 flex items-center text-gatewayPink font-bold space-x-2">
+                    <span>Prøv det nu</span>
+                    <span class="group-hover:translate-x-2 transition-transform">→</span>
+                </div>
+            </a>
+
+            <a href="/status" class="group bg-gatewayCard border border-white/5 p-8 rounded-3xl hover:border-gatewayPink/50 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
+                    <svg class="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <h3 class="text-gatewayPink font-black tracking-widest text-xs uppercase mb-4">System Helbred</h3>
+                <h2 class="text-3xl font-black mb-4">API STATUS</h2>
+                <p class="text-gray-400 font-medium">Overvåg oppetiden på tværs af gatewayen og alle vores transportør-integrationer i realtid.</p>
+                <div class="mt-8 flex items-center text-gatewayPink font-bold space-x-2">
+                    <span>Se status</span>
+                    <span class="group-hover:translate-x-2 transition-transform">→</span>
+                </div>
+            </a>
+
+        </div>
+
+        <div class="border-t border-white/5 pt-12 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm font-bold">
+            <div>&copy; 2026 LOGISTICS GATEWAY . MVP FOCUS: POSTNORD</div>
+            <div class="mt-4 md:mt-0 flex space-x-8">
+                <a href="/api/v1/status" class="hover:text-gatewayPink transition">API v1</a>
+                <a href="/schemas/bookings-v1.json" class="hover:text-gatewayPink transition">JSON SCHEMA</a>
+                <a href="https://github.com/kristiannissen/logistics-gateway" class="hover:text-gatewayPink transition">GITHUB</a>
+            </div>
+        </div>
+
+    </main>
 
 </body>
 </html>
