@@ -5,14 +5,14 @@
     { "src": "public/**/*", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/v1/postnord-bookings", "methods": ["POST"], "dest": "/api/postnord-bookings.go" },
+    { "src": "/api/v1/postnord-bookings", "methods": ["POST", "GET"], "dest": "/api/postnord-bookings.go" },
     { "src": "/api/v1/postnord-bookings/(?<id>[^/]+)/label", "methods": ["GET"], "dest": "/api/postnord-bookings.go?id=$id&asset=label" },
     { "src": "/api/v1/postnord-bookings/(?<id>[^/]+)/return-label", "methods": ["GET"], "dest": "/api/postnord-bookings.go?id=$id&asset=return-label" },
     { "src": "/api/v1/postnord-service-points", "methods": ["GET"], "dest": "/api/postnord-service-points.go" },
     { "src": "/api/v1/postnord-tracking/(?<id>[^/]+)", "methods": ["GET"], "dest": "/api/postnord-tracking.go?id=$id" },
     { "src": "/api/v1/postnord-status", "methods": ["GET"], "dest": "/api/postnord-status.go" },
 
-    { "src": "/api/v1/dao-bookings", "methods": ["POST"], "dest": "/api/dao-bookings.go" },
+    { "src": "/api/v1/dao-bookings", "methods": ["POST", "GET"], "dest": "/api/dao-bookings.go" },
     { "src": "/api/v1/dao-bookings/(?<id>[^/]+)/label", "methods": ["GET"], "dest": "/api/dao-bookings.go?id=$id&asset=label" },
     { "src": "/api/v1/dao-bookings/(?<id>[^/]+)/return-label", "methods": ["GET"], "dest": "/api/dao-bookings.go?id=$id&asset=return-label" },
     { "src": "/api/v1/dao-service-points", "methods": ["GET"], "dest": "/api/dao-service-points.go" },
@@ -20,6 +20,10 @@
     { "src": "/api/v1/dao-status", "methods": ["GET"], "dest": "/api/dao-status.go" },
 
     { "src": "/api/v1/docs/(?<method>[^/]+)", "methods": ["GET"], "dest": "/api/docs.go?method=$method" },
-    { "src": "/api/v1/docs", "methods": ["GET"], "dest": "/api/docs.go" }
+    { "src": "/api/v1/docs", "methods": ["GET"], "dest": "/api/docs.go" },
+
+    { "src": "/css/(.*)", "dest": "/public/css/$1" },
+    { "src": "/js/(.*)", "dest": "/public/js/$1" },
+    { "src": "/(.*)", "dest": "/public/$1" }
   ]
 }
