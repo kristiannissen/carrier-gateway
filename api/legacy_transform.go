@@ -7,7 +7,6 @@ import (
 	"encoding/xml"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // LegacyShipment defines the old-school XML structure used by legacy WMS systems
