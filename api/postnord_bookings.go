@@ -50,7 +50,7 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = json.NewEncoder(w).Encode(job)
+			_ = json.NewEncoder(w).Encode(job)
 			return
 		}
 		w.WriteHeader(http.StatusBadRequest)

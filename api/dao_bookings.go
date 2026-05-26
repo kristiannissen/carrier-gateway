@@ -45,7 +45,7 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			_, _ = json.NewEncoder(w).Encode(job)
+			_ = json.NewEncoder(w).Encode(job)
 			return
 		}
 		w.WriteHeader(http.StatusBadRequest)
@@ -61,7 +61,7 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 
 		if len(req.Colli) == 0 || req.Destination.CountryCode == "" {
 			w.WriteHeader(http.StatusUnprocessableEntity)
-			_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"errors": []string{"Missing required fields: colli array or destination.country_code"},
 			})
 			return
@@ -73,7 +73,7 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 				errMsg := "Trade Compliance Violation: Non-EU destination via DAO requires automated customs mapping and full HS datasets. Verify metrics at https://www.tariffnumber.com/"
 				GlobalEM.Notify(ExceptionEvent{Carrier: "dao", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
 				w.WriteHeader(http.StatusUnprocessableEntity)
-				_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"errors": []string{errMsg},
 					"guided_correction_url": "https://www.tariffnumber.com/",
 				})
@@ -110,7 +110,7 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			}(bookingID, req.IncludeReturnLabel, retFormat, r.Host)
 
 			w.WriteHeader(http.StatusAccepted)
-			_, _ = json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
 			return
 		}
 
@@ -125,7 +125,7 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			res.ReturnFormat = retFormat
 			res.ReturnLabelURL = fmt.Sprintf("https://%s/api/v1/dao-bookings/%s/return-label?format=%s", r.Host, bookingID, retFormat)
 		}
-		_, _ = json.NewEncoder(w).Encode(res)
+		_ = json.NewEncoder(w).Encode(res)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)

@@ -32,7 +32,6 @@ func LegacyTransformHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1. Læs den rå XML-strøm fra det gamle lagersystem
-	var legacy XMLName
 	var xmlShipment LegacyShipment
 	if err := xml.NewDecoder(r.Body).Decode(&xmlShipment); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -60,9 +59,7 @@ func LegacyTransformHandler(w http.ResponseWriter, r *http.Request) {
 			CountryCode: xmlShipment.Country,
 			Type:        "home",
 		},
-		Colli: []interface{}{
-			map[string]interface{}{"weight_kg": xmlShipment.WeightKG},
-		},
+		Colli: []ColliItem,
 	}
 
 	// Hvis det er en Non-EU forsendelse, map'er vi automatisk told-data med over
