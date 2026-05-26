@@ -21,7 +21,7 @@
 
     { "src": "/api/v1/docs/(?<method>[^/]+)", "methods": ["GET"], "dest": "/api/docs.go?method=$method" },
     { "src": "/api/v1/docs", "methods": ["GET"], "dest": "/api/docs.go" },
-
+    { "src": "/api/v1/legacy-transform", "methods": ["POST"], "dest": "/api/legacy-transform.go" },
     { "src": "/css/(.*)", "dest": "/public/css/$1" },
     { "src": "/js/(.*)", "dest": "/public/js/$1" },
     { "src": "/(.*)", "dest": "/public/$1" }
