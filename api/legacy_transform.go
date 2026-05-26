@@ -59,7 +59,9 @@ func LegacyTransformHandler(w http.ResponseWriter, r *http.Request) {
 			CountryCode: xmlShipment.Country,
 			Type:        "home",
 		},
-		Colli: []ColliItem,
+		Colli: []ColliItem{
+        		{WeightKG: 4.5, Dimensions: Dimensions{LengthCM: 10, WidthCM: 10, HeightCM: 10}},
+    		},
 	}
 
 	// Hvis det er en Non-EU forsendelse, map'er vi automatisk told-data med over

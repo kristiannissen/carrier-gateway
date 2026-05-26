@@ -67,7 +67,7 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 		// 1. Core Schema Validation
 		if len(req.Colli) == 0 || req.Destination.CountryCode == "" {
 			w.WriteHeader(http.StatusUnprocessableEntity)
-			_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"errors": []string{"Missing required fields: colli array or destination.country_code"},
 			})
 			return
@@ -80,14 +80,14 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 				errMsg := "Trade Compliance Violation: Non-EU shipments require a valid Incoterm (DDP or DAP)."
 				GlobalEM.Notify(ExceptionEvent{Carrier: "postnord", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
 				w.WriteHeader(http.StatusUnprocessableEntity)
-				_, _ = json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{errMsg}})
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{errMsg}})
 				return
 			}
 			if len(req.CustomsItems) == 0 {
 				errMsg := "Trade Compliance Violation: Missing mandatory customs_items and HS Codes for Non-EU destination. Look up valid tariffs here: https://www.tariffnumber.com/"
 				GlobalEM.Notify(ExceptionEvent{Carrier: "postnord", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
 				w.WriteHeader(http.StatusUnprocessableEntity)
-				_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"errors": []string{errMsg},
 					"guided_correction_url": "https://www.tariffnumber.com/",
 				})
@@ -98,7 +98,7 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 					errMsg := "Trade Compliance Violation: Each customs item must contain a valid hs_code, description, and country_of_origin. Verify codes at https://www.tariffnumber.com/"
 					GlobalEM.Notify(ExceptionEvent{Carrier: "postnord", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
 					w.WriteHeader(http.StatusUnprocessableEntity)
-					_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{
 						"errors": []string{errMsg},
 						"guided_correction_url": "https://www.tariffnumber.com/",
 					})
@@ -136,7 +136,7 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			}(bookingID, req.IncludeReturnLabel, retFormat, r.Host)
 
 			w.WriteHeader(http.StatusAccepted)
-			_, _ = json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
 			return
 		}
 
@@ -151,7 +151,7 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			res.ReturnFormat = retFormat
 			res.ReturnLabelURL = fmt.Sprintf("https://%s/api/v1/postnord-bookings/%s/return-label?format=%s", r.Host, bookingID, retFormat)
 		}
-		_, _ = json.NewEncoder(w).Encode(res)
+		_ = json.NewEncoder(w).Encode(res)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
