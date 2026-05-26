@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SystemStatusResponse",
+  "type": "object",
+  "properties": {
+    "gateway": { "type": "string", "enum": ["healthy", "unhealthy"] },
+    "version": { "type": "string" },
+    "integrations": {
+      "type": "object",
+      "properties": {
+        "postnord": { "type": "string" }
+      },
+      "required": ["postnord"]
+    }
+  },
+  "required": ["gateway", "version", "integrations"]
+}

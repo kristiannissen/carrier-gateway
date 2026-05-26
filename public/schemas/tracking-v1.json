@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TrackingResponse",
+  "type": "object",
+  "properties": {
+    "tracking_number": { "type": "string" },
+    "carrier": { "type": "string" },
+    "status": { "type": "string" },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": { "type": "string", "format": "date-time" },
+          "description": { "type": "string" }
+        },
+        "required": ["timestamp", "description"]
+      }
+    }
+  },
+  "required": ["tracking_number", "carrier", "status", "events"]
+}
