@@ -46,7 +46,7 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 
 			if !exists {
 				w.WriteHeader(http.StatusNotFound)
-				_, _ = json.NewEncoder(w).Encode(map[string]string{"error": "Booking job not found"})
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "Booking job not found"})
 				return
 			}
 			w.WriteHeader(http.StatusOK)
