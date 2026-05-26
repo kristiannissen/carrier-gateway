@@ -1,26 +1,28 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "ServicePointsRequestAndResponse",
+  "title": "ServicePoint",
   "type": "object",
+  "required": ["shop_id", "carrier_code", "name", "address"],
   "properties": {
-    "request": {
+    "shop_id": { "type": "string" },
+    "carrier_code": { "type": "string" },
+    "name": { "type": "string" },
+    "type": { "type": "string", "enum": ["parcel_shop", "locker"] },
+    "address": {
+      "type": "object",
+      "required": ["street", "city", "zip", "country"],
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "zip": { "type": "string" },
+        "country": { "type": "string", "pattern": "^[A-Z]{2}$" }
+      }
+    },
+    "coordinates": {
       "type": "object",
       "properties": {
-        "carrier": { "type": "string", "enum": ["postnord"] },
-        "zip_code": { "type": "string", "pattern": "^[0-9]{4}$" }
-      },
-      "required": ["carrier", "zip_code"]
-    },
-    "response": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "address": { "type": "string" }
-        },
-        "required": ["id", "name", "address"]
+        "lat": { "type": "number" },
+        "lng": { "type": "number" }
       }
     }
   }

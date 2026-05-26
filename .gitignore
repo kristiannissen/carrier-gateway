@@ -40,3 +40,4 @@ go.work.sum
 # Ignore OS specific files
 .DS_STore
 Thumbs.db
+*.sh

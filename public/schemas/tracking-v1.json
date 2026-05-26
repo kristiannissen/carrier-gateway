@@ -1,22 +1,17 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "TrackingResponse",
+  "title": "TrackingStatus",
   "type": "object",
+  "required": ["tracking_id", "current_state", "updated_at"],
   "properties": {
-    "tracking_number": { "type": "string" },
-    "carrier": { "type": "string" },
-    "status": { "type": "string" },
-    "events": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "timestamp": { "type": "string", "format": "date-time" },
-          "description": { "type": "string" }
-        },
-        "required": ["timestamp", "description"]
-      }
-    }
-  },
-  "required": ["tracking_number", "carrier", "status", "events"]
+    "tracking_id": { "type": "string" },
+    "carrier_code": { "type": "string" },
+    "current_state": {
+      "type": "string",
+      "enum": ["PICKED_UP", "IN_TRANSIT", "DELIVERED", "EXCEPTION"]
+    },
+    "last_description": { "type": "string" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "eta": { "type": "string", "format": "date-time" }
+  }
 }
