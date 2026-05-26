@@ -5,12 +5,12 @@
     { "src": "public/**/*", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/v1/bookings", "methods": ["POST"], "dest": "/api/bookings.go" },
-    { "src": "/api/v1/bookings/(?<id>[^/]+)/label", "methods": ["GET"], "dest": "/api/bookings.go?id=$id&asset=label" },
-    { "src": "/api/v1/bookings/(?<id>[^/]+)/return-label", "methods": ["GET"], "dest": "/api/bookings.go?id=$id&asset=return-label" },
-    { "src": "/api/v1/service-points", "methods": ["GET"], "dest": "/api/service-points.go" },
-    { "src": "/api/v1/tracking/(?<id>[^/]+)", "methods": ["GET"], "dest": "/api/tracking.go?id=$id" },
-    { "src": "/api/v1/status", "methods": ["GET"], "dest": "/api/status.go" },
+    { "src": "/api/v1/postnord-bookings", "methods": ["POST"], "dest": "/api/postnord-bookings.go" },
+    { "src": "/api/v1/postnord-bookings/(?<id>[^/]+)/label", "methods": ["GET"], "dest": "/api/postnord-bookings.go?id=$id&asset=label" },
+    { "src": "/api/v1/postnord-bookings/(?<id>[^/]+)/return-label", "methods": ["GET"], "dest": "/api/postnord-bookings.go?id=$id&asset=return-label" },
+    { "src": "/api/v1/postnord-service-points", "methods": ["GET"], "dest": "/api/postnord-service-points.go" },
+    { "src": "/api/v1/postnord-tracking/(?<id>[^/]+)", "methods": ["GET"], "dest": "/api/postnord-tracking.go?id=$id" },
+    { "src": "/api/v1/postnord-status", "methods": ["GET"], "dest": "/api/postnord-status.go" },
 
     { "src": "/api/v1/dao-bookings", "methods": ["POST"], "dest": "/api/dao-bookings.go" },
     { "src": "/api/v1/dao-bookings/(?<id>[^/]+)/label", "methods": ["GET"], "dest": "/api/dao-bookings.go?id=$id&asset=label" },
