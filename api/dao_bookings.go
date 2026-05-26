@@ -1,5 +1,5 @@
 package api
-// /api/dao-bookings.go
+// /api/dao_bookings.go
 
 import (
 	"encoding/json"
@@ -25,12 +25,12 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 		if asset != "" {
 			if format == "qr" {
 				w.Header().Set("Content-Type", "image/png")
-				fmt.Fprintf(w, "[MOCK QR CODE STREAM FOR DAO ASSET %s ID %s]", asset, id)
+				_, _ = fmt.Fprintf(w, "[MOCK QR CODE STREAM FOR DAO ASSET %s ID %s]", asset, id)
 				return
 			}
 			w.Header().Set("Content-Type", "application/pdf")
 			w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"dao-%s-%s.pdf\"", asset, id))
-			fmt.Fprintf(w, "%%PDF-1.4 [MOCK DAO PDF FOR ID: %s]", id)
+			_, _ = fmt.Fprintf(w, "%%PDF-1.4 [MOCK DAO PDF FOR ID: %s]", id)
 			return
 		}
 
@@ -41,11 +41,11 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 
 			if !exists {
 				w.WriteHeader(http.StatusNotFound)
-				json.NewEncoder(w).Encode(map[string]string{"error": "Booking job not found"})
+				_, _ = json.NewEncoder(w).Encode(map[string]string{"error": "Booking job not found"})
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(job)
+			_, _ = json.NewEncoder(w).Encode(job)
 			return
 		}
 		w.WriteHeader(http.StatusBadRequest)
@@ -61,17 +61,22 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 
 		if len(req.Colli) == 0 || req.Destination.CountryCode == "" {
 			w.WriteHeader(http.StatusUnprocessableEntity)
-			json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{"Missing required fields: colli or destination.country_code"}})
+			_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"errors": []string{"Missing required fields: colli array or destination.country_code"},
+			})
 			return
 		}
 
-		// TRADE COMPLIANCE (Symmetrisk beskyttelse på tværs af strategier)
+		// TRADE COMPLIANCE & GUIDED SELF-CORRECTION (Symmetrisk tjek for DAO)
 		if req.Destination.CountryCode == "NO" || req.Destination.CountryCode == "GB" {
 			if req.Incoterm == "" || len(req.CustomsItems) == 0 {
-				errMsg := "Trade Compliance Violation: Non-EU destination via DAO requires automated customs mapping and full HS datasets."
+				errMsg := "Trade Compliance Violation: Non-EU destination via DAO requires automated customs mapping and full HS datasets. Verify metrics at https://www.tariffnumber.com/"
 				GlobalEM.Notify(ExceptionEvent{Carrier: "dao", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
 				w.WriteHeader(http.StatusUnprocessableEntity)
-				json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{errMsg}})
+				_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"errors": []string{errMsg},
+					"guided_correction_url": "https://www.tariffnumber.com/",
+				})
 				return
 			}
 		}
@@ -84,7 +89,7 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			retFormat = "qr"
 		}
 
-		// --- ASYNKRONT FLOW ---
+		// --- ASYNCHRONOUS STRATEGY ---
 		if execMode == "async" {
 			daoMutex.Lock()
 			daoJobs[bookingID] = &BookingResult{BookingID: bookingID, Status: "queued"}
@@ -105,11 +110,11 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			}(bookingID, req.IncludeReturnLabel, retFormat, r.Host)
 
 			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
+			_, _ = json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
 			return
 		}
 
-		// --- SYNKRONT FLOW ---
+		// --- SYNCHRONOUS STRATEGY ---
 		w.WriteHeader(http.StatusCreated)
 		res := BookingResult{
 			BookingID: bookingID,
@@ -120,7 +125,7 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			res.ReturnFormat = retFormat
 			res.ReturnLabelURL = fmt.Sprintf("https://%s/api/v1/dao-bookings/%s/return-label?format=%s", r.Host, bookingID, retFormat)
 		}
-		json.NewEncoder(w).Encode(res)
+		_, _ = json.NewEncoder(w).Encode(res)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)

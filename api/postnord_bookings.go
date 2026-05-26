@@ -1,5 +1,5 @@
 package api
-// /api/postnord-bookings.go
+// /api/postnord_bookings.go
 
 import (
 	"encoding/json"
@@ -14,7 +14,6 @@ var (
 	pnMutex sync.RWMutex
 )
 
-// Liste over EU-lande til lynhurtigt Trade Compliance tjek
 var euCountries = map[string]bool{
 	"DK": true, "SE": true, "FI": true, "DE": true, "FR": true, "NL": true,
 	"BE": true, "IT": true, "ES": true, "AT": true, "PL": true, "IE": true,
@@ -31,12 +30,12 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 		if asset != "" {
 			if format == "qr" {
 				w.Header().Set("Content-Type", "image/png")
-				fmt.Fprintf(w, "[MOCK QR CODE STREAM FOR POSTNORD ASSET %s ID %s]", asset, id)
+				_, _ = fmt.Fprintf(w, "[MOCK QR CODE STREAM FOR POSTNORD ASSET %s ID %s]", asset, id)
 				return
 			}
 			w.Header().Set("Content-Type", "application/pdf")
 			w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"postnord-%s-%s.pdf\"", asset, id))
-			fmt.Fprintf(w, "%%PDF-1.4 [MOCK POSTNORD PDF FOR ID: %s]", id)
+			_, _ = fmt.Fprintf(w, "%%PDF-1.4 [MOCK POSTNORD PDF FOR ID: %s]", id)
 			return
 		}
 
@@ -47,11 +46,11 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 
 			if !exists {
 				w.WriteHeader(http.StatusNotFound)
-				json.NewEncoder(w).Encode(map[string]string{"error": "Booking job not found"})
+				_, _ = json.NewEncoder(w).Encode(map[string]string{"error": "Booking job not found"})
 				return
 			}
 			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(job)
+			_, _ = json.NewEncoder(w).Encode(job)
 			return
 		}
 		w.WriteHeader(http.StatusBadRequest)
@@ -65,36 +64,44 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// 1. Core Schema Validering
+		// 1. Core Schema Validation
 		if len(req.Colli) == 0 || req.Destination.CountryCode == "" {
 			w.WriteHeader(http.StatusUnprocessableEntity)
-			json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{"Missing required fields: colli or destination.country_code"}})
+			_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"errors": []string{"Missing required fields: colli array or destination.country_code"},
+			})
 			return
 		}
 
-		// 2. AUTOMATED TRADE COMPLIANCE LOOP (Non-EU validation)
+		// 2. AUTOMATED TRADE COMPLIANCE & GUIDED SELF-CORRECTION LOOP
 		isEU := euCountries[req.Destination.CountryCode]
 		if !isEU {
 			if req.Incoterm != "DDP" && req.Incoterm != "DAP" {
 				errMsg := "Trade Compliance Violation: Non-EU shipments require a valid Incoterm (DDP or DAP)."
 				GlobalEM.Notify(ExceptionEvent{Carrier: "postnord", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
 				w.WriteHeader(http.StatusUnprocessableEntity)
-				json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{errMsg}})
+				_, _ = json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{errMsg}})
 				return
 			}
 			if len(req.CustomsItems) == 0 {
-				errMsg := "Trade Compliance Violation: Missing mandatory customs_items and HS Codes for Non-EU destination."
+				errMsg := "Trade Compliance Violation: Missing mandatory customs_items and HS Codes for Non-EU destination. Look up valid tariffs here: https://www.tariffnumber.com/"
 				GlobalEM.Notify(ExceptionEvent{Carrier: "postnord", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
 				w.WriteHeader(http.StatusUnprocessableEntity)
-				json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{errMsg}})
+				_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"errors": []string{errMsg},
+					"guided_correction_url": "https://www.tariffnumber.com/",
+				})
 				return
 			}
 			for _, item := range req.CustomsItems {
-				if item.HSCode == "" || item.Description == "" {
-					errMsg := "Trade Compliance Violation: Each customs item must contain a valid hs_code and description."
+				if item.HSCode == "" || item.Description == "" || item.CountryOfOrigin == "" {
+					errMsg := "Trade Compliance Violation: Each customs item must contain a valid hs_code, description, and country_of_origin. Verify codes at https://www.tariffnumber.com/"
 					GlobalEM.Notify(ExceptionEvent{Carrier: "postnord", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
 					w.WriteHeader(http.StatusUnprocessableEntity)
-					json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{errMsg}})
+					_, _ = json.NewEncoder(w).Encode(map[string]interface{}{
+						"errors": []string{errMsg},
+						"guided_correction_url": "https://www.tariffnumber.com/",
+					})
 					return
 				}
 			}
@@ -103,13 +110,12 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 		bookingID := fmt.Sprintf("BK-PN-%d", time.Now().Unix())
 		execMode := r.Header.Get("X-Execution-Mode")
 
-		// Definer returformat (Standard er pdf, medmindre qr er valgt)
 		retFormat := "pdf"
 		if req.ReturnFormat == "qr" {
 			retFormat = "qr"
 		}
 
-		// --- ASYNKRONT FLOW ---
+		// --- ASYNCHRONOUS STRATEGY ---
 		if execMode == "async" {
 			pnMutex.Lock()
 			pnJobs[bookingID] = &BookingResult{BookingID: bookingID, Status: "queued"}
@@ -130,11 +136,11 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			}(bookingID, req.IncludeReturnLabel, retFormat, r.Host)
 
 			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
+			_, _ = json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
 			return
 		}
 
-		// --- SYNKRONT FLOW ---
+		// --- SYNCHRONOUS STRATEGY ---
 		w.WriteHeader(http.StatusCreated)
 		res := BookingResult{
 			BookingID: bookingID,
@@ -145,7 +151,7 @@ func PostNordBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			res.ReturnFormat = retFormat
 			res.ReturnLabelURL = fmt.Sprintf("https://%s/api/v1/postnord-bookings/%s/return-label?format=%s", r.Host, bookingID, retFormat)
 		}
-		json.NewEncoder(w).Encode(res)
+		_, _ = json.NewEncoder(w).Encode(res)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
