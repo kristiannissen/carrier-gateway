@@ -6,6 +6,14 @@ import (
 	"time"
 )
 
+// DummyHandler er udelukkende til for at stille Vercels compiler tilfreds,
+// da denne fil kun fungerer som et delt bibliotek for vores andre endpoints.
+func DummyHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status": "Core engine online"}`))
+}
+
 // ==========================================
 // STRATEGY & ADAPTER PATTERN: Core Interfaces
 // ==========================================
