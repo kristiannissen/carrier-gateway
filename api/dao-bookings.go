@@ -17,15 +17,20 @@ var (
 func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// 1. GET: Polling eller download
 	if r.Method == http.MethodGet {
 		id := r.URL.Query().Get("id")
 		asset := r.URL.Query().Get("asset")
+		format := r.URL.Query().Get("format")
 
 		if asset != "" {
+			if format == "qr" {
+				w.Header().Set("Content-Type", "image/png")
+				fmt.Fprintf(w, "[MOCK QR CODE STREAM FOR DAO ASSET %s ID %s]", asset, id)
+				return
+			}
 			w.Header().Set("Content-Type", "application/pdf")
 			w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"dao-%s-%s.pdf\"", asset, id))
-			fmt.Fprintf(w, "%%PDF-1.4 [MOCK DAO %s DATA FOR ID: %s]", asset, id)
+			fmt.Fprintf(w, "%%PDF-1.4 [MOCK DAO PDF FOR ID: %s]", id)
 			return
 		}
 
@@ -43,29 +48,41 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(job)
 			return
 		}
-
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Missing 'id' parameter"})
 		return
 	}
 
-	// 2. POST: Oprettelse
 	if r.Method == http.MethodPost {
 		var req BookingRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON payload"})
 			return
 		}
 
-		if len(req.Colli) == 0 {
+		if len(req.Colli) == 0 || req.Destination.CountryCode == "" {
 			w.WriteHeader(http.StatusUnprocessableEntity)
-			json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{"At least one colli item is required"}})
+			json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{"Missing required fields: colli or destination.country_code"}})
 			return
+		}
+
+		// TRADE COMPLIANCE (Symmetrisk beskyttelse på tværs af strategier)
+		if req.Destination.CountryCode == "NO" || req.Destination.CountryCode == "GB" {
+			if req.Incoterm == "" || len(req.CustomsItems) == 0 {
+				errMsg := "Trade Compliance Violation: Non-EU destination via DAO requires automated customs mapping and full HS datasets."
+				GlobalEM.Notify(ExceptionEvent{Carrier: "dao", Endpoint: "Bookings-Compliance", ErrorMessage: errMsg, Timestamp: time.Now()})
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				json.NewEncoder(w).Encode(map[string]interface{}{"errors": []string{errMsg}})
+				return
+			}
 		}
 
 		bookingID := fmt.Sprintf("BK-DAO-%d", time.Now().Unix())
 		execMode := r.Header.Get("X-Execution-Mode")
+
+		retFormat := "pdf"
+		if req.ReturnFormat == "qr" {
+			retFormat = "qr"
+		}
 
 		// --- ASYNKRONT FLOW ---
 		if execMode == "async" {
@@ -73,26 +90,22 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			daoJobs[bookingID] = &BookingResult{BookingID: bookingID, Status: "queued"}
 			daoMutex.Unlock()
 
-			go func(id string, wantReturn bool, host string) {
-				time.Sleep(3 * time.Second) // Simulerer DAO backend api-kald
-				
+			go func(id string, wantReturn bool, format string, host string) {
+				time.Sleep(3 * time.Second)
 				daoMutex.Lock()
 				if job, exists := daoJobs[id]; exists {
 					job.Status = "completed"
 					job.LabelURL = fmt.Sprintf("https://%s/api/v1/dao-bookings/%s/label", host, id)
 					if wantReturn {
-						job.ReturnLabelURL = fmt.Sprintf("https://%s/api/v1/dao-bookings/%s/return-label", host, id)
+						job.ReturnFormat = format
+						job.ReturnLabelURL = fmt.Sprintf("https://%s/api/v1/dao-bookings/%s/return-label?format=%s", host, id, format)
 					}
 				}
 				daoMutex.Unlock()
-			}(bookingID, req.IncludeReturnLabel, r.Host)
+			}(bookingID, req.IncludeReturnLabel, retFormat, r.Host)
 
 			w.WriteHeader(http.StatusAccepted)
-			json.NewEncoder(w).Encode(map[string]string{
-				"booking_id": bookingID,
-				"status":     "queued",
-				"message":    "Shipment request accepted. Processing in background.",
-			})
+			json.NewEncoder(w).Encode(map[string]string{"booking_id": bookingID, "status": "queued"})
 			return
 		}
 
@@ -104,11 +117,11 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 			LabelURL:  fmt.Sprintf("https://%s/api/v1/dao-bookings/%s/label", r.Host, bookingID),
 		}
 		if req.IncludeReturnLabel {
-			res.ReturnLabelURL = fmt.Sprintf("https://%s/api/v1/dao-bookings/%s/return-label", r.Host, bookingID)
+			res.ReturnFormat = retFormat
+			res.ReturnLabelURL = fmt.Sprintf("https://%s/api/v1/dao-bookings/%s/return-label?format=%s", r.Host, bookingID, retFormat)
 		}
 		json.NewEncoder(w).Encode(res)
 		return
 	}
-
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
