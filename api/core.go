@@ -4,6 +4,7 @@ package api
 import (
 	"fmt"
 	"time"
+	"net/http"
 )
 
 // DummyHandler er udelukkende til for at stille Vercels compiler tilfreds,
