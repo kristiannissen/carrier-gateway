@@ -4,9 +4,10 @@
     { "src": "/api/v1/dao-bookings", "methods": ["POST"], "dest": "/api/dao_bookings.go" },
     { "src": "/api/v1/legacy-transform", "methods": ["POST"], "dest": "/api/legacy_transform.go" },
     { "src": "/api/v1/status", "methods": ["GET"], "dest": "/api/core.go" },
-    { "src": "/docs.html", "dest": "/public/docs.html" },
-    { "src": "/status.html", "dest": "/public/status.html" },
+    { "src": "/docs", "dest": "/public/docs.html" },
+    { "src": "/status", "dest": "/public/status.html" },
+    { "src": "/sandbox.html", "dest": "/public/sandbox.html" },
     { "src": "/", "dest": "/public/index.html" },
-    { "src": "/(.*)", "dest": "/api/core.go" }
+    { "src": "/api/(.*)", "dest": "/api/core.go" }
   ]
 }
