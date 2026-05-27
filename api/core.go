@@ -2,64 +2,57 @@ package api
 // /api/core.go
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 )
 
 // ==========================================
-// STRATEGY & ADAPTER PATTERN: Core Structures
+// DATA MODELS & SCHEMA CONSTRAINTS
 // ==========================================
 
-// Dimensions represents the physical package layout constraints required
-// by enterprise WMS and major Scandinavian carrier grids.
 type Dimensions struct {
 	LengthCM float64 `json:"length_cm"`
 	WidthCM  float64 `json:"width_cm"`
 	HeightCM float64 `json:"height_cm"`
 }
 
-// ColliItem defines an individual physical package within a multi-colli shipment.
 type ColliItem struct {
 	WeightKG   float64    `json:"weight_kg"`
 	Dimensions Dimensions `json:"dimensions"`
 }
 
-// CashOnDelivery represents the financial collection instructions triggered
-// upon physical delivery of the goods to the recipient (COD).
 type CashOnDelivery struct {
 	Amount   float64 `json:"amount"`
 	Currency string  `json:"currency"`
 }
 
-// CustomsItem handles international trade compliance datasets for Non-EU zones.
 type CustomsItem struct {
-	HSCode           string  `json:"hs_code"`
-	Description      string  `json:"description"`
-	Value            float64 `json:"value"`
-	Currency         string  `json:"currency"`
-	CountryOfOrigin  string  `json:"country_of_origin"`
+	HSCode          string  `json:"hs_code"`
+	Description     string  `json:"description"`
+	Value           float64 `json:"value"`
+	Currency        string  `json:"currency"`
+	CountryOfOrigin string  `json:"country_of_origin"`
 }
 
-// Destination models the delivery target coordinates and location parameters.
 type Destination struct {
-	CountryCode string `json:"country_code"` // e.g., "DK", "NO", "GB"
-	Type        string `json:"type"`         // e.g., "home", "shop"
+	CountryCode string `json:"country_code"`
+	Type        string `json:"type"`
 }
 
-// BookingRequest represents the primary unified ingress data payload received from
-// an API client or ERP system trying to secure carrier shipment fulfillment assets.
 type BookingRequest struct {
 	CarrierCode        string          `json:"carrier_code"`
 	IncludeReturnLabel bool            `json:"include_return_label,omitempty"`
-	ReturnFormat       string          `json:"return_format,omitempty"` // "pdf" or "qr"
-	Incoterm           string          `json:"incoterm,omitempty"`      // "DDP" or "DAP"
+	ReturnFormat       string          `json:"return_format,omitempty"`
+	Incoterm           string          `json:"incoterm,omitempty"`
 	Destination        Destination     `json:"destination"`
 	Colli              []ColliItem     `json:"colli"`
 	CustomsItems       []CustomsItem   `json:"customs_items,omitempty"`
 	CashOnDelivery     *CashOnDelivery `json:"cash_on_delivery,omitempty"`
 }
 
-// BookingResult defines the normalized response payload returned to the client.
 type BookingResult struct {
 	BookingID      string   `json:"booking_id"`
 	Status         string   `json:"status"`
@@ -69,16 +62,40 @@ type BookingResult struct {
 	Errors         []string `json:"errors,omitempty"`
 }
 
-// CarrierStrategy defines the strict unified interface contract for all integrated courier engines.
+// ==========================================
+// STRATEGY PATTERN CORE IMPLEMENTATION
+// ==========================================
+
 type CarrierStrategy interface {
 	ExecuteBooking(req BookingRequest) (*BookingResult, error)
 }
 
+var (
+	strategies      = make(map[string]CarrierStrategy)
+	strategiesMutex sync.RWMutex
+)
+
+func RegisterStrategy(name string, strategy CarrierStrategy) {
+	strategiesMutex.Lock()
+	defer strategiesMutex.Unlock()
+	strategies[strings.ToLower(name)] = strategy
+}
+
+func DispatchBooking(req BookingRequest) (*BookingResult, error) {
+	strategiesMutex.RLock()
+	strategy, exists := strategies[strings.ToLower(req.CarrierCode)]
+	strategiesMutex.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("carrier strategy '%s' is not supported or registered in gateway", req.CarrierCode)
+	}
+	return strategy.ExecuteBooking(req)
+}
+
 // ==========================================
-// OBSERVER PATTERN: Technical Telemetry
+// OBSERVER PATTERN: TELEMETRY LOGGING
 // ==========================================
 
-// ExceptionEvent encapsulates critical runtime failure states for background logging.
 type ExceptionEvent struct {
 	Carrier      string
 	Endpoint     string
@@ -86,26 +103,22 @@ type ExceptionEvent struct {
 	Timestamp    time.Time
 }
 
-// EventObserver defines the interface for subscribing to core system telemetry exceptions.
 type EventObserver interface {
 	OnException(event ExceptionEvent)
 }
 
-// TechnicalLogger writes critical telemetry diagnostic info to stdout in English.
 type TechnicalLogger struct{}
 
 func (tl TechnicalLogger) OnException(event ExceptionEvent) {
 	println("\n🛑 [CRITICAL LOG] [" + event.Timestamp.Format(time.RFC3339) + "] Carrier: " + event.Carrier + " | Endpoint: " + event.Endpoint + " | Error: " + event.ErrorMessage)
 }
 
-// EventManager orchestrates live stream dispatching to registered decoupled observers.
-type EventManager struct {
-	observers []EventObserver
-}
-
-// GlobalEM acts as the central messaging registry for the entire execution thread context.
 var GlobalEM = &EventManager{
 	observers: []EventObserver{TechnicalLogger{}},
+}
+
+type EventManager struct {
+	observers []EventObserver
 }
 
 func (em *EventManager) Notify(event ExceptionEvent) {
@@ -114,7 +127,6 @@ func (em *EventManager) Notify(event ExceptionEvent) {
 	}
 }
 
-// DummyHandler for Vercel deployment compliance.
 func DummyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
