@@ -4,6 +4,7 @@
     { "src": "/api/v1/dao-bookings", "methods": ["POST"], "dest": "/api/dao_bookings.go" },
     { "src": "/api/v1/instabee-bookings", "methods": ["POST"], "dest": "/api/instabee_bookings.go" },
     { "src": "/api/v1/dhl-bookings", "methods": ["POST"], "dest": "/api/dhl_bookings.go" },
+    { "src": "/api/v1/budbee-bookings", "methods": ["POST"], "dest": "/api/budbee_bookings.go" },
     { "src": "/api/v1/legacy-transform", "methods": ["POST"], "dest": "/api/legacy_transform.go" },
     { "src": "/api/v1/status", "methods": ["GET"], "dest": "/api/core.go" },
     { "handle": "filesystem" },
