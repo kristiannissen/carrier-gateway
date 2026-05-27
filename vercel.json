@@ -1,14 +1,55 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "api/core.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/dao.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/budbee.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/dhl.go",
+      "use": "@vercel/go"
+    },
+    {
+      "src": "api/packeta.go",
+      "use": "@vercel/go"
+    }
+  ],
   "routes": [
-    { "src": "/api/v1/dao-bookings", "methods": ["POST"], "dest": "/api/dao_bookings.go" },
-    { "src": "/api/v1/instabee-bookings", "methods": ["POST"], "dest": "/api/instabee_bookings.go" },
-    { "src": "/api/v1/dhl-bookings", "methods": ["POST"], "dest": "/api/dhl_bookings.go" },
-    { "src": "/api/v1/budbee-bookings", "methods": ["POST"], "dest": "/api/budbee_bookings.go" },
-    { "src": "/api/v1/packeta-bookings", "methods": ["POST"], "dest": "/api/packeta_bookings.go" },
-    { "src": "/api/v1/legacy-transform", "methods": ["POST"], "dest": "/api/legacy_transform.go" },
-    { "src": "/api/v1/status", "methods": ["GET"], "dest": "/api/core.go" },
-    { "handle": "filesystem" },
-    { "src": "/api/(.*)", "dest": "/api/core.go" }
+    {
+      "src": "/api/status",
+      "dest": "api/core.go"
+    },
+    {
+      "src": "/api/service-points",
+      "dest": "api/core.go"
+    },
+    {
+      "src": "/api/tracking",
+      "dest": "api/core.go"
+    },
+    {
+      "src": "/api/dao_bookings",
+      "dest": "api/dao.go"
+    },
+    {
+      "src": "/api/budbee_bookings",
+      "dest": "api/budbee.go"
+    },
+    {
+      "src": "/api/dhl_bookings",
+      "dest": "api/dhl.go"
+    },
+    {
+      "src": "/api/packeta_bookings",
+      "dest": "api/packeta.go"
+    }
   ]
 }
