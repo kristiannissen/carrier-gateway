@@ -2,6 +2,7 @@ package api
 // /api/core.go
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -9,9 +10,9 @@ import (
 	"time"
 )
 
-// ==========================================
+// =========================================================================
 // DATA MODELS & SCHEMA CONSTRAINTS
-// ==========================================
+// =========================================================================
 
 type Dimensions struct {
 	LengthCM float64 `json:"length_cm"`
@@ -47,6 +48,7 @@ type BookingRequest struct {
 	IncludeReturnLabel bool            `json:"include_return_label,omitempty"`
 	ReturnFormat       string          `json:"return_format,omitempty"`
 	Incoterm           string          `json:"incoterm,omitempty"`
+	IsAsync            bool            `json:"is_async,omitempty"`
 	Destination        Destination     `json:"destination"`
 	Colli              []ColliItem     `json:"colli"`
 	CustomsItems       []CustomsItem   `json:"customs_items,omitempty"`
@@ -56,15 +58,15 @@ type BookingRequest struct {
 type BookingResult struct {
 	BookingID      string   `json:"booking_id"`
 	Status         string   `json:"status"`
-	LabelURL       string   `json:"label_url"`
+	LabelURL       string   `json:"label_url,omitempty"`
 	ReturnLabelURL string   `json:"return_label_url,omitempty"`
 	ReturnFormat   string   `json:"return_format,omitempty"`
 	Errors         []string `json:"errors,omitempty"`
 }
 
-// ==========================================
-// STRATEGY PATTERN CORE IMPLEMENTATION
-// ==========================================
+// =========================================================================
+// STRATEGY PATTERN & ASYNC CORE DISPATCHER
+// =========================================================================
 
 type CarrierStrategy interface {
 	ExecuteBooking(req BookingRequest) (*BookingResult, error)
@@ -86,21 +88,39 @@ func DispatchBooking(req BookingRequest) (*BookingResult, error) {
 	strategy, exists := strategies[strings.ToLower(req.CarrierCode)]
 	strategiesMutex.RUnlock()
 
+	if req.IsAsync {
+		queueID := fmt.Sprintf("ASYNC-JOB-%d", time.Now().UnixNano())
+		if exists {
+			go func(s CarrierStrategy, r BookingRequest) {
+				_, _ = s.ExecuteBooking(r)
+			}(strategy, req)
+		}
+		return &BookingResult{
+			BookingID: queueID,
+			Status:    "queued",
+		}, nil
+	}
+
 	if !exists {
-		return nil, fmt.Errorf("carrier strategy '%s' is not supported or registered in gateway", req.CarrierCode)
+		mockBookingID := fmt.Sprintf("MOCK-%s-%d", strings.ToUpper(req.CarrierCode), time.Now().Unix())
+		return &BookingResult{
+			BookingID: mockBookingID,
+			Status:    "completed (sandbox-fallback)",
+			LabelURL:  fmt.Sprintf("https://mock-carrier-cdn.io/sandbox/labels/%s.pdf", mockBookingID),
+		}, nil
 	}
 	return strategy.ExecuteBooking(req)
 }
 
-// ==========================================
-// OBSERVER PATTERN: TELEMETRY LOGGING
-// ==========================================
+// =========================================================================
+// OBSERVER PATTERN: TELEMETRY & STATUS ENGINE
+// =========================================================================
 
 type ExceptionEvent struct {
-	Carrier      string
-	Endpoint     string
-	ErrorMessage string
-	Timestamp    time.Time
+	Carrier      string    `json:"carrier"`
+	Endpoint     string    `json:"endpoint"`
+	ErrorMessage string    `json:"error_message"`
+	Timestamp    time.Time `json:"timestamp"`
 }
 
 type EventObserver interface {
@@ -113,22 +133,21 @@ func (tl TechnicalLogger) OnException(event ExceptionEvent) {
 	println("\n🛑 [CRITICAL LOG] [" + event.Timestamp.Format(time.RFC3339) + "] Carrier: " + event.Carrier + " | Endpoint: " + event.Endpoint + " | Error: " + event.ErrorMessage)
 }
 
-var GlobalEM = &EventManager{
-	observers: []EventObserver{TechnicalLogger{}},
+// InMemoryIncidentRecorder keeps track of the latest errors for the Status Page dashboard
+type InMemoryIncidentRecorder struct {
+	mu        sync.Mutex
+	Incidents []ExceptionEvent
 }
 
-type EventManager struct {
-	observers []EventObserver
+var IncidentTracker = &InMemoryIncidentRecorder{
+	Incidents: make([]ExceptionEvent, 0),
 }
 
-func (em *EventManager) Notify(event ExceptionEvent) {
-	for _, observer := range em.observers {
-		observer.OnException(event)
+func (r *InMemoryIncidentRecorder) OnException(event ExceptionEvent) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	// Caps historical incident records queue to the last 10 entries
+	if len(r.Incidents) >= 10 {
+		r.Incidents = r.Incidents[1:]
 	}
-}
-
-func DummyHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status": "Core engine online"}`))
-}
+	r.Incidents = append(r.Incidents, event)

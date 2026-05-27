@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation</title>
+    <style>
+        :root {
+            --bg-color: #0D0E12;
+            --card-bg: #161820;
+            --accent-pink: #FF91AF;
+            --text-main: #E4E6EB;
+            --text-muted: #9EA2B0;
+            --border-color: #2A2D3C;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg-color); color: var(--text-main); margin:0; padding:0; }
+        header { border-bottom: 1px solid var(--border-color); padding: 1.5rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.5px; }
+        .logo span { color: var(--accent-pink); }
+        nav a { color: var(--text-muted); text-decoration: none; margin-left: 1.5rem; font-size: 0.95rem; }
+        nav a:hover, nav a.active { color: var(--accent-pink); }
+        .content { max-width: 800px; margin: 4rem auto; padding: 0 2rem; }
+        h1 { color: var(--accent-pink); font-size: 2rem; }
+        .placeholder-box { border: 2px dashed var(--border-color); padding: 4rem; text-align: center; border-radius: 8px; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">Logistics<span>.Gateway</span></div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/sandbox.html">Sandbox</a>
+            <a href="/docs.html" class="active">Docs</a>
+        </nav>
+    </header>
+    <div class="content">
+        <h1>API Specifications & Integration Blueprint</h1>
+        <div class="placeholder-box">
+            <p>Documentation roadmap locked. As agreed, full schema specs, HS customs mappings, and async callback loop blueprints will be compiled here once the gateway engine integration goes 100% stable.</p>
+        </div>
+    </div>
+</body>
+</html>

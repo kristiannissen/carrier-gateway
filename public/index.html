@@ -1,131 +1,169 @@
 <!DOCTYPE html>
-<html lang="da">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logistics Gateway - Professional API Portal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace'],
-                    },
-                    colors: {
-                        gatewayPink: '#ff007f',
-                        gatewayDark: '#0a050d',
-                        gatewayCard: '#150a1a'
-                    },
-                    boxShadow: {
-                        neon: '0 0 20px rgba(255, 0, 127, 0.3)',
-                        neonStrong: '0 0 40px rgba(255, 0, 127, 0.5)',
-                    }
-                }
-            }
-        }
-    </script>
+    <title>Logistics Gateway Engine</title>
     <style>
-        .pink-glow-text {
-            text-shadow: 0 0 10px rgba(255, 0, 127, 0.5);
+        :root {
+            --bg-color: #0D0E12;
+            --card-bg: #161820;
+            --accent-pink: #FF91AF;
+            --text-main: #E4E6EB;
+            --text-muted: #9EA2B0;
+            --border-color: #2A2D3C;
         }
-        .bg-grid {
-            background-image: radial-gradient(circle, #ff007f 1px, transparent 1px);
-            background-size: 40px 40px;
-            opacity: 0.05;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .logo span {
+            color: var(--accent-pink);
+        }
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            margin-left: 1.5rem;
+            font-size: 0.95rem;
+            transition: color 0.2s;
+        }
+        nav a:hover, nav a.active {
+            color: var(--accent-pink);
+        }
+        main {
+            flex: 1;
+            max-width: 800px;
+            margin: 4rem auto;
+            padding: 0 2rem;
+            text-align: center;
+        }
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 1rem;
+            line-height: 1.1;
+        }
+        h1 span {
+            color: var(--accent-pink);
+        }
+        p.lead {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+            line-height: 1.6;
+        }
+        .cta-group {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 4rem;
+        }
+        .btn {
+            padding: 0.8rem 1.6rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 6px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background-color: var(--accent-pink);
+            color: var(--bg-color);
+        }
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            border-color: var(--accent-pink);
+            color: var(--accent-pink);
+        }
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            text-align: left;
+            margin-top: 2rem;
+        }
+        .feature-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+        .feature-card h3 {
+            color: var(--accent-pink);
+            margin-top: 0;
+            font-size: 1.1rem;
+        }
+        .feature-card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 0;
+            line-line: 1.5;
+        }
+        footer {
+            border-top: 1px solid var(--border-color);
+            padding: 1.5rem 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
         }
     </style>
 </head>
-<body class="bg-gatewayDark text-gray-100 min-h-screen font-sans selection:bg-gatewayPink selection:text-white">
-    
-    <div class="fixed inset-0 bg-grid pointer-events-none"></div>
-    <div class="fixed top-0 -left-4 w-72 h-72 bg-gatewayPink rounded-full mix-blend-multiply filter blur-[120px] opacity-10 animate-blob"></div>
-    <div class="fixed bottom-0 -right-4 w-96 h-96 bg-purple-600 rounded-full mix-blend-multiply filter blur-[150px] opacity-10 animate-blob animation-delay-2000"></div>
-
-    <nav class="sticky top-0 z-50 border-b border-gatewayPink/20 bg-gatewayDark/80 backdrop-blur-md p-5">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-2">
-                <div class="w-8 h-8 bg-gatewayPink rounded flex items-center justify-center shadow-neon">
-                    <span class="text-gatewayDark font-black text-xs">L.GW</span>
-                </div>
-                <span class="text-2xl font-black tracking-tighter pink-glow-text">LOGISTICS<span class="text-gatewayPink">.</span>GW</span>
+<body>
+    <header>
+        <div class="logo">Logistics<span>.Gateway</span></div>
+        <nav>
+            <a href="/" class="active">Home</a>
+            <a href="/sandbox.html">Sandbox</a>
+            <a href="/docs.html">Docs</a>
+        </nav>
+    </header>
+    <main>
+        <h1>One Unified API for <span>Multi-Carrier</span> Shipping</h1>
+        <p class="lead">Integrate DAO, PostNord, and global freight networks seamlessly. Hides complex carrier logistics backend models under a unified, ultra-fast Go engine.</p>
+        <div class="cta-group">
+            <a href="/sandbox.html" class="btn btn-primary">Enter Interactive Sandbox</a>
+            <a href="https://github.com/kristiannissen/logistics-gateway" target="_blank" class="btn btn-secondary">View GitHub Repository</a>
+        </div>
+        <div class="features">
+            <div class="feature-card">
+                <h3>Strategy Pattern Architecture</h3>
+                <p>Add or swap carrier logic dynamically via Go runtime interfaces without altering core engine layouts.</p>
             </div>
-            <div class="hidden md:flex space-x-8 text-sm font-bold uppercase tracking-widest">
-                <a href="/docs" class="hover:text-gatewayPink transition-colors">Dokumentation</a>
-                <a href="/sandbox" class="hover:text-gatewayPink transition-colors">Sandkasse</a>
-                <a href="/status" class="hover:text-gatewayPink transition-colors">Status</a>
-            </div>
-            <a href="/sandbox" class="bg-gatewayPink/10 border border-gatewayPink/50 text-gatewayPink px-4 py-2 rounded-lg text-xs font-black hover:bg-gatewayPink hover:text-white transition-all duration-300">GET STARTED</a>
-        </div>
-    </nav>
-
-    <main class="relative z-10 max-w-7xl mx-auto px-6 pt-20 pb-32">
-        
-        <div class="text-center mb-24">
-            <h1 class="text-6xl md:text-8xl font-black tracking-tighter mb-6 leading-none">
-                BYG FREMTIDENS <br>
-                <span class="text-transparent bg-clip-text bg-gradient-to-r from-white via-gatewayPink to-purple-500 pink-glow-text">LOGISTIK FLOW</span>
-            </h1>
-            <p class="max-w-2xl mx-auto text-gray-400 text-xl font-medium leading-relaxed">
-                Den hurtigste vej til PostNord integration. Vores Gateway abstraherer kompleksiteten væk, så du kan fokusere på at sende pakker.
-            </p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-32">
-            
-            <a href="/docs" class="group bg-gatewayCard border border-white/5 p-8 rounded-3xl hover:border-gatewayPink/50 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
-                    <svg class="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                </div>
-                <h3 class="text-gatewayPink font-black tracking-widest text-xs uppercase mb-4">Integrationsguide</h3>
-                <h2 class="text-3xl font-black mb-4">DOKUMENTATION</h2>
-                <p class="text-gray-400 font-medium">Læs om alle vores endpoints og se hvordan du mapper dine data live fra vores API-kald.</p>
-                <div class="mt-8 flex items-center text-gatewayPink font-bold space-x-2">
-                    <span>Læs mere</span>
-                    <span class="group-hover:translate-x-2 transition-transform">→</span>
-                </div>
-            </a>
-
-            <a href="/sandbox" class="group bg-gatewayCard border border-white/5 p-8 rounded-3xl hover:border-gatewayPink/50 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden shadow-neon">
-                <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
-                    <svg class="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
-                </div>
-                <h3 class="text-gatewayPink font-black tracking-widest text-xs uppercase mb-4">Test Miljø</h3>
-                <h2 class="text-3xl font-black mb-4">SANDBOX</h2>
-                <p class="text-gray-400 font-medium">Affyr interaktive API-kald direkte fra browseren og se JSON-responsen fra gatewayen med det samme.</p>
-                <div class="mt-8 flex items-center text-gatewayPink font-bold space-x-2">
-                    <span>Prøv det nu</span>
-                    <span class="group-hover:translate-x-2 transition-transform">→</span>
-                </div>
-            </a>
-
-            <a href="/status" class="group bg-gatewayCard border border-white/5 p-8 rounded-3xl hover:border-gatewayPink/50 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 transition-opacity">
-                    <svg class="w-24 h-24 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                </div>
-                <h3 class="text-gatewayPink font-black tracking-widest text-xs uppercase mb-4">System Helbred</h3>
-                <h2 class="text-3xl font-black mb-4">API STATUS</h2>
-                <p class="text-gray-400 font-medium">Overvåg oppetiden på tværs af gatewayen og alle vores transportør-integrationer i realtid.</p>
-                <div class="mt-8 flex items-center text-gatewayPink font-bold space-x-2">
-                    <span>Se status</span>
-                    <span class="group-hover:translate-x-2 transition-transform">→</span>
-                </div>
-            </a>
-
-        </div>
-
-        <div class="border-t border-white/5 pt-12 flex flex-col md:flex-row justify-between items-center text-gray-500 text-sm font-bold">
-            <div>&copy; 2026 LOGISTICS GATEWAY . MVP FOCUS: POSTNORD</div>
-            <div class="mt-4 md:mt-0 flex space-x-8">
-                <a href="/api/v1/status" class="hover:text-gatewayPink transition">API v1</a>
-                <a href="/schemas/bookings-v1.json" class="hover:text-gatewayPink transition">JSON SCHEMA</a>
-                <a href="https://github.com/kristiannissen/logistics-gateway" class="hover:text-gatewayPink transition">GITHUB</a>
+            <div class="feature-card">
+                <h3>Synchronous & Asynchronous Routing</h3>
+                <p>Choose high-speed real-time label resolution or utilize automated background workers via Go routines.</p>
             </div>
         </div>
-
     </main>
-
+    <footer>
+        &copy; 2026 Logistics Gateway Project. Built with Go and Baker-Miller Pink (#FF91AF).
+    </footer>
 </body>
 </html>

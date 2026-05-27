@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-// DAOExpressPayload defines the specific JSON schema required by the DAO API.
 type DAOExpressPayload struct {
 	CustomerToken  string `json:"customer_token"`
 	WeightGrams    int    `json:"weight_grams"`
@@ -18,7 +17,6 @@ type DAOExpressPayload struct {
 	CustomerRef    string `json:"customer_reference"`
 }
 
-// DAOResponsePayload defines the expected JSON response contract from the DAO API.
 type DAOResponsePayload struct {
 	Success        bool   `json:"success"`
 	ShipmentID     string `json:"shipment_id"`
@@ -30,11 +28,8 @@ type DAOResponsePayload struct {
 
 type DAOStrategy struct{}
 
-// ExecuteBooking handles the operational trade compliance and dispatches the request
-// either to the live DAO REST API or falls back gracefully to Sandbox simulation mode.
 func (s DAOStrategy) ExecuteBooking(req BookingRequest) (*BookingResult, error) {
-	
-	// 1. Trade Compliance Validation for Non-EU Destinations
+	// 1. Trade Compliance Validation
 	if req.Destination.CountryCode == "NO" || req.Destination.CountryCode == "GB" {
 		if req.Incoterm == "" || len(req.CustomsItems) == 0 {
 			errMsg := "Trade Compliance Violation: Non-EU destination via DAO requires automated customs mapping and full HS datasets. Verify metrics at https://www.tariffnumber.com/"
@@ -43,14 +38,12 @@ func (s DAOStrategy) ExecuteBooking(req BookingRequest) (*BookingResult, error) 
 		}
 	}
 
-	// 2. Fetch API Gateway Credentials from Environment Context
+	// 2. Fetch Credentials from Environment Context
 	apiKey := os.Getenv("DAO_API_KEY")
 	apiURL := os.Getenv("DAO_API_URL")
 
 	// 3. Automated Sandbox Fallback Mechanism
-	// If variables are empty, the system safely degrades to simulated local mock responses.
 	if apiKey == "" || apiURL == "" {
-		// Log sandbox routing telemetry event via the Observer Pattern
 		GlobalEM.Notify(ExceptionEvent{
 			Carrier:      "dao",
 			Endpoint:     "Strategy-Engine",
@@ -58,7 +51,6 @@ func (s DAOStrategy) ExecuteBooking(req BookingRequest) (*BookingResult, error) 
 			Timestamp:    time.Now(),
 		})
 
-		// Synthesize valid mock payload for sandbox confirmation loops
 		mockBookingID := fmt.Sprintf("MOCK-DAO-%d", time.Now().Unix())
 		mockResult := &BookingResult{
 			BookingID: mockBookingID,
@@ -78,9 +70,8 @@ func (s DAOStrategy) ExecuteBooking(req BookingRequest) (*BookingResult, error) 
 	}
 
 	// =========================================================================
-	// LIVE CARRIER API EXECUTION FLOW (PRODUCTION / LIVE TEST STAGE)
+	// LIVE CARRIER API EXECUTION FLOW (PRODUCTION)
 	// =========================================================================
-
 	totalWeightGrams := 0
 	for _, colli := range req.Colli {
 		totalWeightGrams += int(colli.WeightKG * 1000)
@@ -128,8 +119,6 @@ func (s DAOStrategy) ExecuteBooking(req BookingRequest) (*BookingResult, error) 
 		return nil, fmt.Errorf("DAO business logic rejection: %s", daoResponse.ErrorMsg)
 	}
 
-	// Map DAO's production response back to our unified BookingResult format.
-	// We use the actual label and return URLs provided by the carrier API.
 	res := &BookingResult{
 		BookingID: daoResponse.ShipmentID,
 		Status:    "completed",
@@ -162,6 +151,11 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Capture asynchronous runtime flag either via custom header or explicit JSON field
+	if r.Header.Get("Prefer") == "respond-async" || req.IsAsync {
+		req.IsAsync = true
+	}
+
 	req.CarrierCode = "dao"
 	res, err := DAOStrategy{}.ExecuteBooking(req)
 	if err != nil {
@@ -173,6 +167,12 @@ func DAOBookingsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusCreated)
+	// Return 202 Accepted if routed asynchronously, otherwise 210/201 Created
+	if req.IsAsync {
+		w.WriteHeader(http.StatusAccepted)
+	} else {
+		w.WriteHeader(http.StatusCreated)
+	}
+	
 	_ = json.NewEncoder(w).Encode(res)
 }
