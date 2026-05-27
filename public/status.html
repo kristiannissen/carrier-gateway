@@ -74,9 +74,9 @@
         <div class="panel">
             <h2>API Request Payload</h2>
             <label>Carrier Strategy</label>
-            <select id="carrierSelect">
+            <select id="carrierSelect" onchange="updatePayloadTemplate()">
                 <option value="dao">DAO (Dansk Avis Distribution)</option>
-                <option value="postnord">PostNord (Mock-Stage Dynamic)</option>
+                <option value="instabee">Instabee (Instabox Lockers)</option>
             </select>
             
             <label>Execution Routing Preference</label>
@@ -125,6 +125,62 @@
         </div>
     </div>
     <script>
+        function updatePayloadTemplate() {
+            const carrier = document.getElementById("carrierSelect").value;
+            const textarea = document.getElementById("jsonPayload");
+            
+            if (carrier === "instabee") {
+                textarea.value = `{
+  "destination": {
+    "first_name": "Anders",
+    "last_name": "And",
+    "street_name": "Paradisæblevej",
+    "street_number": "111",
+    "postal_code": "0900",
+    "city": "Andeby",
+    "country_code": "DK",
+    "type": "locker",
+    "parcel_shop_id": "INSTABOX-BOX-4221"
+  },
+  "colli": [
+    {
+      "weight_kg": 1.2,
+      "dimensions": {
+        "length_cm": 20,
+        "width_cm": 15,
+        "height_cm": 10
+      }
+    }
+  ],
+  "include_return_label": false
+}`;
+            } else {
+                textarea.value = `{
+  "destination": {
+    "first_name": "Anders",
+    "last_name": "And",
+    "street_name": "Paradisæblevej",
+    "street_number": "111",
+    "postal_code": "0900",
+    "city": "Andeby",
+    "country_code": "DK",
+    "type": "residential"
+  },
+  "colli": [
+    {
+      "weight_kg": 2.4,
+      "dimensions": {
+        "length_cm": 30,
+        "width_cm": 20,
+        "height_cm": 15
+      }
+    }
+  ],
+  "include_return_label": true
+}`;
+            }
+        }
+
         async function fireRequest() {
             const consoleOut = document.getElementById("consoleOut");
             const badge = document.getElementById("statusBadge");
@@ -147,8 +203,11 @@
             badge.className = "status-badge status-empty";
             badge.innerText = "HTTP Status: Processing...";
 
+            // Dynamically target the endpoint based on selected carrier
+            const endpoint = carrier === "instabee" ? '/api/v1/instabee-bookings' : '/api/v1/dao-bookings';
+
             try {
-                const response = await fetch('/api/v1/dao-bookings', {
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

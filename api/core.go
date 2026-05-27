@@ -39,14 +39,15 @@ type CustomsItem struct {
 }
 
 type Destination struct {
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name"`
-	StreetName  string `json:"street_name"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name"`
+	StreetName   string `json:"street_name"`
 	StreetNumber string `json:"street_number"`
-	PostalCode  string `json:"postal_code"`
-	City        string `json:"city"`
-	CountryCode string `json:"country_code"`
-	Type        string `json:"type"` // e.g., "residential" or "commercial"
+	PostalCode   string `json:"postal_code"`
+	City         string `json:"city"`
+	CountryCode  string `json:"country_code"`
+	Type         string `json:"type"`           // "residential", "commercial", "locker"
+	ParcelShopID string `json:"parcel_shop_id"` // Used for Instabox/DAO Shop selection
 }
 
 type BookingRequest struct {
@@ -196,15 +197,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	IncidentTracker.mu.Unlock()
 
 	daoStatus := "operational"
-	postnordStatus := "operational"
+	instabeeStatus := "operational"
 
 	for _, entry := range errorsCopy {
 		if time.Since(entry.Timestamp) < 5*time.Minute {
 			if entry.Carrier == "dao" && entry.Endpoint != "Strategy-Engine" {
 				daoStatus = "degraded"
 			}
-			if entry.Carrier == "postnord" {
-				postnordStatus = "degraded"
+			if entry.Carrier == "instabee" {
+				instabeeStatus = "degraded"
 			}
 		}
 	}
@@ -215,7 +216,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		RecentErrors:  errorsCopy,
 		Carriers: []CarrierStatus{
 			{Name: "DAO (Dansk Avis Distribution)", Status: daoStatus},
-			{Name: "PostNord", Status: postnordStatus},
+			{Name: "Instabee (Instabox / Budbee)", Status: instabeeStatus},
 		},
 	}
 
