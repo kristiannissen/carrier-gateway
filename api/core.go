@@ -39,8 +39,14 @@ type CustomsItem struct {
 }
 
 type Destination struct {
+	FirstName   string `json:"first_name"`
+	LastName    string `json:"last_name"`
+	StreetName  string `json:"street_name"`
+	StreetNumber string `json:"street_number"`
+	PostalCode  string `json:"postal_code"`
+	City        string `json:"city"`
 	CountryCode string `json:"country_code"`
-	Type        string `json:"type"`
+	Type        string `json:"type"` // e.g., "residential" or "commercial"
 }
 
 type BookingRequest struct {
@@ -181,7 +187,6 @@ type SystemStatusResponse struct {
 	Timestamp     time.Time        `json:"timestamp"`
 }
 
-// Handler is the default Vercel serverless entrypoint for core.go
 func Handler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	
