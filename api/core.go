@@ -10,9 +10,8 @@ import (
 	"time"
 )
 
-// =========================================================================
-// DATA MODELS & SCHEMA CONSTRAINTS
-// =========================================================================
+// Data-modeller forbliver de samme, da vores "Enterprise Logistics Schema" 
+// allerede understøtter alt, hvad DHL kræver (adresse, colli-vægt, dimensioner osv.)
 
 type Dimensions struct {
 	LengthCM float64 `json:"length_cm"`
@@ -46,8 +45,8 @@ type Destination struct {
 	PostalCode   string `json:"postal_code"`
 	City         string `json:"city"`
 	CountryCode  string `json:"country_code"`
-	Type         string `json:"type"`           // "residential", "commercial", "locker"
-	ParcelShopID string `json:"parcel_shop_id"` // Used for Instabox/DAO Shop selection
+	Type         string `json:"type"`
+	ParcelShopID string `json:"parcel_shop_id"`
 }
 
 type BookingRequest struct {
@@ -70,10 +69,6 @@ type BookingResult struct {
 	ReturnFormat   string   `json:"return_format,omitempty"`
 	Errors         []string `json:"errors,omitempty"`
 }
-
-// =========================================================================
-// STRATEGY PATTERN & ASYNC CORE DISPATCHER
-// =========================================================================
 
 type CarrierStrategy interface {
 	ExecuteBooking(req BookingRequest) (*BookingResult, error)
@@ -102,10 +97,7 @@ func DispatchBooking(req BookingRequest) (*BookingResult, error) {
 				_, _ = s.ExecuteBooking(r)
 			}(strategy, req)
 		}
-		return &BookingResult{
-			BookingID: queueID,
-			Status:    "queued",
-		}, nil
+		return &BookingResult{BookingID: queueID, Status: "queued"}, nil
 	}
 
 	if !exists {
@@ -118,10 +110,6 @@ func DispatchBooking(req BookingRequest) (*BookingResult, error) {
 	}
 	return strategy.ExecuteBooking(req)
 }
-
-// =========================================================================
-// OBSERVER PATTERN: TELEMETRY & STATUS ENGINE
-// =========================================================================
 
 type ExceptionEvent struct {
 	Carrier      string    `json:"carrier"`
@@ -145,9 +133,7 @@ type InMemoryIncidentRecorder struct {
 	Incidents []ExceptionEvent
 }
 
-var IncidentTracker = &InMemoryIncidentRecorder{
-	Incidents: make([]ExceptionEvent, 0),
-}
+var IncidentTracker = &InMemoryIncidentRecorder{Incidents: make([]ExceptionEvent, 0)}
 
 func (r *InMemoryIncidentRecorder) OnException(event ExceptionEvent) {
 	r.mu.Lock()
@@ -158,23 +144,15 @@ func (r *InMemoryIncidentRecorder) OnException(event ExceptionEvent) {
 	r.Incidents = append(r.Incidents, event)
 }
 
-var GlobalEM = &EventManager{
-	observers: []EventObserver{TechnicalLogger{}, IncidentTracker},
-}
+var GlobalEM = &EventManager{observers: []EventObserver{TechnicalLogger{}, IncidentTracker}}
 
-type EventManager struct {
-	observers []EventObserver
-}
+type EventManager struct{ observers []EventObserver }
 
 func (em *EventManager) Notify(event ExceptionEvent) {
 	for _, observer := range em.observers {
 		observer.OnException(event)
 	}
 }
-
-// =========================================================================
-// SYSTEM HEALTH STATUS API ENDPOINT
-// =========================================================================
 
 type CarrierStatus struct {
 	Name   string `json:"name"`
@@ -198,15 +176,13 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	daoStatus := "operational"
 	instabeeStatus := "operational"
+	dhlStatus := "operational"
 
 	for _, entry := range errorsCopy {
 		if time.Since(entry.Timestamp) < 5*time.Minute {
-			if entry.Carrier == "dao" && entry.Endpoint != "Strategy-Engine" {
-				daoStatus = "degraded"
-			}
-			if entry.Carrier == "instabee" {
-				instabeeStatus = "degraded"
-			}
+			if entry.Carrier == "dao" && entry.Endpoint != "Strategy-Engine" { daoStatus = "degraded" }
+			if entry.Carrier == "instabee" { instabeeStatus = "degraded" }
+			if entry.Carrier == "dhl" { dhlStatus = "degraded" }
 		}
 	}
 
@@ -217,6 +193,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		Carriers: []CarrierStatus{
 			{Name: "DAO (Dansk Avis Distribution)", Status: daoStatus},
 			{Name: "Instabee (Instabox / Budbee)", Status: instabeeStatus},
+			{Name: "DHL Global Freight & Express", Status: dhlStatus},
 		},
 	}
 
