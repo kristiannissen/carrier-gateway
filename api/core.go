@@ -133,7 +133,6 @@ func (tl TechnicalLogger) OnException(event ExceptionEvent) {
 	println("\n🛑 [CRITICAL LOG] [" + event.Timestamp.Format(time.RFC3339) + "] Carrier: " + event.Carrier + " | Endpoint: " + event.Endpoint + " | Error: " + event.ErrorMessage)
 }
 
-// InMemoryIncidentRecorder keeps track of the latest errors for the Status Page dashboard
 type InMemoryIncidentRecorder struct {
 	mu        sync.Mutex
 	Incidents []ExceptionEvent
@@ -146,8 +145,75 @@ var IncidentTracker = &InMemoryIncidentRecorder{
 func (r *InMemoryIncidentRecorder) OnException(event ExceptionEvent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	// Caps historical incident records queue to the last 10 entries
 	if len(r.Incidents) >= 10 {
 		r.Incidents = r.Incidents[1:]
 	}
 	r.Incidents = append(r.Incidents, event)
+}
+
+var GlobalEM = &EventManager{
+	observers: []EventObserver{TechnicalLogger{}, IncidentTracker},
+}
+
+type EventManager struct {
+	observers []EventObserver
+}
+
+func (em *EventManager) Notify(event ExceptionEvent) {
+	for _, observer := range em.observers {
+		observer.OnException(event)
+	}
+}
+
+// =========================================================================
+// SYSTEM HEALTH STATUS API ENDPOINT
+// =========================================================================
+
+type CarrierStatus struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+type SystemStatusResponse struct {
+	GatewayStatus string           `json:"gateway_status"`
+	Carriers      []CarrierStatus  `json:"carriers"`
+	RecentErrors  []ExceptionEvent `json:"recent_errors"`
+	Timestamp     time.Time        `json:"timestamp"`
+}
+
+// Handler is the default Vercel serverless entrypoint for core.go
+func Handler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	IncidentTracker.mu.Lock()
+	errorsCopy := make([]ExceptionEvent, len(IncidentTracker.Incidents))
+	copy(errorsCopy, IncidentTracker.Incidents)
+	IncidentTracker.mu.Unlock()
+
+	daoStatus := "operational"
+	postnordStatus := "operational"
+
+	for _, entry := range errorsCopy {
+		if time.Since(entry.Timestamp) < 5*time.Minute {
+			if entry.Carrier == "dao" && entry.Endpoint != "Strategy-Engine" {
+				daoStatus = "degraded"
+			}
+			if entry.Carrier == "postnord" {
+				postnordStatus = "degraded"
+			}
+		}
+	}
+
+	response := SystemStatusResponse{
+		GatewayStatus: "operational",
+		Timestamp:     time.Now(),
+		RecentErrors:  errorsCopy,
+		Carriers: []CarrierStatus{
+			{Name: "DAO (Dansk Avis Distribution)", Status: daoStatus},
+			{Name: "PostNord", Status: postnordStatus},
+		},
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(response)
+}
