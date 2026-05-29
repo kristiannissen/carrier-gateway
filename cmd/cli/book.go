@@ -1,0 +1,155 @@
+// Package main provides the CLI command for booking shipments.
+// This file is located at /cmd/cli/book.go.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+	"logistics-gateway/internal/adapter"
+)
+
+func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
+	var (
+		carrier      string
+		inputFile    string
+		outputFormat string
+		async        bool
+	)
+
+	cmd := &cobra.Command{
+		Use:   "book",
+		Short: "Book a shipment",
+		Long:  "Book a shipment with a specified carrier (e.g., postnord, fedex, dhl).",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Read request from file or stdin
+			var request adapter.BookingRequest
+			if inputFile != "" {
+				data, err := os.ReadFile(inputFile)
+				if err != nil {
+					return fmt.Errorf("failed to read input file: %v", err)
+				}
+				if err := json.Unmarshal(data, &request); err != nil {
+					return fmt.Errorf("failed to parse input file: %v", err)
+				}
+			} else {
+				// Read from stdin
+				stat, _ := os.Stdin.Stat()
+				if (stat.Mode() & os.ModeCharDevice) == 0 {
+					// Data is being piped in
+					if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
+						return fmt.Errorf("failed to parse stdin: %v", err)
+					}
+				} else {
+					return fmt.Errorf("no input provided. Use --input or pipe JSON to stdin")
+				}
+			}
+
+			// Validate carrier
+			if carrier == "" {
+				return fmt.Errorf("carrier is required (use --carrier)")
+			}
+			request.Carrier = carrier
+
+			// Validate request
+			if err := validateBookingRequest(&request); err != nil {
+				return fmt.Errorf("validation failed: %v", err)
+			}
+
+			// Get adapter
+			adapter, exists := adapters[carrier]
+			if !exists {
+				return fmt.Errorf("unsupported carrier: %s", carrier)
+			}
+
+			// Book shipment
+			response, err := adapter.BookShipment(request)
+			if err != nil {
+				return fmt.Errorf("booking failed: %v", err)
+			}
+
+			// Output response
+			if outputFormat == "json" {
+				return json.NewEncoder(os.Stdout).Encode(response)
+			} else {
+				fmt.Printf("Shipment ID: %s\n", response.ShipmentID)
+				fmt.Printf("Tracking Number: %s\n", response.TrackingNumber)
+				fmt.Printf("Label URL: %s\n", response.LabelURL)
+				fmt.Printf("Carrier: %s\n", response.Carrier)
+				fmt.Printf("Cost: %.2f %s\n", response.Cost, response.Currency)
+				fmt.Printf("Service Level: %s\n", response.ServiceLevel)
+				fmt.Printf("Status: %s\n", response.Status)
+				if len(response.Colli) > 0 {
+					fmt.Println("\nColli:")
+					for _, colli := range response.Colli {
+						fmt.Printf("  - ID: %s, Reference: %s, Tracking: %s, Status: %s\n",
+							colli.ID, colli.Reference, colli.TrackingNumber, colli.Status)
+					}
+				}
+				if async {
+					fmt.Println("\nNote: Async mode enabled. Use 'logistics-gateway track' to check status.")
+				}
+			}
+			return nil
+		},
+	}
+
+	// Flags
+	cmd.Flags().StringVarP(&carrier, "carrier", "c", "", "Carrier (e.g., postnord, fedex, dhl)")
+	cmd.Flags().StringVarP(&inputFile, "input", "i", "", "Input JSON file (default: stdin)")
+	cmd.Flags().StringVarP(&outputFormat, "output", "o", "text", "Output format (json or text)")
+	cmd.Flags().BoolVarP(&async, "async", "a", false, "Enable async booking (if supported by carrier)")
+
+	// Mark carrier as required
+	cmd.MarkFlagRequired("carrier")
+
+	return cmd
+}
+
+// validateBookingRequest reuses the same validation logic as the API.
+func validateBookingRequest(request *adapter.BookingRequest) error {
+	if request.Carrier == "" {
+		return fmt.Errorf("carrier is required")
+	}
+	if request.Shipment.Sender.Name == "" || request.Shipment.Sender.Street == "" ||
+		request.Shipment.Sender.City == "" || request.Shipment.Sender.Country == "" {
+		return fmt.Errorf("sender address is incomplete")
+	}
+	if request.Shipment.Receiver.Name == "" || request.Shipment.Receiver.Street == "" ||
+		request.Shipment.Receiver.City == "" || request.Shipment.Receiver.Country == "" {
+		return fmt.Errorf("receiver address is incomplete")
+	}
+	if len(request.Shipment.Colli) == 0 {
+		return fmt.Errorf("shipment must have at least one colli")
+	}
+	if request.Shipment.TotalWeight <= 0 {
+		return fmt.Errorf("total weight must be greater than 0")
+	}
+	for i, colli := range request.Shipment.Colli {
+		if colli.Weight <= 0 {
+			return fmt.Errorf("colli %d: weight must be greater than 0", i)
+		}
+		if len(colli.Items) == 0 {
+			return fmt.Errorf("colli %d: must contain at least one item", i)
+		}
+		for j, item := range colli.Items {
+			if item.Weight <= 0 {
+				return fmt.Errorf("colli %d, item %d: weight must be greater than 0", i, j)
+			}
+			if item.Quantity <= 0 {
+				return fmt.Errorf("colli %d, item %d: quantity must be greater than 0", i, j)
+			}
+		}
+	}
+	var colliTotalWeight float64
+	for _, colli := range request.Shipment.Colli {
+		colliTotalWeight += colli.Weight
+	}
+	if colliTotalWeight != request.Shipment.TotalWeight {
+		return fmt.Errorf("total weight does not match sum of colli weights (expected %.2f, got %.2f)",
+			colliTotalWeight, request.Shipment.TotalWeight)
+	}
+	return nil
+}
