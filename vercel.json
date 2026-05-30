@@ -4,17 +4,11 @@
     {
       "src": "cmd/api/main.go",
       "use": "@vercel/go",
-      "config": { "goVersion": "1.21" }
+      "config": { "functionName": "VercelHandler" }
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "cmd/api/main.go"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "cmd/api/main.go"
-    }
+    { "src": "/api/(.*)", "dest": "cmd/api/main.go" },
+    { "src": "/(.*)", "dest": "cmd/api/main.go" }
   ]
 }
