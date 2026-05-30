@@ -18,7 +18,7 @@
     }
   ],
   "env": {
-    "POSTNORD_API_KEY": "@postnord_api_key",
-    "MOCK_MODE": "@mock_mode"
+    "POSTNORD_API_KEY": "@POSTNORD_API_KEY",
+    "MOCK_MODE": "@MOCK_MODE"
   }
 }
