@@ -9,5 +9,9 @@
   "routes": [
     { "src": "/api/(.*)", "dest": "cmd/api/vercel_handler.go" },
     { "src": "/(.*)", "dest": "public/$1" }
-  ]
+  ],
+  "env": {
+    "GITHUB_TOKEN": "@GITHUB_TOKEN",
+    "GO_GIT_URL": "https://$GITHUB_TOKEN@github.com"
+  }
 }
