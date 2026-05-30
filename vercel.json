@@ -9,5 +9,9 @@
   "routes": [
     { "src": "/api/(.*)", "dest": "cmd/api/vercel_handler.go" },
     { "src": "/(.*)", "dest": "cmd/api/vercel_handler.go" }
-  ]
+  ],
+  "env": {
+    "POSTNORD_API_KEY": "@postnord_api_key",
+    "MOCK_MODE": "@mock_mode"
+  }
 }
