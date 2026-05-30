@@ -2,13 +2,12 @@
   "version": 2,
   "builds": [
     {
-      "src": "cmd/api/main.go",
-      "use": "@vercel/go",
-      "config": { "functionName": "VercelHandler" }
+      "src": "cmd/api/vercel_handler.go",
+      "use": "@vercel/go"
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "cmd/api/main.go" },
-    { "src": "/(.*)", "dest": "cmd/api/main.go" }
+    { "src": "/api/(.*)", "dest": "cmd/api/vercel_handler.go" },
+    { "src": "/(.*)", "dest": "cmd/api/vercel_handler.go" }
   ]
 }
