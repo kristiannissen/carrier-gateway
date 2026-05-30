@@ -4,15 +4,16 @@
     {
       "src": "cmd/api/vercel_handler.go",
       "use": "@vercel/go"
-    },
-    {
-      "src": "public/index.html",
-      "use": "@vercel/static-build",
-      "config": { "distDir": "public" }
     }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "cmd/api/vercel_handler.go" },
     { "src": "/(.*)", "dest": "public/$1" }
+  ],
+  "filesystem": [
+    {
+      "path": "public",
+      "static": true
+    }
   ]
 }
