@@ -148,6 +148,7 @@
                     <div class="code-block">
                         <pre><code><span class="keyword">POST</span> /api/v1/shipments
 <span class="string">Content-Type: application/json</span>
+<span class="string">Authorization: Bearer your-api-key</span>
 
 {
   <span class="string">"carrier"</span>: <span class="string">"your_carrier"</span>,
@@ -181,6 +182,7 @@
                     </p>
                     <div class="code-block">
                         <pre><code><span class="keyword">GET</span> /api/v1/shipments/<span class="function">:id</span>/tracking
+<span class="string">Authorization: Bearer your-api-key</span>
 
 {
   <span class="string">"status"</span>: <span class="string">"in_transit"</span>,
@@ -243,37 +245,38 @@
                     </ul>
                 </div>
                 <div class="bg-gray-50 p-6 rounded-2xl">
-                    <h4 class="text-xl font-bold mb-4 text-gray-900">Example: Book a Shipment</h4>
+                    <h4 class="text-xl font-bold mb-4 text-gray-900">Example: Test with cURL</h4>
                     <div class="code-block">
-                        <pre><code><span class="keyword">import</span> <span class="string">"logistics-gateway/client"</span>
-
-<span class="keyword">func</span> <span class="function">main</span>() {
-  <span class="keyword">client</span> := <span class="function">client.New</span>(<span class="string">"https://api.logistics-gateway.dev"</span>)
-  
-  <span class="keyword">shipment</span> := <span class="function">client.BookShipment</span>(<span class="string">"your_carrier"</span>, map[string]interface{}{
-    <span class="string">"service"</span>: <span class="string">"standard"</span>,
-    <span class="string">"from"</span>: map[string]string{
-      <span class="string">"name"</span>: <span class="string">"Sender Inc."</span>,
-      <span class="string">"address"</span>: <span class="string">"123 Main St, Copenhagen"</span>,
+                        <pre><code><span class="keyword"># Book a shipment</span>
+<span class="function">curl</span> -X <span class="string">POST</span> https://api.logistics-gateway.dev/api/v1/shipments \
+  -H <span class="string">"Content-Type: application/json"</span> \
+  -H <span class="string">"Authorization: Bearer your-api-key"</span> \
+  -d <span class="string">'{
+    "carrier": "your_carrier",
+    "service": "standard",
+    "from": {
+      "name": "Sender Inc.",
+      "address": "123 Main St, Copenhagen"
     },
-    <span class="string">"to"</span>: map[string]string{
-      <span class="string">"name"</span>: <span class="string">"Receiver A/S"</span>,
-      <span class="string">"address"</span>: <span class="string">"456 Side St, Stockholm"</span>,
+    "to": {
+      "name": "Receiver A/S",
+      "address": "456 Side St, Stockholm"
     },
-    <span class="string">"parcels"</span>: []map[string]interface{}{
+    "parcels": [
       {
-        <span class="string">"weight"</span>: <span class="number">2.5</span>,
-        <span class="string">"dimensions"</span>: map[string]float64{
-          <span class="string">"length"</span>: <span class="number">30</span>,
-          <span class="string">"width"</span>: <span class="number">20</span>,
-          <span class="string">"height"</span>: <span class="number">10</span>,
-        },
-      },
-    },
-  })
-  
-  <span class="function">fmt.Println</span>(<span class="string">"Tracking ID:"</span>, <span class="keyword">shipment</span>.<span class="function">TrackingID</span>)
-}</code></pre>
+        "weight": 2.5,
+        "dimensions": {
+          "length": 30,
+          "width": 20,
+          "height": 10
+        }
+      }
+    ]
+  }'</span>
+
+<span class="keyword"># Track a shipment</span>
+<span class="function">curl</span> -X <span class="string">GET</span> https://api.logistics-gateway.dev/api/v1/shipments/<span class="function">:id</span>/tracking \
+  -H <span class="string">"Authorization: Bearer your-api-key"</span></code></pre>
                     </div>
                 </div>
             </div>
