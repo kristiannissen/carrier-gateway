@@ -1,5 +1,5 @@
 // Package handler provides the Vercel Serverless Function entry point.
-// This file is located at /cmd/api/vercel_handler.go.
+// This file is located at /vercel/handler.go.
 package handler
 
 import (
