@@ -16,9 +16,5 @@
       "src": "/(.*)",
       "dest": "cmd/api/main.go"
     }
-  ],
-  "env": {
-    "POSTNORD_API_KEY": "@POSTNORD_API_KEY",
-    "MOCK_MODE": "@MOCK_MODE"
-  }
+  ]
 }
