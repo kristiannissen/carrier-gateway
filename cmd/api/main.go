@@ -1,6 +1,6 @@
 // Package main is the entry point for the API application.
 // This file is located at /cmd/api/main.go.
-package main
+package api
 
 import (
 	"log/slog"
