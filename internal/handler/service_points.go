@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
 // GetServicePoints handles GET /service-points.

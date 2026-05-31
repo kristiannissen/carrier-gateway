@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"logistics-gateway/internal/adapter"
-	"logistics-gateway/internal/handler"
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/handler"
 )
 
 // NewRouter creates and configures the HTTP router for the API.

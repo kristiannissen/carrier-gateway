@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
 // BookShipment handles POST /bookings.

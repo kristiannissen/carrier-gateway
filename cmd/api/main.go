@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 
-	"logistics-gateway/internal/adapter"
-	"logistics-gateway/internal/router"
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/router"
 )
 
 // main is the entry point for the API application.

@@ -130,34 +130,34 @@ func (a *PostNordAdapter) GetServicePoints(location Location) ([]ServicePoint, e
 
 // PostNordBookingRequest represents a PostNord-specific booking request.
 type PostNordBookingRequest struct {
-	Sender          PostNordAddress   `json:"sender"`
-	Receiver        PostNordAddress   `json:"receiver"`
-	Colli           []PostNordColli   `json:"colli"`
-	Weight          float64           `json:"weight"`
-	NotificationURL string            `json:"notificationUrl,omitempty"`
-	ServiceLevel    string            `json:"serviceLevel,omitempty"`
-	Incoterms       string            `json:"incoterms,omitempty"`
-	HSCode          string            `json:"hsCode,omitempty"`
+	Sender          PostNordAddress `json:"sender"`
+	Receiver        PostNordAddress `json:"receiver"`
+	Colli           []PostNordColli `json:"colli"`
+	Weight          float64         `json:"weight"`
+	NotificationURL string          `json:"notificationUrl,omitempty"`
+	ServiceLevel    string          `json:"serviceLevel,omitempty"`
+	Incoterms       string          `json:"incoterms,omitempty"`
+	HSCode          string          `json:"hsCode,omitempty"`
 }
 
 // PostNordAddress represents a PostNord-specific address.
 type PostNordAddress struct {
-	Name        string `json:"name"`
-	Street      string `json:"street"`
-	City        string `json:"city"`
-	PostalCode  string `json:"postalCode"`
-	Country     string `json:"country"`
-	Phone       string `json:"phone,omitempty"`
-	Email       string `json:"email,omitempty"`
+	Name       string `json:"name"`
+	Street     string `json:"street"`
+	City       string `json:"city"`
+	PostalCode string `json:"postalCode"`
+	Country    string `json:"country"`
+	Phone      string `json:"phone,omitempty"`
+	Email      string `json:"email,omitempty"`
 }
 
 // PostNordColli represents a PostNord-specific colli.
 type PostNordColli struct {
-	ID          string           `json:"id"`
-	Reference   string           `json:"reference,omitempty"`
-	Weight      float64          `json:"weight"`
-	Dimensions  PostNordDimensions `json:"dimensions"`
-	Items       []PostNordItem   `json:"items"`
+	ID         string             `json:"id"`
+	Reference  string             `json:"reference,omitempty"`
+	Weight     float64            `json:"weight"`
+	Dimensions PostNordDimensions `json:"dimensions"`
+	Items      []PostNordItem     `json:"items"`
 }
 
 // PostNordDimensions represents dimensions in PostNord's format.
@@ -178,13 +178,13 @@ type PostNordItem struct {
 
 // PostNordBookingResponse represents a PostNord-specific booking response.
 type PostNordBookingResponse struct {
-	ShipmentID     string           `json:"shipmentId,omitempty"`
-	TrackingNumber string           `json:"trackingNumber"`
-	LabelURL       string           `json:"labelUrl,omitempty"`
-	Cost           float64          `json:"cost,omitempty"`
-	Currency       string           `json:"currency,omitempty"`
-	ServiceLevel   string           `json:"serviceLevel,omitempty"`
-	Status         string           `json:"status,omitempty"`
+	ShipmentID     string                  `json:"shipmentId,omitempty"`
+	TrackingNumber string                  `json:"trackingNumber"`
+	LabelURL       string                  `json:"labelUrl,omitempty"`
+	Cost           float64                 `json:"cost,omitempty"`
+	Currency       string                  `json:"currency,omitempty"`
+	ServiceLevel   string                  `json:"serviceLevel,omitempty"`
+	Status         string                  `json:"status,omitempty"`
 	Colli          []PostNordColliResponse `json:"colli,omitempty"`
 }
 
@@ -199,12 +199,12 @@ type PostNordColliResponse struct {
 
 // PostNordTrackingResponse represents a PostNord-specific tracking response.
 type PostNordTrackingResponse struct {
-	ShipmentID       string          `json:"shipmentId,omitempty"`
-	TrackingNumber   string          `json:"trackingNumber"`
-	Status           string          `json:"status"`
-	Events           []PostNordEvent `json:"events"`
-	EstimatedDelivery string          `json:"estimatedDelivery,omitempty"`
-	Colli            []PostNordColliTracking `json:"colli,omitempty"`
+	ShipmentID        string                  `json:"shipmentId,omitempty"`
+	TrackingNumber    string                  `json:"trackingNumber"`
+	Status            string                  `json:"status"`
+	Events            []PostNordEvent         `json:"events"`
+	EstimatedDelivery string                  `json:"estimatedDelivery,omitempty"`
+	Colli             []PostNordColliTracking `json:"colli,omitempty"`
 }
 
 // PostNordColliTracking represents tracking for an individual colli in PostNord.
@@ -226,11 +226,11 @@ type PostNordEvent struct {
 
 // PostNordServicePoint represents a PostNord-specific service point.
 type PostNordServicePoint struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Address     PostNordAddress `json:"address"`
-	OpeningHours string `json:"openingHours,omitempty"`
-	Services    []string `json:"services,omitempty"`
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	Address      PostNordAddress `json:"address"`
+	OpeningHours string          `json:"openingHours,omitempty"`
+	Services     []string        `json:"services,omitempty"`
 }
 
 // --- Mapping functions ---
@@ -283,10 +283,10 @@ func (a *PostNordAdapter) mapToGenericBookingResponse(resp PostNordBookingRespon
 // mapToGenericTrackingResponse converts a PostNord tracking response to a generic TrackingResponse.
 func (a *PostNordAdapter) mapToGenericTrackingResponse(resp PostNordTrackingResponse) *TrackingResponse {
 	trackingResponse := &TrackingResponse{
-		ShipmentID:       resp.ShipmentID,
-		TrackingNumber:   resp.TrackingNumber,
-		Carrier:          "postnord",
-		Status:           resp.Status,
+		ShipmentID:        resp.ShipmentID,
+		TrackingNumber:    resp.TrackingNumber,
+		Carrier:           "postnord",
+		Status:            resp.Status,
 		EstimatedDelivery: resp.EstimatedDelivery,
 	}
 
@@ -336,11 +336,11 @@ func (a *PostNordAdapter) mapToGenericServicePoints(points []PostNordServicePoin
 	servicePoints := make([]ServicePoint, len(points))
 	for i, p := range points {
 		servicePoints[i] = ServicePoint{
-			ID:          p.ID,
-			Name:        p.Name,
-			Address:     mapToGenericAddress(p.Address),
+			ID:           p.ID,
+			Name:         p.Name,
+			Address:      mapToGenericAddress(p.Address),
 			OpeningHours: p.OpeningHours,
-			Services:    p.Services,
+			Services:     p.Services,
 		}
 	}
 	return servicePoints
@@ -364,9 +364,9 @@ func mapToPostNordColli(colli []Colli) []PostNordColli {
 	postNordColli := make([]PostNordColli, len(colli))
 	for i, c := range colli {
 		postNordColli[i] = PostNordColli{
-			ID:         c.ID,
-			Reference:  c.Reference,
-			Weight:     c.Weight,
+			ID:        c.ID,
+			Reference: c.Reference,
+			Weight:    c.Weight,
 			Dimensions: PostNordDimensions{
 				Length: c.Dimensions.Length,
 				Width:  c.Dimensions.Width,

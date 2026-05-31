@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"logistics-gateway/internal/adapter"
-	"logistics-gateway/internal/router"
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/router"
 )
 
 // Handler is the Vercel Serverless Function entry point.

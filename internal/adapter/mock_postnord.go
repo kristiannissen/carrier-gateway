@@ -13,8 +13,8 @@ import (
 // It returns predefined mock responses for PostNord API calls.
 type MockPostNordAdapter struct {
 	// Fields for customizing mock responses (optional)
-	BookShipmentFunc    func(request BookingRequest) (*BookingResponse, error)
-	TrackShipmentFunc   func(trackingNumber string) (*TrackingResponse, error)
+	BookShipmentFunc     func(request BookingRequest) (*BookingResponse, error)
+	TrackShipmentFunc    func(trackingNumber string) (*TrackingResponse, error)
 	GetServicePointsFunc func(location Location) ([]ServicePoint, error)
 }
 
@@ -92,13 +92,13 @@ func (m *MockPostNordAdapter) TrackShipment(trackingNumber string) (*TrackingRes
 	}
 
 	return &TrackingResponse{
-		ShipmentID:       fmt.Sprintf("shipment_%d", rand.Intn(1000000)),
-		TrackingNumber:   trackingNumber,
-		Carrier:          "postnord",
-		Status:           "In Transit",
+		ShipmentID:        fmt.Sprintf("shipment_%d", rand.Intn(1000000)),
+		TrackingNumber:    trackingNumber,
+		Carrier:           "postnord",
+		Status:            "In Transit",
 		EstimatedDelivery: time.Now().Add(48 * time.Hour).UTC().Format("2006-01-02"),
-		Events:           events,
-		Colli:            colliTracking,
+		Events:            events,
+		Colli:             colliTracking,
 	}, nil
 }
 
@@ -123,7 +123,7 @@ func (m *MockPostNordAdapter) GetServicePoints(location Location) ([]ServicePoin
 				Country:    "DK",
 			},
 			OpeningHours: "09:00-17:00",
-			Services:    []string{"Pickup", "Dropoff"},
+			Services:     []string{"Pickup", "Dropoff"},
 		},
 		{
 			ID:   "sp_456",
@@ -136,7 +136,7 @@ func (m *MockPostNordAdapter) GetServicePoints(location Location) ([]ServicePoin
 				Country:    "DK",
 			},
 			OpeningHours: "08:00-16:00",
-			Services:    []string{"Pickup"},
+			Services:     []string{"Pickup"},
 		},
 	}, nil
 }

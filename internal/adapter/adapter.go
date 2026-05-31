@@ -121,13 +121,15 @@ type TrackingEvent struct {
 	Details   string `json:"details,omitempty"`
 }
 
-// Location represents a geographic location (e.g., for service points).
+// Location represents a physical location (e.g., sender, receiver, or service point).
 type Location struct {
-	City       string  `json:"city"`
-	PostalCode string  `json:"postalCode"`
-	Country    string  `json:"country"`
-	Latitude   float64 `json:"latitude,omitempty"`
-	Longitude  float64 `json:"longitude,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Street     string `json:"street,omitempty"`
+	City       string `json:"city,omitempty"`
+	PostalCode string `json:"postalCode,omitempty"`
+	Country    string `json:"country,omitempty"`
+	Phone      string `json:"phone,omitempty"`
+	Email      string `json:"email,omitempty"`
 }
 
 // ServicePoint represents a carrier service point (e.g., pickup location).

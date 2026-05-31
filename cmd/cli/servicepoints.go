@@ -7,16 +7,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/spf13/cobra"
-	"logistics-gateway/internal/adapter"
 )
 
 func newServicePointsCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 	var (
-		city        string
-		postalCode  string
-		country     string
-		carrier     string
+		city         string
+		postalCode   string
+		country      string
+		carrier      string
 		outputFormat string
 	)
 

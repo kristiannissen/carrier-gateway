@@ -4,12 +4,10 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"logistics-gateway/internal/adapter"
 )
 
 // GetTracking handles GET /trackings/{trackingNumber}.

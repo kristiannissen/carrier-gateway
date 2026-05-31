@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/spf13/cobra"
-	"logistics-gateway/internal/adapter"
 )
 
 func main() {
