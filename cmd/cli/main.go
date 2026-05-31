@@ -50,25 +50,5 @@ func initAdapters() map[string]adapter.CarrierAdapter {
 		adapters["postnord"] = adapter.NewMockPostNordAdapter()
 	}
 
-	// FedEx
-	fedExClientID := os.Getenv("FED_EX_CLIENT_ID")
-	fedExClientSecret := os.Getenv("FED_EX_CLIENT_SECRET")
-	fedExAccountNumber := os.Getenv("FED_EX_ACCOUNT_NUMBER")
-	if fedExClientID != "" && fedExClientSecret != "" && fedExAccountNumber != "" && !mockMode {
-		adapters["fedex"] = adapter.NewFedExAdapter(fedExClientID, fedExClientSecret, fedExAccountNumber, false)
-	} else {
-		// Use mock FedEx adapter if credentials are missing or mock mode is enabled
-		adapters["fedex"] = &adapter.MockFedExAdapter{}
-	}
-
-	// DHL (placeholder for future implementation)
-	dhlAPIKey := os.Getenv("DHL_API_KEY")
-	if dhlAPIKey != "" && !mockMode {
-		// adapters["dhl"] = adapter.NewDHLAdapter(dhlAPIKey)
-	} else {
-		// Use mock DHL adapter if API key is missing or mock mode is enabled
-		// adapters["dhl"] = &adapter.MockDHLAdapter{}
-	}
-
 	return adapters
 }
