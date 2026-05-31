@@ -4,10 +4,6 @@
     {
       "src": "vercel/handler.go",
       "use": "@vercel/go"
-    },
-    {
-      "src": "public/index.html",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
