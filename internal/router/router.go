@@ -3,8 +3,6 @@
 package router
 
 import (
-	"net/http"
-
 	"github.com/gorilla/mux"
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/kristiannissen/logistics-gateway/internal/handler"
