@@ -26,6 +26,7 @@ func InitAdapters() map[string]CarrierAdapter {
 	adapters := make(map[string]CarrierAdapter)
 	mockMode := os.Getenv("MOCK_MODE") == "true"
 
+	// PostNord
 	postNordAPIKey := os.Getenv("POSTNORD_API_KEY")
 	if postNordAPIKey != "" && !mockMode {
 		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey)
@@ -33,6 +34,18 @@ func InitAdapters() map[string]CarrierAdapter {
 	} else {
 		adapters["postnord"] = &MockPostNordAdapter{}
 		slog.Info("PostNord adapter initialized in mock mode")
+	}
+
+	// Bring
+	// Bring
+	bringAPIKey := os.Getenv("BRING_API_KEY")
+	bringCustomerID := os.Getenv("BRING_CUSTOMER_ID")
+	if bringAPIKey != "" && bringCustomerID != "" && !mockMode {
+		adapters["bring"] = NewBringAdapter(bringAPIKey, bringCustomerID)
+		slog.Info("Bring adapter initialized in production mode")
+	} else {
+		// Create a mock adapter for Bring if needed
+		slog.Info("Bring adapter not initialized (missing API key or customer ID)")
 	}
 
 	return adapters
