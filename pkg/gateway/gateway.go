@@ -1,6 +1,4 @@
 // Package gateway exposes a public entry point for the logistics-gateway application.
-// This allows external callers (e.g. Vercel serverless functions) to use the application
-// without importing internal packages directly.
 package gateway
 
 import (

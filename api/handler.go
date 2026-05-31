@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	gateway "github.com/kristiannissen/logistics-gateway"
+	"github.com/kristiannissen/logistics-gateway/pkg/gateway"
 )
 
 // Handler is the Vercel Serverless Function entry point.
