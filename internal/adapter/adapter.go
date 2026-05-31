@@ -2,6 +2,11 @@
 // This file is located at /internal/adapter/adapter.go.
 package adapter
 
+import (
+	"os"
+	"log/slog"
+)
+
 // CarrierAdapter defines the interface for all carrier adapters.
 // All carrier-specific implementations (e.g., PostNord, FedEx, DHL) must satisfy this interface.
 type CarrierAdapter interface {
@@ -13,6 +18,24 @@ type CarrierAdapter interface {
 
 	// GetServicePoints retrieves available service points (e.g., pickup locations) for a carrier.
 	GetServicePoints(location Location) ([]ServicePoint, error)
+}
+
+// InitAdapters initializes all carrier adapters based on environment variables.
+// This function is used by both the API and CLI entry points.
+func InitAdapters() map[string]CarrierAdapter {
+	adapters := make(map[string]CarrierAdapter)
+	mockMode := os.Getenv("MOCK_MODE") == "true"
+
+	postNordAPIKey := os.Getenv("POSTNORD_API_KEY")
+	if postNordAPIKey != "" && !mockMode {
+		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey)
+		slog.Info("PostNord adapter initialized in production mode")
+	} else {
+		adapters["postnord"] = &MockPostNordAdapter{}
+		slog.Info("PostNord adapter initialized in mock mode")
+	}
+
+	return adapters
 }
 
 // BookingRequest represents a generic shipment booking request.
