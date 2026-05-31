@@ -37,7 +37,6 @@ func InitAdapters() map[string]CarrierAdapter {
 	}
 
 	// Bring
-	// Bring
 	bringAPIKey := os.Getenv("BRING_API_KEY")
 	bringCustomerID := os.Getenv("BRING_CUSTOMER_ID")
 	if bringAPIKey != "" && bringCustomerID != "" && !mockMode {
@@ -46,6 +45,16 @@ func InitAdapters() map[string]CarrierAdapter {
 	} else {
 		// Create a mock adapter for Bring if needed
 		slog.Info("Bring adapter not initialized (missing API key or customer ID)")
+	}
+
+	// GLS
+	glsAPIKey := os.Getenv("GLS_API_KEY")
+	if glsAPIKey != "" && !mockMode {
+		adapters["gls"] = NewGLSAdapter(glsAPIKey)
+		slog.Info("GLS adapter initialized in production mode")
+	} else {
+		adapters["gls"] = &MockGLSAdapter{}
+		slog.Info("GLS adapter initialized in mock mode")
 	}
 
 	return adapters
