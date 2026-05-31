@@ -15,7 +15,7 @@ import (
 func Handler(w http.ResponseWriter, r *http.Request) {
 	// Initialize structured logger
 	slog.Info("Handling Vercel request " + r.URL.path)
-
+	panic("Help!")
 	// Initialize carrier adapters
 	adapters := adapter.InitAdapters()
 
