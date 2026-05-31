@@ -18,29 +18,31 @@ type CarrierAdapter interface {
 // BookingRequest represents a generic shipment booking request.
 // All shipments are treated as a list of colli (single or multi-package).
 type BookingRequest struct {
-	Carrier       string    `json:"carrier"`
-	Shipment      Shipment  `json:"shipment"`
-	CallbackURL   string    `json:"callbackUrl,omitempty"`
-	IdempotencyKey string    `json:"idempotencyKey,omitempty"`
-	Incoterms     string    `json:"incoterms,omitempty"`
-	HSCode        string    `json:"hsCode,omitempty"`
+	Carrier        string   `json:"carrier"`
+	Shipment       Shipment `json:"shipment"`
+	CallbackURL    string   `json:"callbackUrl,omitempty"`
+	IdempotencyKey string   `json:"idempotencyKey,omitempty"`
+	Incoterms      string   `json:"incoterms,omitempty"`
+	HSCode         string   `json:"hsCode,omitempty"`
 }
 
 // Shipment represents the shipment details.
 // All shipments are treated as a list of colli (single or multi-package).
 type Shipment struct {
-	Sender      Address   `json:"sender"`
-	Receiver    Address   `json:"receiver"`
-	TotalWeight float64   `json:"totalWeight"` // Sum of all colli weights
-	Colli       []Colli   `json:"colli"`       // Always a list (1+ colli)
+	Sender      Address `json:"sender"`
+	Receiver    Address `json:"receiver"`
+	TotalWeight float64 `json:"totalWeight"` // Sum of all colli weights
+	Colli       []Colli `json:"colli"`       // Always a list (1+ colli)
+	Incoterms   string  `json:"incoterms,omitempty"`
+	HSCode      string  `json:"hsCode,omitempty"`
 }
 
 // Colli represents an individual package in a shipment.
 type Colli struct {
-	ID          string   `json:"id"`
-	Reference   string   `json:"reference,omitempty"`
-	Weight      float64  `json:"weight"`
-	Dimensions  struct {
+	ID         string  `json:"id"`
+	Reference  string  `json:"reference,omitempty"`
+	Weight     float64 `json:"weight"`
+	Dimensions struct {
 		Length float64 `json:"length"`
 		Width  float64 `json:"width"`
 		Height float64 `json:"height"`
@@ -50,13 +52,13 @@ type Colli struct {
 
 // Address represents a physical address.
 type Address struct {
-	Name        string `json:"name"`
-	Street      string `json:"street"`
-	City        string `json:"city"`
-	PostalCode  string `json:"postalCode"`
-	Country     string `json:"country"`
-	Phone       string `json:"phone,omitempty"`
-	Email       string `json:"email,omitempty"`
+	Name       string `json:"name"`
+	Street     string `json:"street"`
+	City       string `json:"city"`
+	PostalCode string `json:"postalCode"`
+	Country    string `json:"country"`
+	Phone      string `json:"phone,omitempty"`
+	Email      string `json:"email,omitempty"`
 }
 
 // Item represents an item in a shipment or colli.
@@ -93,13 +95,13 @@ type ColliResponse struct {
 
 // TrackingResponse represents the tracking status of a shipment.
 type TrackingResponse struct {
-	ShipmentID       string           `json:"shipmentId,omitempty"`
-	TrackingNumber   string           `json:"trackingNumber"`
-	Carrier          string           `json:"carrier"`
-	Status           string           `json:"status"`
-	Events           []TrackingEvent  `json:"events"`
-	EstimatedDelivery string           `json:"estimatedDelivery,omitempty"`
-	Colli            []ColliTracking  `json:"colli,omitempty"`
+	ShipmentID        string          `json:"shipmentId,omitempty"`
+	TrackingNumber    string          `json:"trackingNumber"`
+	Carrier           string          `json:"carrier"`
+	Status            string          `json:"status"`
+	Events            []TrackingEvent `json:"events"`
+	EstimatedDelivery string          `json:"estimatedDelivery,omitempty"`
+	Colli             []ColliTracking `json:"colli,omitempty"`
 }
 
 // ColliTracking represents the tracking status of an individual colli.
@@ -121,18 +123,18 @@ type TrackingEvent struct {
 
 // Location represents a geographic location (e.g., for service points).
 type Location struct {
-	City        string  `json:"city"`
-	PostalCode  string  `json:"postalCode"`
-	Country     string  `json:"country"`
-	Latitude    float64 `json:"latitude,omitempty"`
-	Longitude   float64 `json:"longitude,omitempty"`
+	City       string  `json:"city"`
+	PostalCode string  `json:"postalCode"`
+	Country    string  `json:"country"`
+	Latitude   float64 `json:"latitude,omitempty"`
+	Longitude  float64 `json:"longitude,omitempty"`
 }
 
 // ServicePoint represents a carrier service point (e.g., pickup location).
 type ServicePoint struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Address     Address `json:"address"`
-	OpeningHours string `json:"openingHours,omitempty"`
-	Services    []string `json:"services,omitempty"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Address      Address  `json:"address"`
+	OpeningHours string   `json:"openingHours,omitempty"`
+	Services     []string `json:"services,omitempty"`
 }
