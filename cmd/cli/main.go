@@ -19,7 +19,7 @@ func main() {
 	}
 
 	// Initialize adapters (shared with API)
-	adapters := initAdapters()
+	adapters := InitAdapters()
 
 	// Add subcommands
 	rootCmd.AddCommand(

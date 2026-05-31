@@ -6,21 +6,14 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
-	"github.com/kristiannissen/logistics-gateway/internal/router"
+	"github.com/kristiannissen/logistics-gateway/pkg/gateway"
 )
 
 // Handler is the Vercel Serverless Function entry point.
 // This function is called by Vercel's runtime for each request.
 func Handler(w http.ResponseWriter, r *http.Request) {
 	// Initialize structured logger
-	slog.Info("Handling Vercel request " + r.URL.path)
-	// Initialize carrier adapters
-	adapters := adapter.InitAdapters()
+	slog.Info("Handling Vercel request " + r.URL.Path)
 
-	// Create router
-	rtr := router.NewRouter(adapters)
-
-	// Serve the request using the router
-	rtr.ServeHTTP(w, r)
+	gateway.NewHandler().ServeHTTP(w, r)
 }

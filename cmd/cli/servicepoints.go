@@ -33,7 +33,7 @@ func newServicePointsCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Comm
 			}
 
 			// Get adapter
-			adapter, exists := adapters[carrier]
+			carrierAdapter, exists := adapters[carrier]
 			if !exists {
 				return fmt.Errorf("unsupported carrier: %s", carrier)
 			}
@@ -46,7 +46,7 @@ func newServicePointsCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Comm
 			}
 
 			// Get service points
-			servicePoints, err := adapter.GetServicePoints(location)
+			servicePoints, err := carrierAdapter.GetServicePoints(location)
 			if err != nil {
 				return fmt.Errorf("failed to get service points: %v", err)
 			}
