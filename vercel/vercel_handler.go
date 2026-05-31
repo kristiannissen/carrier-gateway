@@ -14,7 +14,7 @@ import (
 // This function is called by Vercel's runtime for each request.
 func Handler(w http.ResponseWriter, r *http.Request) {
 	// Initialize structured logger
-	slog.Info("Handling Vercel request")
+	slog.Info("Handling Vercel request " + r.URL.path)
 
 	// Initialize carrier adapters
 	adapters := adapter.InitAdapters()
