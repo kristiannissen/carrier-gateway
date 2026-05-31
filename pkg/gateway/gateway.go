@@ -2,14 +2,14 @@
 package gateway
 
 import (
-    "net/http"
+	"net/http"
 
-    "github.com/kristiannissen/logistics-gateway/internal/adapter"
-    "github.com/kristiannissen/logistics-gateway/internal/router"
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/router"
 )
 
 // NewHandler initialises the application and returns an http.Handler.
 func NewHandler() http.Handler {
-    adapters := adapter.InitAdapters()
-    return router.NewRouter(adapters)
+	adapters := adapter.InitAdapters()
+	return router.NewRouter(adapters)
 }

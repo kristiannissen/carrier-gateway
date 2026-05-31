@@ -3,8 +3,8 @@
 package adapter
 
 import (
-	"os"
 	"log/slog"
+	"os"
 )
 
 // CarrierAdapter defines the interface for all carrier adapters.
