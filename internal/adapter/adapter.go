@@ -66,6 +66,16 @@ func InitAdapters() map[string]CarrierAdapter {
 		slog.Info("DAO adapter initialized in mock mode")
 	}
 
+	// Posti
+	postiAPIKey := os.Getenv("POSTI_API_KEY")
+	if postiAPIKey != "" && !mockMode {
+		adapters["posti"] = NewPostiAdapter(postiAPIKey)
+		slog.Info("Posti adapter initialized in production mode")
+	} else {
+		adapters["posti"] = &MockPostiAdapter{}
+		slog.Info("Posti adapter initialized in mock mode")
+	}
+
 	return adapters
 }
 
