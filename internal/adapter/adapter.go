@@ -140,3 +140,10 @@ type ServicePoint struct {
 	OpeningHours string   `json:"openingHours,omitempty"`
 	Services     []string `json:"services,omitempty"`
 }
+
+// Dimensions represents the physical dimensions of a package (length, width, height).
+type Dimensions struct {
+	Length float64 `json:"length"`   // Length in centimeters
+	Width  float64 `json:"width"`    // Width in centimeters
+	Height float64 `json:"height"`   // Height in centimeters
+}

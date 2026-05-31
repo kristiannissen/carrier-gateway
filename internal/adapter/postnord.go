@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
+	"net/http"
 
 	"github.com/go-resty/resty/v2"
 )
