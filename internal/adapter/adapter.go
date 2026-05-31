@@ -76,6 +76,16 @@ func InitAdapters() map[string]CarrierAdapter {
 		slog.Info("Posti adapter initialized in mock mode")
 	}
 
+	// Airmee
+	airmeeAPIKey := os.Getenv("AIRMEE_API_KEY")
+	if airmeeAPIKey != "" && !mockMode {
+		adapters["airmee"] = NewAirmeeAdapter(airmeeAPIKey)
+		slog.Info("Airmee adapter initialized in production mode")
+	} else {
+		adapters["airmee"] = &MockAirmeeAdapter{}
+		slog.Info("Airmee adapter initialized in mock mode")
+	}
+
 	return adapters
 }
 
