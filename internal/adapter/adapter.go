@@ -21,7 +21,6 @@ type CarrierAdapter interface {
 }
 
 // InitAdapters initializes all carrier adapters based on environment variables.
-// This function is used by both the API and CLI entry points.
 func InitAdapters() map[string]CarrierAdapter {
 	adapters := make(map[string]CarrierAdapter)
 	mockMode := os.Getenv("MOCK_MODE") == "true"
@@ -43,7 +42,6 @@ func InitAdapters() map[string]CarrierAdapter {
 		adapters["bring"] = NewBringAdapter(bringAPIKey, bringCustomerID)
 		slog.Info("Bring adapter initialized in production mode")
 	} else {
-		// Create a mock adapter for Bring if needed
 		slog.Info("Bring adapter not initialized (missing API key or customer ID)")
 	}
 
@@ -55,6 +53,17 @@ func InitAdapters() map[string]CarrierAdapter {
 	} else {
 		adapters["gls"] = &MockGLSAdapter{}
 		slog.Info("GLS adapter initialized in mock mode")
+	}
+
+	// DAO
+	daoCustomerID := os.Getenv("DAO_CUSTOMER_ID")
+	daoAPIKey := os.Getenv("DAO_API_KEY")
+	if daoCustomerID != "" && daoAPIKey != "" && !mockMode {
+		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey)
+		slog.Info("DAO adapter initialized in production mode")
+	} else {
+		adapters["dao"] = &MockDAOAdapter{}
+		slog.Info("DAO adapter initialized in mock mode")
 	}
 
 	return adapters
