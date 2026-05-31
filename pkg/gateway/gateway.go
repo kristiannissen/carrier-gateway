@@ -10,6 +10,6 @@ import (
 
 // NewHandler initialises the application and returns an http.Handler.
 func NewHandler() http.Handler {
-	adapters := adapter.InitAdapters()
+	adapters := adapter.initAdapters()
 	return router.NewRouter(adapters)
 }
