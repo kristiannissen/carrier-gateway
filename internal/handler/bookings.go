@@ -42,14 +42,14 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the appropriate carrier adapter
-	adapter, err := c.getAdapter(request.Carrier)
+	carrierAdapter, err := c.getAdapter(request.Carrier)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return
 	}
 
 	// Book the shipment
-	response, err := adapter.BookShipment(request)
+	response, err := carrierAdapter.BookShipment(request)
 	if err != nil {
 		slog.Error("Failed to book shipment", "error", err, "carrier", request.Carrier)
 		writeError(w, http.StatusInternalServerError, "booking failed", err.Error())

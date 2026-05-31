@@ -34,14 +34,14 @@ func (c *Config) GetTracking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the appropriate carrier adapter
-	adapter, err := c.getAdapter(carrier)
+	carrierAdapter, err := c.getAdapter(carrier)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return
 	}
 
 	// Track the shipment
-	response, err := adapter.TrackShipment(trackingNumber)
+	response, err := carrierAdapter.TrackShipment(trackingNumber)
 	if err != nil {
 		slog.Error("Failed to track shipment",
 			"error", err,

@@ -39,7 +39,7 @@ func (c *Config) GetServicePoints(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the appropriate carrier adapter
-	adapter, err := c.getAdapter(carrier)
+	carrierAdapter, err := c.getAdapter(carrier)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return
@@ -53,7 +53,7 @@ func (c *Config) GetServicePoints(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get service points
-	servicePoints, err := adapter.GetServicePoints(location)
+	servicePoints, err := carrierAdapter.GetServicePoints(location)
 	if err != nil {
 		slog.Error("Failed to get service points",
 			"error", err,
