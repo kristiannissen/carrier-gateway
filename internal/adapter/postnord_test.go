@@ -31,7 +31,7 @@ func TestPostNordAdapter_BookShipment(t *testing.T) {
 	adapter := &PostNordAdapter{
 		apiKey:     "test-api-key",
 		baseURL:    mockServer.URL,
-		httpClient:mockServer.Client(),
+		httpClient: mockServer.Client(),
 	}
 
 	// Test booking request

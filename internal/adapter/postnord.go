@@ -110,7 +110,7 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
-		a.baseURL+"/shipments",
+		a.baseURL+"/rest/shipment/v1/booking",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
@@ -121,7 +121,7 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord API call failed: %v", err)
+		return nil, fmt.Errorf("PostNord API call failed: %v - %s", err, a.baseURL)
 	}
 	defer resp.Body.Close()
 
@@ -148,7 +148,7 @@ func (a *PostNordAdapter) TrackShipment(trackingNumber string) (*TrackingRespons
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		fmt.Sprintf("%s/tracking/%s", a.baseURL, trackingNumber),
+		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s", a.baseURL, trackingNumber),
 		nil,
 	)
 	if err != nil {

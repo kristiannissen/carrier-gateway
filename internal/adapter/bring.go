@@ -97,7 +97,7 @@ func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 	// Parse the response
 	var bringResponse struct {
 		ConsignmentNumber string `json:"consignmentNumber"`
-		LabelURL       string `json:"labelUrl"`
+		LabelURL          string `json:"labelUrl"`
 	}
 	if err := json.Unmarshal(body, &bringResponse); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
@@ -208,8 +208,8 @@ func (a *BringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, 
 	// Parse the response
 	var bringTrackingResponse struct {
 		ConsignmentNumber string `json:"consignmentNumber"`
-		Status           string `json:"status"`
-		Events           []struct {
+		Status            string `json:"status"`
+		Events            []struct {
 			Timestamp string `json:"timestamp"`
 			Status    string `json:"status"`
 			Location  string `json:"location"`
