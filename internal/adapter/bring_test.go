@@ -29,10 +29,10 @@ func TestBringAdapter_BookShipment(t *testing.T) {
 
 	// Initialize Bring adapter with mock server URL
 	adapter := &BringAdapter{
-		APIKey:     "test-api-key",
-		CustomerID: "test-customer-id",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
+		apiKey:     "test-api-key",
+		customerID: "test-customer-id",
+		baseURL:    mockServer.URL,
+		httpClient: mockServer.Client(),
 	}
 
 	// Test booking request
@@ -40,22 +40,22 @@ func TestBringAdapter_BookShipment(t *testing.T) {
 		Carrier: "bring",
 		Shipment: Shipment{
 			Sender: Address{
-				Name:    "Sender Name",
-				Street:  "Sender Street",
-				City:    "Oslo",
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Oslo",
 				PostalCode: "0123",
-				Country: "NO",
+				Country:    "NO",
 			},
 			Receiver: Address{
-				Name:    "Receiver Name",
-				Street:  "Receiver Street",
-				City:    "Bergen",
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Bergen",
 				PostalCode: "5678",
-				Country: "NO",
+				Country:    "NO",
 			},
 			Colli: []Colli{
 				{
-					ID:   "colli-1",
+					ID:     "colli-1",
 					Weight: 5.0,
 					Dimensions: Dimensions{
 						Length: 20.0,
@@ -103,10 +103,10 @@ func TestBringAdapter_TrackShipment(t *testing.T) {
 
 	// Initialize Bring adapter with mock server URL
 	adapter := &BringAdapter{
-		APIKey:     "test-api-key",
-		CustomerID: "test-customer-id",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
+		apiKey:     "test-api-key",
+		customerID: "test-customer-id",
+		baseURL:    mockServer.URL,
+		httpClient: mockServer.Client(),
 	}
 
 	// Call the TrackShipment method

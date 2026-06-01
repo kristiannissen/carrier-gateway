@@ -36,8 +36,9 @@ go.work.sum
 
 # Explicitely whitelist readme
 !README.md
-!docs/architecture.md
 # Ignore OS specific files
 .DS_STore
 Thumbs.db
 *.sh
+
+*.github_token

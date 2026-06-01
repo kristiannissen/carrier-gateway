@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/go-resty/resty/v2"
 )
 
 func TestPostNordAdapter_BookShipment(t *testing.T) {
@@ -30,9 +29,9 @@ func TestPostNordAdapter_BookShipment(t *testing.T) {
 
 	// Initialize PostNord adapter with mock server URL
 	adapter := &PostNordAdapter{
-		apiKey:   "test-api-key",
-		baseURL:  mockServer.URL,
-		httpClient: resty.New(),
+		apiKey:     "test-api-key",
+		baseURL:    mockServer.URL,
+		httpClient:mockServer.Client(),
 	}
 
 	// Test booking request
@@ -40,23 +39,23 @@ func TestPostNordAdapter_BookShipment(t *testing.T) {
 		Carrier: "postnord",
 		Shipment: Shipment{
 			Sender: Address{
-				Name:   "Sender Name",
-				Street: "Sender Street",
-				City:   "Sender City",
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Sender City",
 				PostalCode: "12345",
-				Country: "DK",
+				Country:    "DK",
 			},
 			Receiver: Address{
-				Name:   "Receiver Name",
-				Street: "Receiver Street",
-				City:   "Receiver City",
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Receiver City",
 				PostalCode: "67890",
-				Country: "DK",
+				Country:    "DK",
 			},
 			Colli: []Colli{
 				{
-					ID:       "colli-1",
-					Weight:   10.0,
+					ID:     "colli-1",
+					Weight: 10.0,
 					Dimensions: Dimensions{
 						Length: 10.0,
 						Width:  10.0,
@@ -103,9 +102,9 @@ func TestPostNordAdapter_TrackShipment(t *testing.T) {
 
 	// Initialize PostNord adapter with mock server URL
 	adapter := &PostNordAdapter{
-		apiKey:   "test-api-key",
-		baseURL:  mockServer.URL,
-		httpClient: resty.New(),
+		apiKey:     "test-api-key",
+		baseURL:    mockServer.URL,
+		httpClient: mockServer.Client(),
 	}
 
 	// Call the TrackShipment method

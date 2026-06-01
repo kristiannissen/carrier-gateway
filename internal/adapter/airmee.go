@@ -41,8 +41,8 @@ func (a *AirmeeAdapter) BookShipment(request BookingRequest) (*BookingResponse, 
 				"postalCode": request.Shipment.Sender.PostalCode,
 				"city":       request.Shipment.Sender.City,
 				"country":    request.Shipment.Sender.Country,
-				"latitude":    0.0, // TODO: Add geocoding logic to get lat/long
-				"longitude":   0.0, // TODO: Add geocoding logic to get lat/long
+				"latitude":   0.0, // TODO: Add geocoding logic to get lat/long
+				"longitude":  0.0, // TODO: Add geocoding logic to get lat/long
 			},
 			"contact": map[string]interface{}{
 				"name":  request.Shipment.Sender.Name,
@@ -60,8 +60,8 @@ func (a *AirmeeAdapter) BookShipment(request BookingRequest) (*BookingResponse, 
 				"postalCode": request.Shipment.Receiver.PostalCode,
 				"city":       request.Shipment.Receiver.City,
 				"country":    request.Shipment.Receiver.Country,
-				"latitude":    0.0, // TODO: Add geocoding logic to get lat/long
-				"longitude":   0.0, // TODO: Add geocoding logic to get lat/long
+				"latitude":   0.0, // TODO: Add geocoding logic to get lat/long
+				"longitude":  0.0, // TODO: Add geocoding logic to get lat/long
 			},
 			"contact": map[string]interface{}{
 				"name":  request.Shipment.Receiver.Name,
@@ -123,10 +123,10 @@ func (a *AirmeeAdapter) BookShipment(request BookingRequest) (*BookingResponse, 
 
 	// Parse the response
 	var airmeeResponse struct {
-		ID             string `json:"id"`
-		TrackingURL    string `json:"trackingUrl"`
-		Status         string `json:"status"`
-		Error          struct {
+		ID          string `json:"id"`
+		TrackingURL string `json:"trackingUrl"`
+		Status      string `json:"status"`
+		Error       struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
 		} `json:"error"`
@@ -178,16 +178,16 @@ func (a *AirmeeAdapter) TrackShipment(trackingNumber string) (*TrackingResponse,
 
 	// Parse the response
 	var airmeeTrackingResponse struct {
-		ID       string `json:"id"`
-		Status   string `json:"status"`
-		Events   []struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+		Events []struct {
 			Timestamp time.Time `json:"timestamp"`
-			Type      string   `json:"type"`
-			Message   string   `json:"message"`
+			Type      string    `json:"type"`
+			Message   string    `json:"message"`
 			Location  struct {
 				Latitude  float64 `json:"latitude"`
 				Longitude float64 `json:"longitude"`
-				Address   string   `json:"address"`
+				Address   string  `json:"address"`
 			} `json:"location"`
 		} `json:"events"`
 		Error struct {

@@ -39,24 +39,24 @@ func TestGLSAdapter_BookShipment(t *testing.T) {
 		Carrier: "gls",
 		Shipment: Shipment{
 			Sender: Address{
-				Name:    "Sender Name",
-				Street:  "Sender Street",
-				City:    "Copenhagen",
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Copenhagen",
 				PostalCode: "1234",
-				Country: "DK",
-				Phone:  "+4512345678",
+				Country:    "DK",
+				Phone:      "+4512345678",
 			},
 			Receiver: Address{
-				Name:    "Receiver Name",
-				Street:  "Receiver Street",
-				City:    "Aarhus",
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Aarhus",
 				PostalCode: "5678",
-				Country: "DK",
-				Phone:  "+4587654321",
+				Country:    "DK",
+				Phone:      "+4587654321",
 			},
 			Colli: []Colli{
 				{
-					ID:   "colli-1",
+					ID:     "colli-1",
 					Weight: 5.0,
 					Dimensions: Dimensions{
 						Length: 20.0,

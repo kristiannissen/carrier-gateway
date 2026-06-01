@@ -42,6 +42,7 @@ func InitAdapters() map[string]CarrierAdapter {
 		adapters["bring"] = NewBringAdapter(bringAPIKey, bringCustomerID)
 		slog.Info("Bring adapter initialized in production mode")
 	} else {
+		adapters["bring"] = &MockBringAdapter{}
 		slog.Info("Bring adapter not initialized (missing API key or customer ID)")
 	}
 
@@ -217,7 +218,7 @@ type ServicePoint struct {
 
 // Dimensions represents the physical dimensions of a package (length, width, height).
 type Dimensions struct {
-	Length float64 `json:"length"`   // Length in centimeters
-	Width  float64 `json:"width"`    // Width in centimeters
-	Height float64 `json:"height"`   // Height in centimeters
+	Length float64 `json:"length"` // Length in centimeters
+	Width  float64 `json:"width"`  // Width in centimeters
+	Height float64 `json:"height"` // Height in centimeters
 }

@@ -40,7 +40,7 @@ func (a *DAOAdapter) BookShipment(request BookingRequest) (*BookingResponse, err
 	params.Set("navn", request.Shipment.Receiver.Name)
 	params.Set("mobil", request.Shipment.Receiver.Phone)
 	params.Set("email", request.Shipment.Receiver.Email)
-	params.Set("dato", "2026-06-01") // Default to tomorrow
+	params.Set("dato", "2026-06-01")                                              // Default to tomorrow
 	params.Set("vaegt", strconv.Itoa(int(request.Shipment.Colli[0].Weight*1000))) // Convert kg to grams
 	params.Set("l", strconv.Itoa(int(request.Shipment.Colli[0].Dimensions.Length)))
 	params.Set("h", strconv.Itoa(int(request.Shipment.Colli[0].Dimensions.Height)))
@@ -73,16 +73,16 @@ func (a *DAOAdapter) BookShipment(request BookingRequest) (*BookingResponse, err
 
 	// Parse the response
 	var daoResponse struct {
-		Status   string `json:"status"`
+		Status    string `json:"status"`
 		ErrorCode string `json:"fejlkode"`
 		ErrorText string `json:"fejltekst"`
-		Result   struct {
-			Barcode      string `json:"stregkode"`
-			LabelText1   string `json:"labelTekst1"`
-			LabelText2   string `json:"labelTekst2"`
-			LabelText3   string `json:"labelTekst3"`
-			SortingCode  string `json:"udsorting"`
-			ETA          string `json:"ETA"`
+		Result    struct {
+			Barcode     string `json:"stregkode"`
+			LabelText1  string `json:"labelTekst1"`
+			LabelText2  string `json:"labelTekst2"`
+			LabelText3  string `json:"labelTekst3"`
+			SortingCode string `json:"udsorting"`
+			ETA         string `json:"ETA"`
 		} `json:"resultat"`
 	}
 	if err := json.Unmarshal(body, &daoResponse); err != nil {
@@ -136,10 +136,10 @@ func (a *DAOAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, er
 
 	// Parse the response
 	var daoTrackingResponse struct {
-		Status   string `json:"status"`
+		Status    string `json:"status"`
 		ErrorCode string `json:"fejlkode"`
 		ErrorText string `json:"fejltekst"`
-		Result   struct {
+		Result    struct {
 			TrackingNumber string `json:"stregkode"`
 			ParcelType     string `json:"pakketype"`
 			ETA            string `json:"eta"`
@@ -152,12 +152,12 @@ func (a *DAOAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, er
 			} `json:"modtager"`
 			ExternalTracking string `json:"ekstern_tracking"`
 			Events           []struct {
-				Timestamp string `json:"tidspunkt"`
-				Event     string `json:"haendelse"`
+				Timestamp   string `json:"tidspunkt"`
+				Event       string `json:"haendelse"`
 				Description string `json:"beskrivelse"`
-				ParcelType string `json:"pakketype"`
-				Location  string `json:"sted"`
-				ShopID    string `json:"shopid"`
+				ParcelType  string `json:"pakketype"`
+				Location    string `json:"sted"`
+				ShopID      string `json:"shopid"`
 			} `json:"haendelser"`
 		} `json:"resultat"`
 	}
@@ -224,10 +224,10 @@ func (a *DAOAdapter) GetServicePoints(location Location) ([]ServicePoint, error)
 
 	// Parse the response
 	var daoServicePoints struct {
-		Status   string `json:"status"`
+		Status    string `json:"status"`
 		ErrorCode string `json:"fejlkode"`
 		ErrorText string `json:"fejltekst"`
-		Result   struct {
+		Result    struct {
 			ServicePoints []struct {
 				ShopID       string `json:"shopId"`
 				Type         string `json:"type"`
@@ -248,13 +248,13 @@ func (a *DAOAdapter) GetServicePoints(location Location) ([]ServicePoint, error)
 					Saturday  string `json:"lor"`
 					Sunday    string `json:"son"`
 				} `json:"aabningstider"`
-				DistanceDirect string `json:"afstand_direkte"`
+				DistanceDirect  string `json:"afstand_direkte"`
 				DistanceMinutes string `json:"afstand_minutter"`
 			} `json:"pakkeshops"`
 			StartingPoint struct {
-				Latitude  string `json:"latitude"`
-				Longitude string `json:"longitude"`
-				PositionFromPostal bool `json:"position_from_postal"`
+				Latitude           string `json:"latitude"`
+				Longitude          string `json:"longitude"`
+				PositionFromPostal bool   `json:"position_from_postal"`
 			} `json:"udgangspunkt"`
 			Count string `json:"antal"`
 		} `json:"resultat"`

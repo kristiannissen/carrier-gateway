@@ -235,9 +235,9 @@ func (a *PostiAdapter) GetServicePoints(location Location) ([]ServicePoint, erro
 	// Parse the response
 	var postiServicePoints struct {
 		PickupPoints []struct {
-			ID          string `json:"id"`
-			Name        string `json:"name"`
-			Address     struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Address struct {
 				Street     string `json:"street"`
 				PostalCode string `json:"postalCode"`
 				City       string `json:"city"`
