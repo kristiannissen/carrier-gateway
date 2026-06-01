@@ -15,14 +15,14 @@ func TestPostNordAdapter_BookShipment(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify the request method and path
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/shipments", r.URL.Path)
+		assert.Equal(t, "/rest/shipment/v1/booking", r.URL.Path)
 
 		// Mock response for successful booking
 		mockResponse := `{
 			"trackingNumber": "PN123456789DK",
 			"labelURL": "https://example.com/label.png"
 		}`
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(mockResponse))
 	}))
 	defer mockServer.Close()
@@ -81,7 +81,7 @@ func TestPostNordAdapter_TrackShipment(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify the request method and path
 		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/tracking/PN123456789DK", r.URL.Path)
+		assert.Equal(t, "/rest/shipment/v1/tracking/PN123456789DK", r.URL.Path)
 
 		// Mock response for tracking
 		mockResponse := `{

@@ -1,5 +1,4 @@
 // Package adapter provides the PostNord implementation of the CarrierAdapter interface.
-// This file is located at /internal/adapter/postnord.go.
 package adapter
 
 import (
@@ -30,7 +29,6 @@ func NewPostNordAdapter(apiKey string) *PostNordAdapter {
 }
 
 // NewPostNordAdapterFromEnv creates a new PostNord adapter from environment variables.
-// Falls back to nil if POSTNORD_API_KEY is not set.
 func NewPostNordAdapterFromEnv() *PostNordAdapter {
 	apiKey := os.Getenv("POSTNORD_API_KEY")
 	if apiKey == "" {
@@ -46,7 +44,6 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
 
-	// Log warning if Idempotency-Key is provided (PostNord does not support it)
 	if request.IdempotencyKey != "" {
 		slog.Warn(
 			"PostNord does not support idempotency. Ignoring Idempotency-Key.",
@@ -89,7 +86,6 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 		"parcels": parcels,
 	}
 
-	// Add optional fields
 	if request.CallbackURL != "" {
 		postNordRequest["callbackUrl"] = request.CallbackURL
 	}
@@ -100,32 +96,30 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 		postNordRequest["hsCode"] = request.Shipment.HSCode
 	}
 
-	// Marshal request body
 	payloadBytes, err := json.Marshal(postNordRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %v", err)
 	}
 
-	// Build and send HTTP request
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
-		a.baseURL+"/rest/shipment/v1/booking",
+		fmt.Sprintf("%s/rest/shipment/v1/booking?apikey=%s", a.baseURL, a.apiKey),
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord API call failed: %v - %s", err, a.baseURL)
+		return nil, fmt.Errorf("PostNord API call failed: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	// PostNord returns 201 Created on success
+	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("PostNord API returned status %d: %s", resp.StatusCode, string(body))
 	}
@@ -148,13 +142,12 @@ func (a *PostNordAdapter) TrackShipment(trackingNumber string) (*TrackingRespons
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s", a.baseURL, trackingNumber),
+		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s?apikey=%s", a.baseURL, trackingNumber, a.apiKey),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
@@ -181,14 +174,13 @@ func (a *PostNordAdapter) GetServicePoints(location Location) ([]ServicePoint, e
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		fmt.Sprintf("%s/service-points?postalCode=%s&city=%s&country=%s",
-			a.baseURL, location.PostalCode, location.City, location.Country),
+		fmt.Sprintf("%s/rest/shipment/v1/servicepoints?postalCode=%s&city=%s&countryCode=%s&apikey=%s",
+			a.baseURL, location.PostalCode, location.City, location.Country, a.apiKey),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
 	resp, err := a.httpClient.Do(req)
 	if err != nil {
