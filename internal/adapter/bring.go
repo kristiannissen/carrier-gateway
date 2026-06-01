@@ -96,7 +96,7 @@ func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 
 	// Parse the response
 	var bringResponse struct {
-		TrackingNumber string `json:"trackingNumber"`
+		ConsignmentNumber string `json:"consignmentNumber"`
 		LabelURL       string `json:"labelUrl"`
 	}
 	if err := json.Unmarshal(body, &bringResponse); err != nil {
@@ -105,7 +105,7 @@ func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 
 	// Return the standardized response
 	return &BookingResponse{
-		TrackingNumber: bringResponse.TrackingNumber,
+		TrackingNumber: bringResponse.ConsignmentNumber,
 		LabelURL:       bringResponse.LabelURL,
 		Carrier:        "bring",
 	}, nil

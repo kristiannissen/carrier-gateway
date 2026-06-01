@@ -12,17 +12,17 @@ import (
 
 // GLSAdapter implements the CarrierAdapter interface for GLS.
 type GLSAdapter struct {
-	APIKey     string
-	BaseURL    string
-	HTTPClient *http.Client
+	apiKey     string
+	baseURL    string
+	httpClient *http.Client
 }
 
 // NewGLSAdapter creates a new GLSAdapter instance.
 func NewGLSAdapter(apiKey string) *GLSAdapter {
 	return &GLSAdapter{
-		APIKey:     apiKey,
-		BaseURL:    "https://api.gls-group.eu/api/v1",
-		HTTPClient: http.DefaultClient,
+		apiKey:     apiKey,
+		baseURL:    "https://api.gls-group.eu/api/v1",
+		httpClient: http.DefaultClient,
 	}
 }
 
@@ -67,7 +67,7 @@ func (a *GLSAdapter) BookShipment(request BookingRequest) (*BookingResponse, err
 	// Create a new request to GLS's API
 	req, err := http.NewRequest(
 		http.MethodPost,
-		a.BaseURL+"/shipments",
+		a.baseURL+"/shipments",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
@@ -76,10 +76,10 @@ func (a *GLSAdapter) BookShipment(request BookingRequest) (*BookingResponse, err
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
 	// Send the request
-	resp, err := a.HTTPClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -113,7 +113,7 @@ func (a *GLSAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, er
 	// Create a new request to GLS's tracking API
 	req, err := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("%s/tracking/%s", a.BaseURL, trackingNumber),
+		fmt.Sprintf("%s/tracking/%s", a.baseURL, trackingNumber),
 		nil,
 	)
 	if err != nil {
@@ -121,10 +121,10 @@ func (a *GLSAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, er
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
 	// Send the request
-	resp, err := a.HTTPClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -173,7 +173,7 @@ func (a *GLSAdapter) GetServicePoints(location Location) ([]ServicePoint, error)
 	// Create a new request to GLS's service points API
 	req, err := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("%s/parcelshops?city=%s&country=%s", a.BaseURL, location.City, location.Country),
+		fmt.Sprintf("%s/parcelshops?city=%s&country=%s", a.baseURL, location.City, location.Country),
 		nil,
 	)
 	if err != nil {
@@ -181,10 +181,10 @@ func (a *GLSAdapter) GetServicePoints(location Location) ([]ServicePoint, error)
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 
 	// Send the request
-	resp, err := a.HTTPClient.Do(req)
+	resp, err := a.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}

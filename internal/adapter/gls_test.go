@@ -29,9 +29,9 @@ func TestGLSAdapter_BookShipment(t *testing.T) {
 
 	// Initialize GLS adapter with mock server URL
 	adapter := &GLSAdapter{
-		APIKey:     "test-api-key",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
+		apiKey:     "test-api-key",
+		baseURL:    mockServer.URL,
+		httpClient: mockServer.Client(),
 	}
 
 	// Test booking request
@@ -104,9 +104,9 @@ func TestGLSAdapter_TrackShipment(t *testing.T) {
 
 	// Initialize GLS adapter with mock server URL
 	adapter := &GLSAdapter{
-		APIKey:     "test-api-key",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
+		apiKey:     "test-api-key",
+		baseURL:    mockServer.URL,
+		httpClient: mockServer.Client(),
 	}
 
 	// Call the TrackShipment method
@@ -144,9 +144,9 @@ func TestGLSAdapter_GetServicePoints(t *testing.T) {
 
 	// Initialize GLS adapter with mock server URL
 	adapter := &GLSAdapter{
-		APIKey:     "test-api-key",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
+		apiKey:     "test-api-key",
+		baseURL:    mockServer.URL,
+		httpClient: mockServer.Client(),
 	}
 
 	// Call the GetServicePoints method

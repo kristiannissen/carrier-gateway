@@ -19,13 +19,13 @@ func main() {
 	}
 
 	// Initialize adapters (shared with API)
-	adapters := InitAdapters()
+	carrierAdapters := adapter.InitAdapters()
 
 	// Add subcommands
 	rootCmd.AddCommand(
-		newBookCmd(adapters),
-		newTrackCmd(adapters),
-		newServicePointsCmd(adapters),
+		newBookCmd(carrierAdapters),
+		newTrackCmd(carrierAdapters),
+		newServicePointsCmd(carrierAdapters),
 		newHealthCmd(),
 	)
 
@@ -39,16 +39,16 @@ func main() {
 // initAdapters initializes carrier adapters based on environment variables.
 // Reuses the same logic as the API.
 func initAdapters() map[string]adapter.CarrierAdapter {
-	adapters := make(map[string]adapter.CarrierAdapter)
+	carrierAdapters := make(map[string]adapter.CarrierAdapter)
 	mockMode := os.Getenv("MOCK_MODE") == "true"
 
 	// PostNord
 	postNordAPIKey := os.Getenv("POSTNORD_API_KEY")
 	if postNordAPIKey != "" && !mockMode {
-		adapters["postnord"] = adapter.NewPostNordAdapter(postNordAPIKey)
+		carrierAdapters["postnord"] = adapter.NewPostNordAdapter(postNordAPIKey)
 	} else {
-		adapters["postnord"] = adapter.NewMockPostNordAdapter()
+		carrierAdapters["postnord"] = adapter.NewMockPostNordAdapter()
 	}
 
-	return adapters
+	return carrierAdapters
 }
