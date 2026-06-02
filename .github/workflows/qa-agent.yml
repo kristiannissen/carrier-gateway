@@ -3,3 +3,61 @@ name: QA Agent - Test PR and Create Bug Issues
 on:
   push:
     branches: [ main ]  # Also trigger on pushes to main
+
+jobs:
+  test-and-report:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run tests
+        id: run-tests
+        run: |
+          go test ./... -v > test_output.txt 2>&1 || echo "TESTS_FAILED=true" >> $GITHUB_ENV
+          echo "test_output=$(cat test_output.txt)" >> $GITHUB_OUTPUT
+
+      - name: Upload test output
+        if: env.TESTS_FAILED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: test_output.txt
+
+      - name: Create Bug Issue for Test Failures
+        if: env.TESTS_FAILED == 'true'
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          PR_URL=${{ github.event.pull_request.html_url }}
+
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{
+              "title": "[BUG] Test Failure in PR #'"$PR_NUMBER"'",
+              "body": "
+              **PR:** [#'"$PR_NUMBER"']('"$PR_URL"')
+
+              **Test Output:**
+              \`\`\`
+              ${{ steps.run-tests.outputs.test_output }}
+              \`\`\`
+
+              **How to Reproduce:**
+              1. Checkout the PR branch: \`git checkout pr-'"$PR_NUMBER"'\`
+              2. Run: \`go test ./... -v\`
+              ",
+              "labels": ["bug", "test-failure"]
+            }' \
+            "https://api.github.com/repos/${{ github.repository }}/issues"
