@@ -1,32 +1,42 @@
-name: QA Agent - Test PR and Create Bug Issues
+name: QA Agent - Test Commits to Main
 
 on:
   push:
-    branches: [ main ]  # Also trigger on pushes to main
+    branches: [ main ]  # Trigger on commits to main
 
 jobs:
   test-and-report:
     runs-on: ubuntu-latest
     permissions:
-      issues: write
-      pull-requests: read
+      issues: write  # Required to create issues
+      contents: read  # Required for Go module downloads
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
+          cache: true  # Cache Go modules
+
+      - name: Download Go dependencies
+        run: go mod download
 
       - name: Run tests
         id: run-tests
         run: |
-          go test ./... -v > test_output.txt 2>&1 || echo "TESTS_FAILED=true" >> $GITHUB_ENV
-          echo "test_output=$(cat test_output.txt)" >> $GITHUB_OUTPUT
+          # Run tests and capture output
+          if go test ./... -v > test_output.txt 2>&1; then
+            echo "TESTS_PASSED=true" >> $GITHUB_ENV
+          else
+            echo "TESTS_FAILED=true" >> $GITHUB_ENV
+          fi
+          # Store test output for later use
+          echo "test_output<<EOF" >> $GITHUB_OUTPUT
+          cat test_output.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Upload test output
         if: env.TESTS_FAILED == 'true'
@@ -38,26 +48,23 @@ jobs:
       - name: Create Bug Issue for Test Failures
         if: env.TESTS_FAILED == 'true'
         run: |
-          PR_NUMBER=${{ github.event.pull_request.number }}
-          PR_URL=${{ github.event.pull_request.html_url }}
+          # Get the commit SHA that triggered the workflow
+          COMMIT_SHA=${{ github.sha }}
+          COMMIT_URL=${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
 
+          # Read the test output file
+          TEST_OUTPUT=$(cat test_output.txt)
+
+          # Escape newlines and special characters for JSON
+          TEST_OUTPUT_ESCAPED=$(printf '%s\n' "$TEST_OUTPUT" | jq -Rs .)
+
+          # Create a bug issue using GitHub API
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            -d '{
-              "title": "[BUG] Test Failure in PR #'"$PR_NUMBER"'",
-              "body": "
-              **PR:** [#'"$PR_NUMBER"']('"$PR_URL"')
-
-              **Test Output:**
-              \`\`\`
-              ${{ steps.run-tests.outputs.test_output }}
-              \`\`\`
-
-              **How to Reproduce:**
-              1. Checkout the PR branch: \`git checkout pr-'"$PR_NUMBER"'\`
-              2. Run: \`go test ./... -v\`
-              ",
-              "labels": ["bug", "test-failure"]
-            }' \
+            -d "{
+              \"title\": \"[BUG] Test Failure in Commit $COMMIT_SHA\",
+              \"body\": \"**Commit:** [$COMMIT_SHA]($COMMIT_URL)\\n\\n**Test Output:**\\n\\`\\`\\`\\n$TEST_OUTPUT\\n\\`\\`\\`\\n\\n**How to Reproduce:**\\n1. Checkout the commit: \\`git checkout $COMMIT_SHA\\`\\n2. Run: \\`go test ./... -v\\`\",
+              \"labels\": [\"bug\", \"test-failure\"]
+            }" \
             "https://api.github.com/repos/${{ github.repository }}/issues"
