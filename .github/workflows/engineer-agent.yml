@@ -2,7 +2,7 @@ name: Engineer Agent - Create PR from Issue
 
 on:
   issues:
-    types: [labeled]  # Trigger when an issue is labeled
+    types: [labeled]
 
 jobs:
   create-pr:
@@ -14,34 +14,49 @@ jobs:
       contents: write
 
     steps:
+      - name: Debug Event Data
+        run: |
+          echo "Event: ${{ toJSON(github.event) }}"
+          echo "Issue Number: ${{ github.event.issue.number }}"
+          echo "Issue Title: ${{ github.event.issue.title }}"
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.1
         with:
-          fetch-depth: 0  # Full git history
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
 
       - name: Create PR for Issue
         run: |
-          # Extract issue details from GitHub context
+          # Extract issue details
           ISSUE_NUMBER=${{ github.event.issue.number }}
           ISSUE_TITLE="${{ github.event.issue.title }}"
           ISSUE_BODY="${{ github.event.issue.body }}"
 
-          # Create a branch name (replace spaces with hyphens)
-          BRANCH_NAME="feat/$ISSUE_NUMBER-$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
+          # Create a branch name
+          BRANCH_NAME="feat/$ISSUE_NUMBER-$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -d '[]')"
 
-          # Create and checkout the branch
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
+          echo "Branch Name: $BRANCH_NAME"
+
+          # Checkout the branch (delete if it already exists)
+          git fetch origin
+          if git show-ref --quiet refs/heads/"$BRANCH_NAME"; then
+            git branch -D "$BRANCH_NAME"
+          fi
           git checkout -b "$BRANCH_NAME"
 
-          # Make a dummy change (e.g., create a file for the issue)
+          # Make a dummy change
           echo "Implemented: $ISSUE_TITLE" > "implementation-$ISSUE_NUMBER.txt"
           git add "implementation-$ISSUE_NUMBER.txt"
           git commit -m "feat: implement $ISSUE_TITLE (Closes #$ISSUE_NUMBER)"
-          git push origin "$BRANCH_NAME"
+          git push origin "$BRANCH_NAME" --force
 
-          # Create a PR using GitHub API (curl)
-          curl -X POST \
+          # Create a PR using GitHub API
+          PR_RESPONSE=$(curl -s -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d '{
@@ -50,4 +65,6 @@ jobs:
               "head": "'$BRANCH_NAME'",
               "base": "main"
             }' \
-            "https://api.github.com/repos/${{ github.repository }}/pulls"
+            "https://api.github.com/repos/${{ github.repository }}/pulls")
+
+          echo "PR Response: $PR_RESPONSE"
