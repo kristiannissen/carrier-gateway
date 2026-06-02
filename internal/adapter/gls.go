@@ -13,7 +13,7 @@ import (
 // GLSAdapter implements the CarrierAdapter interface for GLS Denmark.
 type GLSAdapter struct {
 	apiKey     string
-	baseURL    string
+	BaseURL    string
 	httpClient *http.Client
 }
 
@@ -21,7 +21,7 @@ type GLSAdapter struct {
 func NewGLSAdapter(apiKey string) *GLSAdapter {
 	return &GLSAdapter{
 		apiKey:     apiKey,
-		baseURL:    "https://api.gls-group.eu/api/v1",
+		BaseURL:    "https://api.gls-group.eu/api/v1",
 		httpClient: http.DefaultClient,
 	}
 }
