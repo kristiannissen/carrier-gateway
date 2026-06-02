@@ -1,0 +1,86 @@
+name: QA Agent - Test Commits and Create Bug Issues
+
+on:
+  push:
+    branches: [ main, 'feat/**', 'fix/**' ]  # Trigger on pushes to main or feature/fix branches
+
+jobs:
+  test-and-report:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full git history
+
+      - name: Check for Issue References in Commit Messages
+        id: check-commit
+        run: |
+          # Get the latest commit message
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "commit_msg=$COMMIT_MSG" >> $GITHUB_OUTPUT
+
+          # Check if the commit references an issue (e.g., "fixes #123" or "closes #456")
+          if [[ "$COMMIT_MSG" =~ (fixes|closes|resolves)\ #[0-9]+ ]]; then
+            echo "has_issue_reference=true" >> $GITHUB_OUTPUT
+            # Extract the issue number (e.g., #123)
+            ISSUE_NUMBER=$(echo "$COMMIT_MSG" | grep -oE '#[0-9]+' | grep -oE '[0-9]+')
+            echo "issue_number=$ISSUE_NUMBER" >> $GITHUB_OUTPUT
+          else
+            echo "has_issue_reference=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Go
+        if: steps.check-commit.outputs.has_issue_reference == 'true'
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Run tests
+        if: steps.check-commit.outputs.has_issue_reference == 'true'
+        id: run-tests
+        run: |
+          # Run tests and capture output
+          go test ./... -v > test_output.txt 2>&1 || echo "TESTS_FAILED=true" >> $GITHUB_ENV
+          echo "test_output=$(cat test_output.txt)" >> $GITHUB_OUTPUT
+
+      - name: Upload test output
+        if: env.TESTS_FAILED == 'true' && steps.check-commit.outputs.has_issue_reference == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-output
+          path: test_output.txt
+
+      - name: Create Bug Issue for Test Failures
+        if: env.TESTS_FAILED == 'true' && steps.check-commit.outputs.has_issue_reference == 'true'
+        run: |
+          # Extract issue number from commit
+          ISSUE_NUMBER=${{ steps.check-commit.outputs.issue_number }}
+          COMMIT_SHA=${{ github.sha }}
+
+          # Create a bug issue using GitHub API (curl)
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{
+              "title": "[BUG] Test Failure in Commit '"$COMMIT_SHA"' (Related to #'$ISSUE_NUMBER')",
+              "body": "
+              **Commit:** '"$COMMIT_SHA"'
+              **Related Issue:** [#'"$ISSUE_NUMBER"'](https://github.com/${{ github.repository }}/issues/$ISSUE_NUMBER)
+
+              **Test Output:**
+              \`\`\`
+              ${{ steps.run-tests.outputs.test_output }}
+              \`\`\`
+
+              **How to Reproduce:**
+              1. Checkout the commit: \`git checkout '"$COMMIT_SHA"'\`
+              2. Run: \`go test ./... -v\`
+              ",
+              "labels": ["bug", "test-failure"]
+            }' \
+            "https://api.github.com/repos/${{ github.repository }}/issues"
