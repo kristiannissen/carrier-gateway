@@ -10,7 +10,7 @@ import (
 	"net/http"
 )
 
-// GLSAdapter implements the CarrierAdapter interface for GLS.
+// GLSAdapter implements the CarrierAdapter interface for GLS DK.
 type GLSAdapter struct {
 	apiKey     string
 	baseURL    string
