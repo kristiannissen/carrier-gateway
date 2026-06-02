@@ -1,0 +1,53 @@
+name: Engineer Agent - Create PR from Issue
+
+on:
+  issues:
+    types: [labeled]  # Trigger when an issue is labeled
+
+jobs:
+  create-pr:
+    if: contains(github.event.issue.labels.*.name, 'bug') || contains(github.event.issue.labels.*.name, 'enhancement')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      pull-requests: write
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full git history
+
+      - name: Create PR for Issue
+        run: |
+          # Extract issue details from GitHub context
+          ISSUE_NUMBER=${{ github.event.issue.number }}
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_BODY="${{ github.event.issue.body }}"
+
+          # Create a branch name (replace spaces with hyphens)
+          BRANCH_NAME="feat/$ISSUE_NUMBER-$(echo "$ISSUE_TITLE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
+
+          # Create and checkout the branch
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git checkout -b "$BRANCH_NAME"
+
+          # Make a dummy change (e.g., create a file for the issue)
+          echo "Implemented: $ISSUE_TITLE" > "implementation-$ISSUE_NUMBER.txt"
+          git add "implementation-$ISSUE_NUMBER.txt"
+          git commit -m "feat: implement $ISSUE_TITLE (Closes #$ISSUE_NUMBER)"
+          git push origin "$BRANCH_NAME"
+
+          # Create a PR using GitHub API (curl)
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{
+              "title": "[FEAT-'$ISSUE_NUMBER'] '$ISSUE_TITLE'",
+              "body": "Closes #$ISSUE_NUMBER. '$ISSUE_BODY'",
+              "head": "'$BRANCH_NAME'",
+              "base": "main"
+            }' \
+            "https://api.github.com/repos/${{ github.repository }}/pulls"
