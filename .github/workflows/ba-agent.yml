@@ -1,0 +1,36 @@
+name: BA Agent - Create Enhancement Issues
+
+on:
+  workflow_dispatch:  # Manually trigger the workflow
+
+jobs:
+  create-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write  # Required to create issues
+
+    steps:
+      - name: Create Enhancement Issue 1
+        run: |
+          # Use GitHub API via curl to create an issue
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{
+              "title": "[ENHANCEMENT] Add Multi-Carrier Freight Rate Comparison",
+              "body": "**What:**\nImplement a feature to compare freight rates across carriers (FedEx, UPS, DHL).\n\n**Why:**\nEnables cost savings and better carrier selection for LTL/FTL shipments.\n\n**Main Deliverables:**\n- API integration with carrier rate APIs.\n- UI to display rate comparisons.\n- Option to book directly with selected carrier.",
+              "labels": ["enhancement", "freight", "carrier-selection"]
+            }' \
+            "https://api.github.com/repos/${{ github.repository }}/issues"
+
+      - name: Create Enhancement Issue 2
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{
+              "title": "[ENHANCEMENT] Automate NMFC Classification",
+              "body": "**What:**\nAutomate NMFC code assignment for LTL shipments.\n\n**Why:**\nReduces billing errors and compliance risks.\n\n**Main Deliverables:**\n- Integration with NMFC API.\n- Auto-assign codes to 90% of shipments.",
+              "labels": ["enhancement", "freight", "compliance"]
+            }' \
+            "https://api.github.com/repos/${{ github.repository }}/issues"
