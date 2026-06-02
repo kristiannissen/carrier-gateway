@@ -40,5 +40,5 @@ go.work.sum
 .DS_STore
 Thumbs.db
 *.sh
-
+*.swp
 *.github_token

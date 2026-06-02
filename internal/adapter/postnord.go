@@ -14,17 +14,17 @@ import (
 
 // PostNordAdapter implements CarrierAdapter for PostNord.
 type PostNordAdapter struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+	APIKey     string
+	BaseURL    string
+	HTTPClient *http.Client
 }
 
 // NewPostNordAdapter creates a new PostNord adapter.
 func NewPostNordAdapter(apiKey string) *PostNordAdapter {
 	return &PostNordAdapter{
-		apiKey:     apiKey,
-		baseURL:    "https://api.postnord.com",
-		httpClient: http.DefaultClient,
+		APIKey:     apiKey,
+		BaseURL:    "https://api.postnord.com",
+		HTTPClient: http.DefaultClient,
 	}
 }
 
@@ -104,7 +104,7 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
-		fmt.Sprintf("%s/rest/shipment/v1/booking?apikey=%s", a.baseURL, a.apiKey),
+		fmt.Sprintf("%s/rest/shipment/v1/booking?apikey=%s", a.BaseURL, a.APIKey),
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
@@ -112,7 +112,7 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := a.httpClient.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("PostNord API call failed: %v", err)
 	}
@@ -142,14 +142,14 @@ func (a *PostNordAdapter) TrackShipment(trackingNumber string) (*TrackingRespons
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s?apikey=%s", a.baseURL, trackingNumber, a.apiKey),
+		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s?apikey=%s", a.BaseURL, trackingNumber, a.APIKey),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
-	resp, err := a.httpClient.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("PostNord tracking API call failed: %v", err)
 	}
@@ -175,14 +175,14 @@ func (a *PostNordAdapter) GetServicePoints(location Location) ([]ServicePoint, e
 		context.Background(),
 		http.MethodGet,
 		fmt.Sprintf("%s/rest/shipment/v1/servicepoints?postalCode=%s&city=%s&countryCode=%s&apikey=%s",
-			a.baseURL, location.PostalCode, location.City, location.Country, a.apiKey),
+			a.BaseURL, location.PostalCode, location.City, location.Country, a.APIKey),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 
-	resp, err := a.httpClient.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("PostNord service points API call failed: %v", err)
 	}

@@ -13,19 +13,19 @@ import (
 
 // BringAdapter implements CarrierAdapter for Bring.
 type BringAdapter struct {
-	apiKey     string
-	customerID string
-	baseURL    string
-	httpClient *http.Client // Use http.Client instead of resty.Client
+	APIKey     string
+	CustomerID string
+	BaseURL    string
+	HTTPClient *http.Client // Use http.Client instead of resty.Client
 }
 
 // NewBringAdapter creates a new Bring adapter.
 func NewBringAdapter(apiKey, customerID string) *BringAdapter {
 	return &BringAdapter{
-		apiKey:     apiKey,
-		customerID: customerID,
-		baseURL:    "https://api.bring.com",
-		httpClient: http.DefaultClient, // Use http.DefaultClient
+		APIKey:     apiKey,
+		CustomerID: customerID,
+		BaseURL:    "https://api.bring.com",
+		HTTPClient: http.DefaultClient, // Use http.DefaultClient
 	}
 }
 
@@ -33,7 +33,7 @@ func NewBringAdapter(apiKey, customerID string) *BringAdapter {
 func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
 	// Prepare the request payload for Bring's API
 	payload := map[string]interface{}{
-		"customerId": a.customerID,
+		"customerId": a.CustomerID,
 		"shipment": map[string]interface{}{
 			"from": map[string]interface{}{
 				"name":       request.Shipment.Sender.Name,
@@ -69,7 +69,7 @@ func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
-		a.baseURL+"/shipping/shipment",
+		a.BaseURL+"/shipping/shipment",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
@@ -78,11 +78,11 @@ func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
-	req.Header.Set("X-MyBring-API-Uid", a.customerID)
+	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 
 	// Send the request
-	resp, err := a.httpClient.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -117,7 +117,7 @@ func (a *BringAdapter) GetServicePoints(location Location) ([]ServicePoint, erro
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		fmt.Sprintf("%s/pickup-points?postalCode=%s&country=%s&limit=10", a.baseURL, location.PostalCode, location.Country),
+		fmt.Sprintf("%s/pickup-points?postalCode=%s&country=%s&limit=10", a.BaseURL, location.PostalCode, location.Country),
 		nil,
 	)
 	if err != nil {
@@ -125,11 +125,11 @@ func (a *BringAdapter) GetServicePoints(location Location) ([]ServicePoint, erro
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
-	req.Header.Set("X-MyBring-API-Uid", a.customerID)
+	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 
 	// Send the request
-	resp, err := a.httpClient.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
@@ -180,7 +180,7 @@ func (a *BringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, 
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		fmt.Sprintf("%s/tracking/consignments/%s", a.baseURL, trackingNumber),
+		fmt.Sprintf("%s/tracking/consignments/%s", a.BaseURL, trackingNumber),
 		nil,
 	)
 	if err != nil {
@@ -188,12 +188,12 @@ func (a *BringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, 
 	}
 
 	// Set headers
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
-	req.Header.Set("X-MyBring-API-Uid", a.customerID)
+	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 	req.Header.Set("Content-Type", "application/json")
 
 	// Send the request
-	resp, err := a.httpClient.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}

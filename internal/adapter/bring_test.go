@@ -29,10 +29,10 @@ func TestBringAdapter_BookShipment(t *testing.T) {
 
 	// Initialize Bring adapter with mock server URL
 	adapter := &BringAdapter{
-		apiKey:     "test-api-key",
-		customerID: "test-customer-id",
-		baseURL:    mockServer.URL,
-		httpClient: mockServer.Client(),
+		APIKey:     "test-api-key",
+		CustomerID: "test-customer-id",
+		BaseURL:    mockServer.URL,
+		HTTPClient: mockServer.Client(),
 	}
 
 	// Test booking request
@@ -103,10 +103,10 @@ func TestBringAdapter_TrackShipment(t *testing.T) {
 
 	// Initialize Bring adapter with mock server URL
 	adapter := &BringAdapter{
-		apiKey:     "test-api-key",
-		customerID: "test-customer-id",
-		baseURL:    mockServer.URL,
-		httpClient: mockServer.Client(),
+		APIKey:     "test-api-key",
+		CustomerID: "test-customer-id",
+		BaseURL:    mockServer.URL,
+		HTTPClient: mockServer.Client(),
 	}
 
 	// Call the TrackShipment method
