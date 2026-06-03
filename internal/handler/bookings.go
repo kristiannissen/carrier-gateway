@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/parser"
 )
 
 // BookShipment handles POST /bookings.
@@ -30,14 +31,27 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var request adapter.BookingRequest
-	if err := json.Unmarshal(body, &request); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid JSON", err.Error())
+	// Select parser based on Content-Type - JSON, XML, EDIFACT
+	p, err := parser.ForRequest(r)
+	if err != nil {
+		writeError(w, http.StatusUnsupportedMediaType, "unsupported content type", err.Error())
 		return
 	}
 
+	request, err := p.Parse(body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to parse request", err.Error())
+		return
+	}
+
+	//var request adapter.BookingRequest
+	//if err := json.Unmarshal(body, &request); err != nil {
+	//	writeError(w, http.StatusBadRequest, "invalid JSON", err.Error())
+	//	return
+	//}
+
 	// Validate the request
-	if err := validateBookingRequest(&request); err != nil {
+	if err := validateBookingRequest(request); err != nil {
 		writeError(w, http.StatusBadRequest, "validation failed", err.Error())
 		return
 	}
@@ -57,7 +71,7 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Book the shipment
-	response, err := carrierAdapter.BookShipment(request)
+	response, err := carrierAdapter.BookShipment(*request)
 	if err != nil {
 		slog.Error("Failed to book shipment", "error", err, "carrier", request.Carrier)
 		writeError(w, http.StatusInternalServerError, "booking failed", err.Error())
