@@ -1,4 +1,5 @@
 // Package adapter provides the PostNord implementation of the CarrierAdapter interface.
+// This file is located at /internal/adapter/postnord.go.
 package adapter
 
 import (
