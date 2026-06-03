@@ -3,7 +3,7 @@
 package adapter
 
 import (
-	"log/slog"
+	"go.uber.org/zap"
 	"os"
 )
 
@@ -21,81 +21,81 @@ type CarrierAdapter interface {
 }
 
 // InitAdapters initializes all carrier adapters based on environment variables.
-func InitAdapters() map[string]CarrierAdapter {
+func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	adapters := make(map[string]CarrierAdapter)
 	mockMode := os.Getenv("MOCK_MODE") == "true"
 
 	// PostNord
 	postNordAPIKey := os.Getenv("POSTNORD_API_KEY")
 	if postNordAPIKey != "" && !mockMode {
-		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey)
-		slog.Info("PostNord adapter initialized in production mode")
+		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey, log)
+		log.Info("PostNord adapter initialized in production mode")
 	} else {
 		adapters["postnord"] = &MockPostNordAdapter{}
-		slog.Info("PostNord adapter initialized in mock mode")
+		log.Info("PostNord adapter initialized in mock mode")
 	}
 
 	// Bring
 	bringAPIKey := os.Getenv("BRING_API_KEY")
 	bringCustomerID := os.Getenv("BRING_CUSTOMER_ID")
 	if bringAPIKey != "" && bringCustomerID != "" && !mockMode {
-		adapters["bring"] = NewBringAdapter(bringAPIKey, bringCustomerID)
-		slog.Info("Bring adapter initialized in production mode")
+		adapters["bring"] = NewBringAdapter(bringAPIKey, bringCustomerID, log)
+		log.Info("Bring adapter initialized in production mode")
 	} else {
 		adapters["bring"] = &MockBringAdapter{}
-		slog.Info("Bring adapter not initialized (missing API key and customer ID)")
+		log.Info("Bring adapter initialized in mock mode")
 	}
 
 	// GLS
 	glsAPIKey := os.Getenv("GLS_API_KEY")
 	contractID := os.Getenv("GLS_CONTRACT_ID")
 	if glsAPIKey != "" && !mockMode {
-		adapters["gls"] = NewGLSAdapter(glsAPIKey, contractID)
-		slog.Info("GLS adapter initialized in production mode")
+		adapters["gls"] = NewGLSAdapter(glsAPIKey, contractID, log)
+		log.Info("GLS adapter initialized in production mode")
 	} else {
 		adapters["gls"] = &MockGLSAdapter{}
-		slog.Info("GLS adapter initialized in mock mode")
+		log.Info("GLS adapter initialized in mock mode")
 	}
 
 	// DAO
 	daoCustomerID := os.Getenv("DAO_CUSTOMER_ID")
 	daoAPIKey := os.Getenv("DAO_API_KEY")
 	if daoCustomerID != "" && daoAPIKey != "" && !mockMode {
-		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey)
-		slog.Info("DAO adapter initialized in production mode")
+		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey, log)
+		log.Info("DAO adapter initialized in production mode")
 	} else {
 		adapters["dao"] = &MockDAOAdapter{}
-		slog.Info("DAO adapter initialized in mock mode")
+		log.Info("DAO adapter initialized in mock mode")
 	}
 
 	// Posti
 	postiAPIKey := os.Getenv("POSTI_API_KEY")
 	if postiAPIKey != "" && !mockMode {
-		adapters["posti"] = NewPostiAdapter(postiAPIKey)
-		slog.Info("Posti adapter initialized in production mode")
+		adapters["posti"] = NewPostiAdapter(postiAPIKey, log)
+		log.Info("Posti adapter initialized in production mode")
 	} else {
 		adapters["posti"] = &MockPostiAdapter{}
-		slog.Info("Posti adapter initialized in mock mode")
+		log.Info("Posti adapter initialized in mock mode")
 	}
 
 	// Airmee
 	airmeeAPIKey := os.Getenv("AIRMEE_API_KEY")
 	if airmeeAPIKey != "" && !mockMode {
-		adapters["airmee"] = NewAirmeeAdapter(airmeeAPIKey)
-		slog.Info("Airmee adapter initialized in production mode")
+		adapters["airmee"] = NewAirmeeAdapter(airmeeAPIKey, log)
+		log.Info("Airmee adapter initialized in production mode")
 	} else {
 		adapters["airmee"] = &MockAirmeeAdapter{}
-		slog.Info("Airmee adapter initialized in mock mode")
+		log.Info("Airmee adapter initialized in mock mode")
 	}
 
 	// InPost
 	inpostAPIKey := os.Getenv("INPOST_API_KEY")
 	if inpostAPIKey != "" && !mockMode {
-		adapters["inpost"] = NewInPostAdapter(inpostAPIKey)
-		slog.Info("InPost adapter initialized in production mode")
+		adapters["inpost"] = NewInPostAdapter(inpostAPIKey, log)
+		log.Info("InPost adapter initialized in production mode")
 	} else {
 		adapters["inpost"] = &MockInPostAdapter{}
-		slog.Info("InPost adapter initialized in mock mode")
+		log.Info("InPost adapter initialized in mock mode")
 	}
 
 	return adapters
@@ -168,7 +168,7 @@ type BookingResponse struct {
 	Status         string          `json:"status,omitempty"`
 	Colli          []ColliResponse `json:"colli,omitempty"`
 	Errors         []string        `json:"errors,omitempty"`
-	LockerId	string	`json:"lockerId,omnitempty"`
+	LockerId       string          `json:"lockerId,omnitempty"`
 }
 
 // ColliResponse represents the response for an individual colli in a shipment.

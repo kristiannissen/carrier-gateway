@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +19,13 @@ func main() {
 		Long:  "A CLI tool for booking shipments and tracking with multiple carriers (PostNord, FedEx, DHL).",
 	}
 
+	log, err := logger.New()
+	if err != nil {
+		panic("Failed to initialize logger:" + err.Error())
+	}
+	defer log.Sync()
 	// Initialize adapters (shared with API)
-	carrierAdapters := adapter.InitAdapters()
+	carrierAdapters := adapter.InitAdapters(log)
 
 	// Add subcommands
 	rootCmd.AddCommand(
@@ -42,10 +48,15 @@ func initAdapters() map[string]adapter.CarrierAdapter {
 	carrierAdapters := make(map[string]adapter.CarrierAdapter)
 	mockMode := os.Getenv("MOCK_MODE") == "true"
 
+	log, err := logger.New()
+	if err != nil {
+		panic("Failed to initialize logger:" + err.Error())
+	}
+	defer log.Sync()
 	// PostNord
 	postNordAPIKey := os.Getenv("POSTNORD_API_KEY")
 	if postNordAPIKey != "" && !mockMode {
-		carrierAdapters["postnord"] = adapter.NewPostNordAdapter(postNordAPIKey)
+		carrierAdapters["postnord"] = adapter.NewPostNordAdapter(postNordAPIKey, log)
 	} else {
 		carrierAdapters["postnord"] = adapter.NewMockPostNordAdapter()
 	}

@@ -8,9 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
-	"os"
+	"go.uber.org/zap"
 )
 
 // InPostAdapter implements CarrierAdapter for InPost.
@@ -18,26 +17,17 @@ type InPostAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
+	log *zap.Logger
 }
 
 // NewInPostAdapter creates a new InPostAdapter with the given API key.
-func NewInPostAdapter(apiKey string) *InPostAdapter {
+func NewInPostAdapter(apiKey string, log *zap.Logger) *InPostAdapter {
 	return &InPostAdapter{
 		APIKey:     apiKey,
 		BaseURL:    "https://api.inpost.pl/v1",
 		HTTPClient: http.DefaultClient,
+		log: log,
 	}
-}
-
-// NewInPostAdapterFromEnv creates an InPostAdapter from the INPOST_API_KEY
-// environment variable. Returns nil if the variable is unset.
-func NewInPostAdapterFromEnv() *InPostAdapter {
-	apiKey := os.Getenv("INPOST_API_KEY")
-	if apiKey == "" {
-		slog.Warn("INPOST_API_KEY not set")
-		return nil
-	}
-	return NewInPostAdapter(apiKey)
 }
 
 // inpostParty builds the sender/recipient object expected by the InPost API.

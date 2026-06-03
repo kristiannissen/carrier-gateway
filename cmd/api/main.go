@@ -3,33 +3,35 @@
 package main
 
 import (
-	"log/slog"
 	"net/http"
 	"os"
 
+	"go.uber.org/zap"
+
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/logger"
 	"github.com/kristiannissen/logistics-gateway/internal/router"
 )
 
-// main is the entry point for the API application.
-// Use this for local development or non-Vercel deployments.
 func main() {
-	slog.Info("Starting logistics-gateway API server")
+	log, err := logger.New()
+	if err != nil {
+		panic("failed to initialise logger: " + err.Error())
+	}
+	defer log.Sync() //nolint:errcheck
 
-	// Initialize carrier adapters
-	adapters := adapter.InitAdapters()
+	log.Info("starting logistics-gateway API server")
 
-	// Create router
+	adapters := adapter.InitAdapters(log)
 	rtr := router.NewRouter(adapters)
 
-	// Start HTTP server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	slog.Info("Server listening on port " + port)
+
+	log.Info("server listening", zap.String("port", port))
 	if err := http.ListenAndServe(":"+port, rtr); err != nil {
-		slog.Error("Server failed", "error", err)
-		os.Exit(1)
+		log.Fatal("server failed", zap.Error(err))
 	}
 }

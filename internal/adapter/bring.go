@@ -7,9 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
-	"os"
+	"go.uber.org/zap"
 )
 
 // BringAdapter implements CarrierAdapter for Bring.
@@ -18,28 +17,18 @@ type BringAdapter struct {
 	CustomerID string
 	BaseURL    string
 	HTTPClient *http.Client
+	log *zap.Logger
 }
 
 // NewBringAdapter creates a new BringAdapter with the given API key and customer ID.
-func NewBringAdapter(apiKey, customerID string) *BringAdapter {
+func NewBringAdapter(apiKey, customerID string, log *zap.Logger) *BringAdapter {
 	return &BringAdapter{
 		APIKey:     apiKey,
 		CustomerID: customerID,
 		BaseURL:    "https://api.bring.com",
 		HTTPClient: http.DefaultClient,
+		log: log,
 	}
-}
-
-// NewBringAdapterFromEnv creates a BringAdapter from the BRING_API_KEY and
-// BRING_CUSTOMER_ID environment variables. Returns nil if either is unset.
-func NewBringAdapterFromEnv() *BringAdapter {
-	apiKey := os.Getenv("BRING_API_KEY")
-	customerID := os.Getenv("BRING_CUSTOMER_ID")
-	if apiKey == "" || customerID == "" {
-		slog.Warn("BRING_API_KEY or BRING_CUSTOMER_ID not set")
-		return nil
-	}
-	return NewBringAdapter(apiKey, customerID)
 }
 
 // bringParcel converts a single Colli to the Bring parcel wire format.

@@ -8,10 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"math"
 	"net/http"
-	"os"
+	"go.uber.org/zap"
 )
 
 // PostNordAdapter implements CarrierAdapter for PostNord.
@@ -19,26 +18,17 @@ type PostNordAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
+	log *zap.Logger
 }
 
 // NewPostNordAdapter creates a new PostNordAdapter with the given API key.
-func NewPostNordAdapter(apiKey string) *PostNordAdapter {
+func NewPostNordAdapter(apiKey string, log *zap.Logger) *PostNordAdapter {
 	return &PostNordAdapter{
 		APIKey:     apiKey,
 		BaseURL:    "https://api.postnord.com",
 		HTTPClient: http.DefaultClient,
+		log: log,
 	}
-}
-
-// NewPostNordAdapterFromEnv creates a PostNordAdapter from the POSTNORD_API_KEY
-// environment variable. Returns nil if the variable is unset.
-func NewPostNordAdapterFromEnv() *PostNordAdapter {
-	apiKey := os.Getenv("POSTNORD_API_KEY")
-	if apiKey == "" {
-		slog.Warn("POSTNORD_API_KEY not set")
-		return nil
-	}
-	return NewPostNordAdapter(apiKey)
 }
 
 // postNordParty builds the sender/recipient object expected by the PostNord API.

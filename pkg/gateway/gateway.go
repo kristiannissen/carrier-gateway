@@ -6,10 +6,17 @@ import (
 
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/kristiannissen/logistics-gateway/internal/router"
+	"github.com/kristiannissen/logistics-gateway/internal/logger"
 )
 
 // NewHandler initialises the application and returns an http.Handler.
 func NewHandler() http.Handler {
-	adapters := adapter.InitAdapters()
+	log, err := logger.New()
+	if err != nil {
+		panic("Failed to initialize logger:" + err.Error())
+	}
+	defer log.Sync()
+
+	adapters := adapter.InitAdapters(log)
 	return router.NewRouter(adapters)
 }

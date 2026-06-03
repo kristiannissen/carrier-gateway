@@ -7,9 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
-	"os"
+	"go.uber.org/zap"
 )
 
 // GLSAdapter implements CarrierAdapter for GLS using the ShipIT Farm API v1.
@@ -19,28 +18,18 @@ type GLSAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
+	log *zap.Logger
 }
 
 // NewGLSAdapter creates a new GLSAdapter with the given contact ID and API key.
-func NewGLSAdapter(contactID, apiKey string) *GLSAdapter {
+func NewGLSAdapter(contactID, apiKey string, log *zap.Logger) *GLSAdapter {
 	return &GLSAdapter{
 		ContactID:  contactID,
 		APIKey:     apiKey,
 		BaseURL:    "https://api.gls-group.net/shipit-farm/v1/backend",
 		HTTPClient: http.DefaultClient,
+		log: log,
 	}
-}
-
-// NewGLSAdapterFromEnv creates a GLSAdapter from the GLS_CONTACT_ID and
-// GLS_API_KEY environment variables. Returns nil if either is unset.
-func NewGLSAdapterFromEnv() *GLSAdapter {
-	contactID := os.Getenv("GLS_CONTACT_ID")
-	apiKey := os.Getenv("GLS_API_KEY")
-	if contactID == "" || apiKey == "" {
-		slog.Warn("GLS_CONTACT_ID or GLS_API_KEY not set")
-		return nil
-	}
-	return NewGLSAdapter(contactID, apiKey)
 }
 
 // glsAddress converts a unified Address to the GLS ShipIT Address schema.

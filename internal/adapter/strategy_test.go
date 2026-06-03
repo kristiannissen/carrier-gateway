@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
 )
 
 // Test that all adapters implement the CarrierAdapter interface.
@@ -74,8 +75,10 @@ func TestInitAdapters_StrategySelection(t *testing.T) {
 	// Set mock mode to ensure all adapters are initialized as mocks
 	t.Setenv("MOCK_MODE", "true")
 
+	// Initialize zap
+	log := zaptest.NewLogger(t)
 	// Initialize adapters
-	adapters := InitAdapters()
+	adapters := InitAdapters(log)
 
 	// Verify that all expected carriers are present
 	expectedCarriers := []string{
@@ -140,8 +143,9 @@ func TestUseAdapter_StrategyExecution(t *testing.T) {
 	// Set mock mode to ensure all adapters are initialized as mocks
 	t.Setenv("MOCK_MODE", "true")
 
+	log := zaptest.NewLogger(t)
 	// Initialize adapters
-	adapters := InitAdapters()
+	adapters := InitAdapters(log)
 
 	// Test PostNord adapter
 	postNordAdapter, exists := adapters["postnord"]

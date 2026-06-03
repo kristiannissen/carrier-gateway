@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"time"
@@ -16,14 +17,16 @@ type AirmeeAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
+	log        *zap.Logger
 }
 
 // NewAirmeeAdapter creates a new AirmeeAdapter instance.
-func NewAirmeeAdapter(apiKey string) *AirmeeAdapter {
+func NewAirmeeAdapter(apiKey string, log *zap.Logger) *AirmeeAdapter {
 	return &AirmeeAdapter{
 		APIKey:     apiKey,
 		BaseURL:    "https://api.airmee.com/v1",
 		HTTPClient: http.DefaultClient,
+		log:        log,
 	}
 }
 
