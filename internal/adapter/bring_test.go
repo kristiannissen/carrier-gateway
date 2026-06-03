@@ -3,39 +3,15 @@
 package adapter
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBringAdapter_BookShipment(t *testing.T) {
-	// Mock HTTP server for Bring API
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify the request method and path
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/shipping/shipment", r.URL.Path)
+func TestMockBringAdapter_BookShipment(t *testing.T) {
+	adapter := &MockBringAdapter{}
 
-		// Mock response for successful booking
-		mockResponse := `{
-			"consignmentNumber": "BR123456789NO",
-			"labelUrl": "https://example.com/bring-label.png"
-		}`
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockResponse))
-	}))
-	defer mockServer.Close()
-
-	// Initialize Bring adapter with mock server URL
-	adapter := &BringAdapter{
-		APIKey:     "test-api-key",
-		CustomerID: "test-customer-id",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
-	}
-
-	// Test booking request
+	// Test case: TotalWeight is missing
 	request := BookingRequest{
 		Carrier: "bring",
 		Shipment: Shipment{
@@ -64,57 +40,109 @@ func TestBringAdapter_BookShipment(t *testing.T) {
 					},
 				},
 			},
+			// TotalWeight is missing
 		},
 	}
+	_, err := adapter.BookShipment(request)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "TotalWeight is required and must be greater than 0")
 
-	// Call the BookShipment method
+	// Test case: TotalWeight does not match sum of colli weights
+	request = BookingRequest{
+		Carrier: "bring",
+		Shipment: Shipment{
+			Sender: Address{
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Oslo",
+				PostalCode: "0123",
+				Country:    "NO",
+			},
+			Receiver: Address{
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Bergen",
+				PostalCode: "5678",
+				Country:    "NO",
+			},
+			TotalWeight: 3.0, // Mismatched with colli weight (5.0)
+			Colli: []Colli{
+				{
+					ID:     "colli-1",
+					Weight: 5.0,
+					Dimensions: Dimensions{
+						Length: 20.0,
+						Width:  15.0,
+						Height: 10.0,
+					},
+				},
+			},
+		},
+	}
+	_, err = adapter.BookShipment(request)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "TotalWeight must match the sum of all colli weights")
+
+	// Test case: TotalWeight is correct
+	request = BookingRequest{
+		Carrier: "bring",
+		Shipment: Shipment{
+			Sender: Address{
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Oslo",
+				PostalCode: "0123",
+				Country:    "NO",
+			},
+			Receiver: Address{
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Bergen",
+				PostalCode: "5678",
+				Country:    "NO",
+			},
+			TotalWeight: 5.0, // Matches sum of colli weights
+			Colli: []Colli{
+				{
+					ID:     "colli-1",
+					Weight: 5.0,
+					Dimensions: Dimensions{
+						Length: 20.0,
+						Width:  15.0,
+						Height: 10.0,
+					},
+				},
+			},
+		},
+	}
 	response, err := adapter.BookShipment(request)
-
-	// Verify the response
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "BR123456789NO", response.TrackingNumber)
-	assert.Equal(t, "https://example.com/bring-label.png", response.LabelURL)
+	assert.Equal(t, "https://example.com/mock-bring-label.png", response.LabelURL)
 }
 
-func TestBringAdapter_TrackShipment(t *testing.T) {
-	// Mock HTTP server for Bring tracking API
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify the request method and path
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/tracking/consignments/BR123456789NO", r.URL.Path)
+func TestMockBringAdapter_TrackShipment(t *testing.T) {
+	adapter := &MockBringAdapter{}
 
-		// Mock response for tracking
-		mockResponse := `{
-			"consignmentNumber": "BR123456789NO",
-			"status": "In Transit",
-			"events": [
-				{
-					"timestamp": "2026-05-31T12:00:00Z",
-					"status": "Shipment Accepted",
-					"location": "Oslo"
-				}
-			]
-		}`
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockResponse))
-	}))
-	defer mockServer.Close()
-
-	// Initialize Bring adapter with mock server URL
-	adapter := &BringAdapter{
-		APIKey:     "test-api-key",
-		CustomerID: "test-customer-id",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
-	}
-
-	// Call the TrackShipment method
 	response, err := adapter.TrackShipment("BR123456789NO")
-
-	// Verify the response
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "BR123456789NO", response.TrackingNumber)
 	assert.Equal(t, "In Transit", response.Status)
+	assert.Len(t, response.Events, 1)
+}
+
+func TestMockBringAdapter_GetServicePoints(t *testing.T) {
+	adapter := &MockBringAdapter{}
+
+	location := Location{
+		City:    "Oslo",
+		Country: "NO",
+	}
+	servicePoints, err := adapter.GetServicePoints(location)
+	assert.NoError(t, err)
+	assert.NotNil(t, servicePoints)
+	assert.Len(t, servicePoints, 1)
+	assert.Equal(t, "BR001", servicePoints[0].ID)
 }

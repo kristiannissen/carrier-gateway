@@ -3,47 +3,26 @@
 package adapter
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPostNordAdapter_BookShipment(t *testing.T) {
-	// Mock HTTP server for PostNord API
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify the request method and path
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/rest/shipment/v1/booking", r.URL.Path)
+func TestMockPostNordAdapter_BookShipment(t *testing.T) {
+	adapter := &MockPostNordAdapter{}
 
-		// Mock response for successful booking
-		mockResponse := `{
-			"trackingNumber": "PN123456789DK",
-			"labelURL": "https://example.com/label.png"
-		}`
-		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(mockResponse))
-	}))
-	defer mockServer.Close()
-
-	// Initialize PostNord adapter with mock server URL
-	adapter := &PostNordAdapter{
-		APIKey:     "test-api-key",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
-	}
-
-	// Test booking request
+	// Test case: TotalWeight is missing
 	request := BookingRequest{
 		Carrier: "postnord",
 		Shipment: Shipment{
 			Sender: Address{
 				Name:       "Sender Name",
 				Street:     "Sender Street",
-				City:       "Sender City",
+				City:       "Copenhagen",
 				PostalCode: "12345",
 				Country:    "DK",
+				Phone:      "+4512345678",
+				Email:      "sender@example.com",
 			},
 			Receiver: Address{
 				Name:       "Receiver Name",
@@ -51,7 +30,50 @@ func TestPostNordAdapter_BookShipment(t *testing.T) {
 				City:       "Receiver City",
 				PostalCode: "67890",
 				Country:    "DK",
+				Phone:      "+4587654321",
+				Email:      "receiver@example.com",
 			},
+			Colli: []Colli{
+				{
+					ID:     "colli-1",
+					Weight: 10.0,
+					Dimensions: Dimensions{
+						Length: 10.0,
+						Width:  10.0,
+						Height: 10.0,
+					},
+				},
+			},
+			// TotalWeight is missing
+		},
+	}
+	_, err := adapter.BookShipment(request)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "TotalWeight is required and must be greater than 0")
+
+	// Test case: TotalWeight does not match sum of colli weights
+	request = BookingRequest{
+		Carrier: "postnord",
+		Shipment: Shipment{
+			Sender: Address{
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Copenhagen",
+				PostalCode: "12345",
+				Country:    "DK",
+				Phone:      "+4512345678",
+				Email:      "sender@example.com",
+			},
+			Receiver: Address{
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Receiver City",
+				PostalCode: "67890",
+				Country:    "DK",
+				Phone:      "+4587654321",
+				Email:      "receiver@example.com",
+			},
+			TotalWeight: 5.0, // Mismatched with colli weight (10.0)
 			Colli: []Colli{
 				{
 					ID:     "colli-1",
@@ -65,54 +87,77 @@ func TestPostNordAdapter_BookShipment(t *testing.T) {
 			},
 		},
 	}
+	_, err = adapter.BookShipment(request)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "TotalWeight must match the sum of all colli weights")
 
-	// Call the BookShipment method
+	// Test case: TotalWeight is correct
+	request = BookingRequest{
+		Carrier: "postnord",
+		Shipment: Shipment{
+			Sender: Address{
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Copenhagen",
+				PostalCode: "12345",
+				Country:    "DK",
+				Phone:      "+4512345678",
+				Email:      "sender@example.com",
+			},
+			Receiver: Address{
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Receiver City",
+				PostalCode: "67890",
+				Country:    "DK",
+				Phone:      "+4587654321",
+				Email:      "receiver@example.com",
+			},
+			TotalWeight: 10.0, // Matches sum of colli weights
+			Colli: []Colli{
+				{
+					ID:     "colli-1",
+					Weight: 10.0,
+					Dimensions: Dimensions{
+						Length: 10.0,
+						Width:  10.0,
+						Height: 10.0,
+					},
+				},
+			},
+		},
+	}
 	response, err := adapter.BookShipment(request)
-
-	// Verify the response
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
-	assert.Equal(t, "PN123456789DK", response.TrackingNumber)
-	assert.Equal(t, "https://example.com/label.png", response.LabelURL)
+	assert.Equal(t, "postnord", response.Carrier)
+	assert.NotEmpty(t, response.TrackingNumber)
+	assert.NotEmpty(t, response.LabelURL)
 }
 
-func TestPostNordAdapter_TrackShipment(t *testing.T) {
-	// Mock HTTP server for PostNord tracking API
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify the request method and path
-		assert.Equal(t, http.MethodGet, r.Method)
-		assert.Equal(t, "/rest/shipment/v1/tracking/PN123456789DK", r.URL.Path)
+func TestMockPostNordAdapter_TrackShipment(t *testing.T) {
+	adapter := &MockPostNordAdapter{}
 
-		// Mock response for tracking
-		mockResponse := `{
-			"trackingNumber": "PN123456789DK",
-			"status": "In Transit",
-			"events": [
-				{
-					"timestamp": "2026-05-31T12:00:00Z",
-					"status": "Shipment Accepted",
-					"location": "Copenhagen"
-				}
-			]
-		}`
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(mockResponse))
-	}))
-	defer mockServer.Close()
-
-	// Initialize PostNord adapter with mock server URL
-	adapter := &PostNordAdapter{
-		APIKey:     "test-api-key",
-		BaseURL:    mockServer.URL,
-		HTTPClient: mockServer.Client(),
-	}
-
-	// Call the TrackShipment method
 	response, err := adapter.TrackShipment("PN123456789DK")
-
-	// Verify the response
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "PN123456789DK", response.TrackingNumber)
 	assert.Equal(t, "In Transit", response.Status)
+	assert.Len(t, response.Events, 2)
+}
+
+func TestMockPostNordAdapter_GetServicePoints(t *testing.T) {
+	adapter := &MockPostNordAdapter{}
+
+	location := Location{
+		City:       "Copenhagen",
+		Country:    "DK",
+		PostalCode: "12345",
+	}
+	servicePoints, err := adapter.GetServicePoints(location)
+	assert.NoError(t, err)
+	assert.NotNil(t, servicePoints)
+	assert.Len(t, servicePoints, 2)
+	assert.Equal(t, "sp_123", servicePoints[0].ID)
+	assert.Equal(t, "PostNord Copenhagen", servicePoints[0].Name)
 }

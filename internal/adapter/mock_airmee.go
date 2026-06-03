@@ -2,11 +2,29 @@
 // This file is located at /internal/adapter/mock_airmee.go.
 package adapter
 
+import "fmt"
+
 // MockAirmeeAdapter is a mock implementation of the CarrierAdapter interface for Airmee.
 type MockAirmeeAdapter struct{}
 
 // BookShipment mocks booking a shipment with Airmee.
 func (a *MockAirmeeAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+	// Validate TotalWeight is provided
+	if request.Shipment.TotalWeight <= 0 {
+		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
+	}
+
+	// Calculate sum of all colli weights
+	var sumColliWeight float64
+	for _, colli := range request.Shipment.Colli {
+		sumColliWeight += colli.Weight
+	}
+
+	// Validate TotalWeight matches sum of colli weights
+	if request.Shipment.TotalWeight != sumColliWeight {
+		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
+	}
+
 	return &BookingResponse{
 		TrackingNumber: "AIRMEE123456789",
 		LabelURL:       "https://example.com/mock-airmee-tracking",

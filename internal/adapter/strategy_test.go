@@ -21,11 +21,42 @@ func TestCarrierAdapterInterface(t *testing.T) {
 		&MockAirmeeAdapter{},
 	}
 
+	bookingRequest := BookingRequest{
+		Carrier: "airmee",
+		Shipment: Shipment{
+			Sender: Address{
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Copenhagen",
+				PostalCode: "1234",
+				Country:    "DK",
+			},
+			Receiver: Address{
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Copenhagen",
+				PostalCode: "5678",
+				Country:    "DK",
+			},
+			TotalWeight: 10.0,
+			Colli: []Colli{
+				{
+					ID:     "colli-1",
+					Weight: 10.0,
+					Dimensions: Dimensions{
+						Length: 30.0,
+						Width:  20.0,
+						Height: 15.0,
+					},
+				},
+			},
+		},
+	}
 	// Verify that each adapter implements the CarrierAdapter interface
 	// by calling all methods. This will compile-time check the interface.
 	for _, adapter := range adapters {
 		// Test BookShipment
-		_, err := adapter.BookShipment(BookingRequest{})
+		_, err := adapter.BookShipment(bookingRequest)
 		assert.NoError(t, err, "BookShipment method should not panic")
 
 		// Test TrackShipment
@@ -56,13 +87,44 @@ func TestInitAdapters_StrategySelection(t *testing.T) {
 		"airmee",
 	}
 
+	request := BookingRequest{
+		Carrier: "airmee",
+		Shipment: Shipment{
+			Sender: Address{
+				Name:       "Sender Name",
+				Street:     "Sender Street",
+				City:       "Copenhagen",
+				PostalCode: "1234",
+				Country:    "DK",
+			},
+			Receiver: Address{
+				Name:       "Receiver Name",
+				Street:     "Receiver Street",
+				City:       "Copenhagen",
+				PostalCode: "5678",
+				Country:    "DK",
+			},
+			TotalWeight: 10.0,
+			Colli: []Colli{
+				{
+					ID:     "colli-1",
+					Weight: 10.0,
+					Dimensions: Dimensions{
+						Length: 30.0,
+						Width:  20.0,
+						Height: 15.0,
+					},
+				},
+			},
+		},
+	}
 	for _, carrier := range expectedCarriers {
 		adapter, exists := adapters[carrier]
 		assert.True(t, exists, "Adapter for carrier %s should exist", carrier)
 		assert.NotNil(t, adapter, "Adapter for carrier %s should not be nil", carrier)
 
 		// Verify that the adapter implements CarrierAdapter
-		_, err := adapter.BookShipment(BookingRequest{})
+		_, err := adapter.BookShipment(request)
 		assert.NoError(t, err, "BookShipment should not panic for %s", carrier)
 
 		_, err = adapter.TrackShipment("test-tracking-number")
@@ -104,6 +166,7 @@ func TestUseAdapter_StrategyExecution(t *testing.T) {
 				PostalCode: "5678",
 				Country:    "DK",
 			},
+			TotalWeight: 5.0,
 			Colli: []Colli{
 				{
 					ID:     "test-colli",

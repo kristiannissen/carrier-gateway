@@ -2,11 +2,29 @@
 // This file is located at /internal/adapter/mock_dao.go.
 package adapter
 
+import "fmt"
+
 // MockDAOAdapter is a mock implementation of the CarrierAdapter interface for DAO.
 type MockDAOAdapter struct{}
 
 // BookShipment mocks booking a shipment with DAO.
 func (a *MockDAOAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+	// Validate TotalWeight is provided
+	if request.Shipment.TotalWeight <= 0 {
+		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
+	}
+
+	// Calculate sum of all colli weights
+	var sumColliWeight float64
+	for _, colli := range request.Shipment.Colli {
+		sumColliWeight += colli.Weight
+	}
+
+	// Validate TotalWeight matches sum of colli weights
+	if request.Shipment.TotalWeight != sumColliWeight {
+		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
+	}
+
 	return &BookingResponse{
 		TrackingNumber: "DAO123456789DK",
 		LabelURL:       "https://example.com/mock-dao-label.png",

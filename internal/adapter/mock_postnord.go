@@ -24,6 +24,22 @@ func (m *MockPostNordAdapter) BookShipment(request BookingRequest) (*BookingResp
 		return m.BookShipmentFunc(request)
 	}
 
+	// Validate TotalWeight is provided
+	if request.Shipment.TotalWeight <= 0 {
+		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
+	}
+
+	// Calculate sum of all colli weights
+	var sumColliWeight float64
+	for _, colli := range request.Shipment.Colli {
+		sumColliWeight += colli.Weight
+	}
+
+	// Validate TotalWeight matches sum of colli weights
+	if request.Shipment.TotalWeight != sumColliWeight {
+		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
+	}
+
 	// Log mock mode warning
 	slog.Info("MockPostNordAdapter: Returning mock booking response")
 
