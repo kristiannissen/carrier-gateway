@@ -93,45 +93,45 @@ func InitAdapters() map[string]CarrierAdapter {
 // BookingRequest represents a generic shipment booking request.
 // All shipments are treated as a list of colli (single or multi-package).
 type BookingRequest struct {
-	Carrier        string   `json:"carrier"`
-	Shipment       Shipment `json:"shipment"`
+	Carrier        string   `json:"carrier" validate:"required"`
+	Shipment       Shipment `json:"shipment" validate:"required"`
 	CallbackURL    string   `json:"callbackUrl,omitempty"`
 	IdempotencyKey string   `json:"idempotencyKey,omitempty"`
-	Incoterms      string   `json:"incoterms,omitempty"`
+	Incoterms      string   `json:"incoterms,omitempty" validate:"omitempty,oneof=EXW FCA CPT CIP DAP DPU DDP FAS FOB CFR CIF"`
 	HSCode         string   `json:"hsCode,omitempty"`
 }
 
 // Shipment represents the shipment details.
 // All shipments are treated as a list of colli (single or multi-package).
 type Shipment struct {
-	Sender      Address `json:"sender"`
-	Receiver    Address `json:"receiver"`
-	TotalWeight float64 `json:"totalWeight"` // Sum of all colli weights
-	Colli       []Colli `json:"colli"`       // Always a list (1+ colli)
+	Sender      Address `json:"sender" validate:"required"`
+	Receiver    Address `json:"receiver" validate:"required"`
+	TotalWeight float64 `json:"totalWeight" validate:required,gt=0"` // Sum of all colli weights
+	Colli       []Colli `json:"colli" validate:"required,min=1"`       // Always a list (1+ colli)
 	Incoterms   string  `json:"incoterms,omitempty"`
 	HSCode      string  `json:"hsCode,omitempty"`
 }
 
 // Colli represents an individual package in a shipment.
 type Colli struct {
-	ID         string  `json:"id"`
+	ID         string  `json:"id" validate:"required"`
 	Reference  string  `json:"reference,omitempty"`
-	Weight     float64 `json:"weight"`
+	Weight     float64 `json:"weight" validate:"gt=0"`
 	Dimensions struct {
 		Length float64 `json:"length"`
 		Width  float64 `json:"width"`
 		Height float64 `json:"height"`
 	} `json:"dimensions"`
-	Items []Item `json:"items"`
+	Items []Item `json:"items" validate:"required,min=1"`
 }
 
 // Address represents a physical address.
 type Address struct {
-	Name       string `json:"name"`
-	Street     string `json:"street"`
-	City       string `json:"city"`
-	PostalCode string `json:"postalCode"`
-	Country    string `json:"country"`
+	Name       string `json:"name" validate:"required"`
+	Street     string `json:"street" validate:"required"`
+	City       string `json:"city" validate:"required"`
+	PostalCode string `json:"postalCode" validate:"required"`
+	Country    string `json:"country" validate:"required"`
 	Phone      string `json:"phone,omitempty"`
 	Email      string `json:"email,omitempty"`
 }
