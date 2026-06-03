@@ -1,5 +1,4 @@
 // Package adapter provides the GLS implementation of the CarrierAdapter interface.
-// 
 package adapter
 
 import (
@@ -48,13 +47,13 @@ func NewGLSAdapterFromEnv() *GLSAdapter {
 // GLS uses PascalCase field names and "Zipcode" instead of "postalCode".
 func glsAddress(a Address) map[string]interface{} {
 	return map[string]interface{}{
-		"Name1":               a.Name,
-		"Street":              a.Street,
-		"City":                a.City,
-		"Zipcode":             a.PostalCode,
-		"CountryCode":         a.Country,
-		"MobilePhoneNumber":   a.Phone,
-		"Email":               a.Email,
+		"Name1":             a.Name,
+		"Street":            a.Street,
+		"City":              a.City,
+		"Zipcode":           a.PostalCode,
+		"CountryCode":       a.Country,
+		"MobilePhoneNumber": a.Phone,
+		"Email":             a.Email,
 	}
 }
 

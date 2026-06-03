@@ -108,7 +108,7 @@ type Shipment struct {
 	Sender      Address `json:"sender" validate:"required"`
 	Receiver    Address `json:"receiver" validate:"required"`
 	TotalWeight float64 `json:"totalWeight" validate:required,gt=0"` // Sum of all colli weights
-	Colli       []Colli `json:"colli" validate:"required,min=1"`       // Always a list (1+ colli)
+	Colli       []Colli `json:"colli" validate:"required,min=1"`     // Always a list (1+ colli)
 	Incoterms   string  `json:"incoterms,omitempty"`
 	HSCode      string  `json:"hsCode,omitempty"`
 }

@@ -159,8 +159,8 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 	// Parcels
 	parcels := requireParcels(t, shipment, 1)
 	parcel := parcels[0].(map[string]interface{})
-	assert.Equal(t, "1", parcel["id"])                // sequential, not colli.ID
-	assert.Equal(t, float64(1500), parcel["weight"])  // kg → grams
+	assert.Equal(t, "1", parcel["id"])               // sequential, not colli.ID
+	assert.Equal(t, float64(1500), parcel["weight"]) // kg → grams
 	assert.NotContains(t, parcel, "reference")
 	dims := requireNested(t, parcel, "dimensions")
 	assert.Equal(t, float64(10), dims["length"])
@@ -347,8 +347,8 @@ func postnordTestReceiver() Address {
 
 func postnordTestColli(id string, weightKg float64) Colli {
 	return Colli{
-		ID:     id,
-		Weight: weightKg,
+		ID:         id,
+		Weight:     weightKg,
 		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
 	}
 }

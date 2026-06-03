@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/go-playground/validator/v10"
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
 // BookShipment handles POST /bookings.

@@ -9,7 +9,7 @@ import (
 )
 
 func TestMockPostiAdapter_BookShipment(t *testing.T) {
-	// 
+	//
 	t.Parallel()
 
 	adapter := &MockPostiAdapter{}

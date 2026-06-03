@@ -348,8 +348,8 @@ func bringTestReceiver() Address {
 
 func bringTestColli(id string, weightKg float64) Colli {
 	return Colli{
-		ID:     id,
-		Weight: weightKg,
+		ID:         id,
+		Weight:     weightKg,
 		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
 	}
 }

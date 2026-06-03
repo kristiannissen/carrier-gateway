@@ -187,9 +187,9 @@ func (a *BringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, 
 	}
 
 	var bringResp struct {
-		ConsignmentNumber string  `json:"consignmentNumber"`
-		Status            string  `json:"status"`
-		EstimatedDelivery string  `json:"estimatedDelivery"`
+		ConsignmentNumber string `json:"consignmentNumber"`
+		Status            string `json:"status"`
+		EstimatedDelivery string `json:"estimatedDelivery"`
 		Events            []struct {
 			Timestamp string `json:"timestamp"`
 			Status    string `json:"status"`

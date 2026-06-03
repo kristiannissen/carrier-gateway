@@ -139,9 +139,9 @@ func TestGLSAdapter_BookShipment_PayloadShape(t *testing.T) {
 	shipperAddr := glsRequireNested(t, shipper, "Address")
 	assert.Equal(t, "Unisport Group", shipperAddr["Name1"])
 	assert.Equal(t, "Industrivej 10", shipperAddr["Street"])
-	assert.Equal(t, "2300", shipperAddr["Zipcode"])       // PostalCode → Zipcode
+	assert.Equal(t, "2300", shipperAddr["Zipcode"]) // PostalCode → Zipcode
 	assert.Equal(t, "Copenhagen", shipperAddr["City"])
-	assert.Equal(t, "DK", shipperAddr["CountryCode"])     // Country → CountryCode
+	assert.Equal(t, "DK", shipperAddr["CountryCode"]) // Country → CountryCode
 	assert.Equal(t, "+4512345678", shipperAddr["MobilePhoneNumber"])
 	assert.Equal(t, "logistics@unisport.dk", shipperAddr["Email"])
 
@@ -393,8 +393,8 @@ func glsTestReceiver() Address {
 
 func glsTestColli(id string, weightKg float64) Colli {
 	return Colli{
-		ID:     id,
-		Weight: weightKg,
+		ID:         id,
+		Weight:     weightKg,
 		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
 	}
 }
