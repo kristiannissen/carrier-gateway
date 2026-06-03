@@ -1,422 +1,408 @@
+// Package adapter provides interfaces and implementations for carrier integrations.
+// This file is located at /internal/adapter/inpost_test.go.
 package adapter
 
 import (
-	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// --- Test Cases for Translation ---
+// =========================================================================
+// Mock adapter tests
+// =========================================================================
 
-func TestTranslateUnifiedToInPost(t *testing.T) {
+func TestMockInPostAdapter_BookShipment(t *testing.T) {
 	t.Parallel()
 
-	adapter := NewInPostAdapter("test-api-key")
-
-	// Unified payload from logistics-gateway
-	unifiedReq := &UnifiedBookingRequest{
-		Carrier: "inpost",
-		Shipment: UnifiedShipment{
-			Sender: UnifiedAddress{
-				Name:       "Sender Shop",
-				Street:     "Sender Street 1",
-				City:       "Warsaw",
-				PostalCode: "00-001",
-				Country:    "PL",
-				Phone:      "+4812345678",
-				Email:      "sender@example.com",
+	t.Run("missing TotalWeight", func(t *testing.T) {
+		t.Parallel()
+		_, err := (&MockInPostAdapter{}).BookShipment(BookingRequest{
+			Carrier: "inpost",
+			Shipment: Shipment{
+				Sender:   inpostTestSender(),
+				Receiver: inpostTestReceiver(),
+				Colli:    []Colli{inpostTestColli("c1", 2.0)},
 			},
-			Receiver: UnifiedAddress{
-				Name:       "John Kowalski",
-				Street:     "Receiver Avenue 2",
-				City:       "Krakow",
-				PostalCode: "30-001",
-				Country:    "PL",
-				Phone:      "+48987654321",
-				Email:      "john.kowalski@example.com",
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "TotalWeight is required and must be greater than 0")
+	})
+
+	t.Run("TotalWeight mismatch", func(t *testing.T) {
+		t.Parallel()
+		_, err := (&MockInPostAdapter{}).BookShipment(BookingRequest{
+			Carrier: "inpost",
+			Shipment: Shipment{
+				Sender:      inpostTestSender(),
+				Receiver:    inpostTestReceiver(),
+				TotalWeight: 1.0,
+				Colli:       []Colli{inpostTestColli("c1", 2.0)},
 			},
-			TotalWeight: 2.0,
-			Colli: []UnifiedColli{
-				{
-					ID:     "1",
-					Weight: 2.0,
-					Dimensions: UnifiedDimensions{
-						Length: 30.0,
-						Width:  20.0,
-						Height: 10.0,
-					},
-					Reference: "INPOST-ORDER-12345",
-				},
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "TotalWeight must match the sum of all colli weights")
+	})
+
+	t.Run("valid request", func(t *testing.T) {
+		t.Parallel()
+		response, err := (&MockInPostAdapter{}).BookShipment(BookingRequest{
+			Carrier: "inpost",
+			Shipment: Shipment{
+				Sender:      inpostTestSender(),
+				Receiver:    inpostTestReceiver(),
+				TotalWeight: 2.0,
+				Colli:       []Colli{inpostTestColli("c1", 2.0)},
 			},
-		},
-		CallbackURL:    "https://api.example.com/webhooks/tracking",
-		IdempotencyKey: "unique-key-123",
-		Incoterms:      "DDP",
-		HsCode:         "61091000",
-	}
-
-	// Translate to InPost format
-	inpostReq := adapter.TranslateUnifiedToInPost(unifiedReq)
-
-	// Assert sender
-	assert.Equal(t, "Sender Shop", inpostReq.Shipment.Sender.Name)
-	assert.Equal(t, "Sender Street", inpostReq.Shipment.Sender.Address.StreetName)
-	assert.Equal(t, "1", inpostReq.Shipment.Sender.Address.HouseNumber)
-	assert.Equal(t, "Warsaw", inpostReq.Shipment.Sender.Address.City)
-	assert.Equal(t, "00-001", inpostReq.Shipment.Sender.Address.PostalCode)
-	assert.Equal(t, "PL", inpostReq.Shipment.Sender.Address.Country)
-	assert.Equal(t, "+4812345678", inpostReq.Shipment.Sender.Contact.Phone)
-	assert.Equal(t, "sender@example.com", inpostReq.Shipment.Sender.Contact.Email)
-
-	// Assert recipient
-	assert.Equal(t, "John Kowalski", inpostReq.Shipment.Recipient.Name)
-	assert.Equal(t, "Receiver Avenue", inpostReq.Shipment.Recipient.Address.StreetName)
-	assert.Equal(t, "2", inpostReq.Shipment.Recipient.Address.HouseNumber)
-	assert.Equal(t, "Krakow", inpostReq.Shipment.Recipient.Address.City)
-	assert.Equal(t, "30-001", inpostReq.Shipment.Recipient.Address.PostalCode)
-	assert.Equal(t, "PL", inpostReq.Shipment.Recipient.Address.Country)
-	assert.Equal(t, "+48987654321", inpostReq.Shipment.Recipient.Contact.Phone)
-	assert.Equal(t, "john.kowalski@example.com", inpostReq.Shipment.Recipient.Contact.Email)
-
-	// Assert parcels
-	require.Len(t, inpostReq.Shipment.Parcels, 1)
-	assert.Equal(t, "1", inpostReq.Shipment.Parcels[0].ID)
-	assert.Equal(t, 2.0, inpostReq.Shipment.Parcels[0].Weight)
-	assert.Equal(t, 30, inpostReq.Shipment.Parcels[0].Dimensions.Length)
-	assert.Equal(t, 20, inpostReq.Shipment.Parcels[0].Dimensions.Width)
-	assert.Equal(t, 10, inpostReq.Shipment.Parcels[0].Dimensions.Height)
-
-	// Assert service
-	assert.Equal(t, "INPOST_STANDARD", inpostReq.Shipment.Service.ID)
-	assert.Equal(t, time.Now().Format("2006-01-02"), inpostReq.Shipment.Service.PickupDate)
-
-	// Assert reference
-	assert.Equal(t, "INPOST-ORDER-12345", inpostReq.Shipment.Reference)
-}
-
-func TestTranslateUnifiedToInPost_EmptyHouseNumber(t *testing.T) {
-	t.Parallel()
-
-	adapter := NewInPostAdapter("test-api-key")
-
-	// Unified payload with street without house number
-	unifiedReq := &UnifiedBookingRequest{
-		Carrier: "inpost",
-		Shipment: UnifiedShipment{
-			Sender: UnifiedAddress{
-				Name:       "Sender Shop",
-				Street:     "Sender Street", // No house number
-				City:       "Warsaw",
-				PostalCode: "00-001",
-				Country:    "PL",
-			},
-			Receiver: UnifiedAddress{
-				Name:       "John Kowalski",
-				Street:     "Receiver Avenue", // No house number
-				City:       "Krakow",
-				PostalCode: "30-001",
-				Country:    "PL",
-			},
-			TotalWeight: 2.0,
-			Colli: []UnifiedColli{
-				{
-					ID:     "1",
-					Weight: 2.0,
-				},
-			},
-		},
-	}
-
-	// Translate to InPost format
-	inpostReq := adapter.TranslateUnifiedToInPost(unifiedReq)
-
-	// Assert sender address (house number should be empty)
-	assert.Equal(t, "Sender Street", inpostReq.Shipment.Sender.Address.StreetName)
-	assert.Equal(t, "", inpostReq.Shipment.Sender.Address.HouseNumber)
-
-	// Assert recipient address (house number should be empty)
-	assert.Equal(t, "Receiver Avenue", inpostReq.Shipment.Recipient.Address.StreetName)
-	assert.Equal(t, "", inpostReq.Shipment.Recipient.Address.HouseNumber)
-}
-
-func TestTranslateUnifiedToInPost_GeneratedReference(t *testing.T) {
-	t.Parallel()
-
-	adapter := NewInPostAdapter("test-api-key")
-
-	// Unified payload without reference
-	unifiedReq := &UnifiedBookingRequest{
-		Carrier: "inpost",
-		Shipment: UnifiedShipment{
-			Sender: UnifiedAddress{
-				Name:    "Sender Shop",
-				Street:  "Sender Street 1",
-				City:    "Warsaw",
-				Country: "PL",
-			},
-			Receiver: UnifiedAddress{
-				Name:    "John Kowalski",
-				Street:  "Receiver Avenue 2",
-				City:    "Krakow",
-				Country: "PL",
-			},
-			Colli: []UnifiedColli{
-				{
-					ID:     "1",
-					Weight: 2.0,
-					// No reference
-				},
-			},
-		},
-	}
-
-	// Translate to InPost format
-	inpostReq := adapter.TranslateUnifiedToInPost(unifiedReq)
-
-	// Assert that a reference was generated
-	assert.NotEmpty(t, inpostReq.Shipment.Reference)
-	assert.Contains(t, inpostReq.Shipment.Reference, "INPOST-inpost-")
-}
-
-// --- Test Cases for BookShipment ---
-
-func TestBookShipment_Success(t *testing.T) {
-	t.Parallel()
-
-	// Mock InPost API server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request method and path
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.Equal(t, "/shipments", r.URL.Path)
-
-		// Verify headers
-		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-		// Decode the request body
-		var reqBody InPostBookingRequest
-		err := json.NewDecoder(r.Body).Decode(&reqBody)
+		})
 		require.NoError(t, err)
+		assert.Equal(t, "inpost", response.Carrier)
+		assert.NotEmpty(t, response.TrackingNumber)
+		assert.NotEmpty(t, response.ShipmentID)
+		assert.Equal(t, "PLN", response.Currency)
+		assert.Equal(t, "WAR001", response.LockerId)
+	})
+}
 
-		// Verify the request payload matches the provided example
-		assert.Equal(t, "Sender Shop", reqBody.Shipment.Sender.Name)
-		assert.Equal(t, "Sender Street", reqBody.Shipment.Sender.Address.StreetName)
-		assert.Equal(t, "1", reqBody.Shipment.Sender.Address.HouseNumber)
-		assert.Equal(t, "Warsaw", reqBody.Shipment.Sender.Address.City)
-		assert.Equal(t, "00-001", reqBody.Shipment.Sender.Address.PostalCode)
-		assert.Equal(t, "PL", reqBody.Shipment.Sender.Address.Country)
-		assert.Equal(t, "+4812345678", reqBody.Shipment.Sender.Contact.Phone)
-		assert.Equal(t, "sender@example.com", reqBody.Shipment.Sender.Contact.Email)
+func TestMockInPostAdapter_TrackShipment(t *testing.T) {
+	t.Parallel()
 
-		assert.Equal(t, "John Kowalski", reqBody.Shipment.Recipient.Name)
-		assert.Equal(t, "Receiver Avenue", reqBody.Shipment.Recipient.Address.StreetName)
-		assert.Equal(t, "2", reqBody.Shipment.Recipient.Address.HouseNumber)
-		assert.Equal(t, "Krakow", reqBody.Shipment.Recipient.Address.City)
-		assert.Equal(t, "30-001", reqBody.Shipment.Recipient.Address.PostalCode)
-		assert.Equal(t, "PL", reqBody.Shipment.Recipient.Address.Country)
-		assert.Equal(t, "+48987654321", reqBody.Shipment.Recipient.Contact.Phone)
-		assert.Equal(t, "john.kowalski@example.com", reqBody.Shipment.Recipient.Contact.Email)
+	response, err := (&MockInPostAdapter{}).TrackShipment("INPOST123456789PL")
+	require.NoError(t, err)
+	assert.Equal(t, "INPOST123456789PL", response.TrackingNumber)
+	assert.Equal(t, "In Transit", response.Status)
+	assert.Equal(t, "inpost", response.Carrier)
+	assert.Len(t, response.Events, 2)
+}
 
-		require.Len(t, reqBody.Shipment.Parcels, 1)
-		assert.Equal(t, "1", reqBody.Shipment.Parcels[0].ID)
-		assert.Equal(t, 2.0, reqBody.Shipment.Parcels[0].Weight)
-		assert.Equal(t, 30, reqBody.Shipment.Parcels[0].Dimensions.Length)
-		assert.Equal(t, 20, reqBody.Shipment.Parcels[0].Dimensions.Width)
-		assert.Equal(t, 10, reqBody.Shipment.Parcels[0].Dimensions.Height)
+func TestMockInPostAdapter_GetServicePoints(t *testing.T) {
+	t.Parallel()
 
-		assert.Equal(t, "INPOST_STANDARD", reqBody.Shipment.Service.ID)
-		assert.Equal(t, "INPOST-ORDER-12345", reqBody.Shipment.Reference)
+	points, err := (&MockInPostAdapter{}).GetServicePoints(Location{
+		City: "Warsaw", Country: "PL", PostalCode: "00-001",
+	})
+	require.NoError(t, err)
+	assert.Len(t, points, 2)
+	assert.Equal(t, "WAR001", points[0].ID)
+	assert.Equal(t, "Locker", points[0].Services[0])
+}
 
-		// Send mock response
-		mockResponse := InPostBookingResponse{
-			ShipmentID:     "INPOST-550e8400-e29b-41d4-a716-446655440007",
-			TrackingNumber: "INPOST123456789PL",
-			LabelURL:       "https://api.inpost.pl/labels/550e8400-e29b-41d4-a716-446655440007.pdf",
-			Status:         "booked",
-			Cost:           8.00,
-			Currency:       "PLN",
-			LockerID:       "WAR001",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mockResponse)
-	}))
-	defer server.Close()
+// =========================================================================
+// Real adapter — payload transformation tests
+// =========================================================================
 
-	// Create adapter with mock server URL
-	adapter := NewInPostAdapter("test-api-key")
-	adapter.baseURL = server.URL
+func TestInPostAdapter_BookShipment_PayloadShape(t *testing.T) {
+	t.Parallel()
 
-	// Unified payload
-	unifiedReq := &UnifiedBookingRequest{
+	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
+
+	_, err := adapter.BookShipment(BookingRequest{
 		Carrier: "inpost",
-		Shipment: UnifiedShipment{
-			Sender: UnifiedAddress{
+		Shipment: Shipment{
+			Sender: Address{
 				Name:       "Sender Shop",
-				Street:     "Sender Street 1",
+				Street:     "Sender Street",
 				City:       "Warsaw",
 				PostalCode: "00-001",
 				Country:    "PL",
 				Phone:      "+4812345678",
 				Email:      "sender@example.com",
 			},
-			Receiver: UnifiedAddress{
+			Receiver: Address{
 				Name:       "John Kowalski",
-				Street:     "Receiver Avenue 2",
+				Street:     "Receiver Avenue",
 				City:       "Krakow",
 				PostalCode: "30-001",
 				Country:    "PL",
 				Phone:      "+48987654321",
 				Email:      "john.kowalski@example.com",
 			},
-			Colli: []UnifiedColli{
-				{
-					ID:         "1",
-					Weight:     2.0,
-					Reference:  "INPOST-ORDER-12345",
-					Dimensions: UnifiedDimensions{Length: 30.0, Width: 20.0, Height: 10.0},
-				},
-			},
+			TotalWeight: 2.0,
+			Colli:       []Colli{inpostTestColli("box-1", 2.0)},
 		},
-	}
-
-	// Call BookShipment
-	resp, err := adapter.BookShipment(context.Background(), unifiedReq)
+	})
 	require.NoError(t, err)
 
-	// Assert response
-	assert.Equal(t, "INPOST-550e8400-e29b-41d4-a716-446655440007", resp.ShipmentID)
-	assert.Equal(t, "INPOST123456789PL", resp.TrackingNumber)
-	assert.Equal(t, "https://api.inpost.pl/labels/550e8400-e29b-41d4-a716-446655440007.pdf", resp.LabelURL)
-	assert.Equal(t, "booked", resp.Status)
-	assert.Equal(t, 8.00, resp.Cost)
-	assert.Equal(t, "PLN", resp.Currency)
-	assert.Equal(t, "WAR001", resp.LockerID)
+	payload := *captured
+	shipment := inpostRequireNested(t, payload, "shipment")
+
+	// Sender
+	sender := inpostRequireNested(t, shipment, "sender")
+	assert.Equal(t, "Sender Shop", sender["name"])
+	senderAddr := inpostRequireNested(t, sender, "address")
+	assert.Equal(t, "Sender Street", senderAddr["streetName"]) // Street → streetName
+	assert.Equal(t, "Warsaw", senderAddr["city"])
+	assert.Equal(t, "00-001", senderAddr["postalCode"])
+	assert.Equal(t, "PL", senderAddr["country"])
+	senderContact := inpostRequireNested(t, sender, "contact")
+	assert.Equal(t, "+4812345678", senderContact["phone"])
+	assert.Equal(t, "sender@example.com", senderContact["email"])
+
+	// Recipient — must not be "receiver"
+	_, hasReceiver := shipment["receiver"]
+	assert.False(t, hasReceiver, "InPost expects 'recipient', not 'receiver'")
+	recipient := inpostRequireNested(t, shipment, "recipient")
+	assert.Equal(t, "John Kowalski", recipient["name"])
+	recipientAddr := inpostRequireNested(t, recipient, "address")
+	assert.Equal(t, "Receiver Avenue", recipientAddr["streetName"])
+	assert.Equal(t, "PL", recipientAddr["country"])
+	recipientContact := inpostRequireNested(t, recipient, "contact")
+	assert.Equal(t, "+48987654321", recipientContact["phone"])
+
+	// Service block
+	service := inpostRequireNested(t, shipment, "service")
+	assert.Equal(t, "INPOST_STANDARD", service["id"])
+
+	// Parcels
+	parcels := inpostRequireArray(t, shipment, "parcels", 1)
+	parcel := parcels[0].(map[string]interface{})
+	assert.Equal(t, "1", parcel["id"])
+	assert.Equal(t, float64(2.0), parcel["weight"]) // kg, no conversion
+	dims := inpostRequireNested(t, parcel, "dimensions")
+	assert.Equal(t, float64(10), dims["length"])
+	assert.Equal(t, float64(10), dims["width"])
+	assert.Equal(t, float64(10), dims["height"])
 }
 
-func TestBookShipment_APIError(t *testing.T) {
+func TestInPostAdapter_BookShipment_LockerForwarded(t *testing.T) {
 	t.Parallel()
 
-	// Mock InPost API server with error response
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error": "Invalid API key"}`))
-	}))
-	defer server.Close()
+	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
 
-	// Create adapter with mock server URL
-	adapter := NewInPostAdapter("invalid-api-key")
-	adapter.baseURL = server.URL
+	req := inpostMinimalRequest()
+	req.Shipment.Incoterms = "WAR001"
 
-	// Unified payload
-	unifiedReq := &UnifiedBookingRequest{
-		Carrier: "inpost",
-		Shipment: UnifiedShipment{
-			Sender: UnifiedAddress{
-				Name:    "Sender Shop",
-				Street:  "Sender Street 1",
-				City:    "Warsaw",
-				Country: "PL",
-			},
-			Receiver: UnifiedAddress{
-				Name:    "John Kowalski",
-				Street:  "Receiver Avenue 2",
-				City:    "Krakow",
-				Country: "PL",
-			},
-			Colli: []UnifiedColli{
-				{ID: "1", Weight: 2.0},
-			},
-		},
+	_, err := adapter.BookShipment(req)
+	require.NoError(t, err)
+
+	_ = adapter
+	shipment := inpostRequireNested(t, *captured, "shipment")
+	service := inpostRequireNested(t, shipment, "service")
+	assert.Equal(t, "WAR001", service["targetLocker"])
+}
+
+func TestInPostAdapter_BookShipment_NoLockerWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
+
+	_, err := adapter.BookShipment(inpostMinimalRequest())
+	require.NoError(t, err)
+
+	_ = adapter
+	shipment := inpostRequireNested(t, *captured, "shipment")
+	service := inpostRequireNested(t, shipment, "service")
+	assert.NotContains(t, service, "targetLocker")
+}
+
+func TestInPostAdapter_BookShipment_ReferenceForwarded(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
+
+	req := inpostMinimalRequest()
+	req.IdempotencyKey = "INPOST-ORDER-12345"
+
+	_, err := adapter.BookShipment(req)
+	require.NoError(t, err)
+
+	_ = adapter
+	shipment := inpostRequireNested(t, *captured, "shipment")
+	assert.Equal(t, "INPOST-ORDER-12345", shipment["reference"])
+}
+
+func TestInPostAdapter_BookShipment_MultiColli(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
+
+	req := inpostMinimalRequest()
+	req.Shipment.TotalWeight = 5.0
+	req.Shipment.Colli = []Colli{
+		inpostTestColli("box-1", 2.0),
+		inpostTestColli("box-2", 3.0),
 	}
 
-	// Call BookShipment and expect error
-	_, err := adapter.BookShipment(context.Background(), unifiedReq)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "API request failed with status 400")
+	_, err := adapter.BookShipment(req)
+	require.NoError(t, err)
+
+	_ = adapter
+	shipment := inpostRequireNested(t, *captured, "shipment")
+	parcels := inpostRequireArray(t, shipment, "parcels", 2)
+
+	p0 := parcels[0].(map[string]interface{})
+	assert.Equal(t, "1", p0["id"])
+	assert.Equal(t, float64(2.0), p0["weight"])
+
+	p1 := parcels[1].(map[string]interface{})
+	assert.Equal(t, "2", p1["id"])
+	assert.Equal(t, float64(3.0), p1["weight"])
 }
 
-func TestBookShipment_MalformedResponse(t *testing.T) {
+func TestInPostAdapter_BookShipment_ResponseMapped(t *testing.T) {
 	t.Parallel()
 
-	// Mock InPost API server with malformed JSON response
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+	adapter, _ := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
+
+	response, err := adapter.BookShipment(inpostMinimalRequest())
+	require.NoError(t, err)
+
+	assert.Equal(t, "INPOST-550e8400-e29b-41d4-a716-446655440007", response.ShipmentID)
+	assert.Equal(t, "INPOST123456789PL", response.TrackingNumber)
+	assert.Equal(t, "inpost", response.Carrier)
+	assert.Equal(t, 8.00, response.Cost)
+	assert.Equal(t, "PLN", response.Currency)
+	assert.Equal(t, "booked", response.Status)
+	assert.Equal(t, "WAR001", response.LockerId)
+}
+
+func TestInPostAdapter_BookShipment_APIError(t *testing.T) {
+	t.Parallel()
+
+	adapter, _ := newInPostTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
+
+	_, err := adapter.BookShipment(inpostMinimalRequest())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "400")
+}
+
+func TestInPostAdapter_TrackShipment_RequestShape(t *testing.T) {
+	t.Parallel()
+
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{invalid json}`))
+		_, _ = w.Write([]byte(`{"trackingNumber":"INPOST123456789PL","status":"In Transit","events":[{"timestamp":"2026-06-01T10:00:00Z","status":"Picked Up","location":"Warsaw, PL"}]}`))
 	}))
-	defer server.Close()
+	t.Cleanup(srv.Close)
 
-	// Create adapter with mock server URL
-	adapter := NewInPostAdapter("test-api-key")
-	adapter.baseURL = server.URL
-
-	// Unified payload
-	unifiedReq := &UnifiedBookingRequest{
-		Carrier: "inpost",
-		Shipment: UnifiedShipment{
-			Sender: UnifiedAddress{
-				Name:    "Sender Shop",
-				Street:  "Sender Street 1",
-				City:    "Warsaw",
-				Country: "PL",
-			},
-			Receiver: UnifiedAddress{
-				Name:    "John Kowalski",
-				Street:  "Receiver Avenue 2",
-				City:    "Krakow",
-				Country: "PL",
-			},
-			Colli: []UnifiedColli{
-				{ID: "1", Weight: 2.0},
-			},
-		},
+	adapter := &InPostAdapter{
+		APIKey:     "test-key",
+		BaseURL:    srv.URL,
+		HTTPClient: srv.Client(),
 	}
 
-	// Call BookShipment and expect error
-	_, err := adapter.BookShipment(context.Background(), unifiedReq)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to decode response")
+	resp, err := adapter.TrackShipment("INPOST123456789PL")
+	require.NoError(t, err)
+
+	assert.Equal(t, "/tracking/INPOST123456789PL", capturedPath)
+	assert.Equal(t, "INPOST123456789PL", resp.TrackingNumber)
+	assert.Equal(t, "In Transit", resp.Status)
+	assert.Equal(t, "inpost", resp.Carrier)
+	assert.Len(t, resp.Events, 1)
 }
 
-// --- Test Cases for splitStreetAddress ---
-
-func TestSplitStreetAddress(t *testing.T) {
+func TestInPostAdapter_GetServicePoints_RequestShape(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		input    string
-		expected []string
-	}{
-		{
-			name:     "Street with house number",
-			input:    "Main Street 123",
-			expected: []string{"Main Street", "123"},
-		},
-		{
-			name:     "Street without house number",
-			input:    "Main Street",
-			expected: []string{"Main Street"},
-		},
-		{
-			name:     "Street with multiple spaces",
-			input:    "Main Street Apt 123",
-			expected: []string{"Main Street Apt", "123"},
-		},
+	var capturedURL string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"items":[{"name":"WAR001","address":{"street":"Marszałkowska 1","postalCode":"00-001","city":"Warsaw","country":"PL"}}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	adapter := &InPostAdapter{
+		APIKey:     "test-key",
+		BaseURL:    srv.URL,
+		HTTPClient: srv.Client(),
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := splitStreetAddress(tt.input)
-			assert.Equal(t, tt.expected, result)
-		})
+	points, err := adapter.GetServicePoints(Location{
+		City: "Warsaw", Country: "PL", PostalCode: "00-001",
+	})
+	require.NoError(t, err)
+	require.Len(t, points, 1)
+	assert.Equal(t, "WAR001", points[0].ID)
+	assert.Equal(t, "Locker", points[0].Services[0])
+
+	assert.Contains(t, capturedURL, "city=Warsaw")
+	assert.Contains(t, capturedURL, "postalCode=00-001")
+	assert.Contains(t, capturedURL, "countryCode=PL")
+}
+
+// =========================================================================
+// Helpers
+// =========================================================================
+
+func newInPostTestServer(t *testing.T, statusCode int, body string) (*InPostAdapter, *map[string]interface{}) {
+	t.Helper()
+
+	var captured map[string]interface{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(raw, &captured))
+		w.WriteHeader(statusCode)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+
+	return &InPostAdapter{
+		APIKey:     "test-key",
+		BaseURL:    srv.URL,
+		HTTPClient: srv.Client(),
+	}, &captured
+}
+
+func inpostMockBookingResponse() string {
+	return `{"shipmentId":"INPOST-550e8400-e29b-41d4-a716-446655440007","trackingNumber":"INPOST123456789PL","labelUrl":"https://mock.inpost.pl/labels/550e8400.pdf","status":"booked","cost":8.00,"currency":"PLN","lockerId":"WAR001"}`
+}
+
+func inpostRequireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
+	t.Helper()
+	v, ok := parent[key].(map[string]interface{})
+	require.True(t, ok, "missing nested key %q", key)
+	return v
+}
+
+func inpostRequireArray(t *testing.T, parent map[string]interface{}, key string, wantLen int) []interface{} {
+	t.Helper()
+	v, ok := parent[key].([]interface{})
+	require.True(t, ok, "missing array key %q", key)
+	require.Len(t, v, wantLen)
+	return v
+}
+
+func inpostMinimalRequest() BookingRequest {
+	return BookingRequest{
+		Carrier: "inpost",
+		Shipment: Shipment{
+			Sender:      inpostTestSender(),
+			Receiver:    inpostTestReceiver(),
+			TotalWeight: 2.0,
+			Colli:       []Colli{inpostTestColli("c1", 2.0)},
+		},
+	}
+}
+
+func inpostTestSender() Address {
+	return Address{
+		Name: "Sender Shop", Street: "Sender Street",
+		City: "Warsaw", PostalCode: "00-001", Country: "PL",
+	}
+}
+
+func inpostTestReceiver() Address {
+	return Address{
+		Name: "John Kowalski", Street: "Receiver Avenue",
+		City: "Krakow", PostalCode: "30-001", Country: "PL",
+	}
+}
+
+func inpostTestColli(id string, weightKg float64) Colli {
+	return Colli{
+		ID:     id,
+		Weight: weightKg,
+		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
 	}
 }

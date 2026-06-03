@@ -1,200 +1,131 @@
+// Package adapter provides a mock InPost CarrierAdapter for testing and local development.
+// This file is located at /internal/adapter/mock_inpost.go.
 package adapter
 
 import (
-	"context"
-	"sync"
+	"fmt"
+	"log/slog"
+	"math/rand"
+	"time"
 )
 
-// MockInPostAdapter is a mock implementation of the InPostAdapter for testing.
+// MockInPostAdapter implements CarrierAdapter with pre-canned InPost responses.
+// All three methods can be overridden via their corresponding Func fields:
+//
+//	adapter := &MockInPostAdapter{
+//	    BookShipmentFunc: func(r BookingRequest) (*BookingResponse, error) {
+//	        return nil, errors.New("upstream timeout")
+//	    },
+//	}
 type MockInPostAdapter struct {
-	// Mutex to ensure thread-safe access to the mock data
-	mu sync.Mutex
-
-	// Expected request for validation
-	expectedRequest *InPostBookingRequest
-
-	// Response to return
-	response *InPostBookingResponse
-
-	// Error to return
-	err error
-
-	// Track if BookShipment was called
-	bookShipmentCalled bool
-
-	// Track the last request received
-	lastRequest *InPostBookingRequest
+	BookShipmentFunc     func(request BookingRequest) (*BookingResponse, error)
+	TrackShipmentFunc    func(trackingNumber string) (*TrackingResponse, error)
+	GetServicePointsFunc func(location Location) ([]ServicePoint, error)
 }
 
-// NewMockInPostAdapter creates a new MockInPostAdapter instance.
+// BookShipment returns a mock InPost booking response, applying the same
+// validation as the real InPostAdapter so tests catch input errors without a live API.
+func (m *MockInPostAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+	if m.BookShipmentFunc != nil {
+		return m.BookShipmentFunc(request)
+	}
+
+	if request.Shipment.TotalWeight <= 0 {
+		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
+	}
+
+	var sum float64
+	for _, c := range request.Shipment.Colli {
+		sum += c.Weight
+	}
+	if request.Shipment.TotalWeight != sum {
+		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
+	}
+
+	slog.Info("MockInPostAdapter: returning mock booking response")
+
+	shipmentID := fmt.Sprintf("INPOST-%x", rand.Uint32())
+	trackingNumber := fmt.Sprintf("INPOST%09dPL", rand.Intn(1000000000))
+
+	return &BookingResponse{
+		ShipmentID:     shipmentID,
+		TrackingNumber: trackingNumber,
+		LabelURL:       fmt.Sprintf("https://mock.inpost.pl/labels/%s.pdf", shipmentID),
+		Carrier:        "inpost",
+		Cost:           8.00,
+		Currency:       "PLN",
+		Status:         "booked",
+		LockerId:       "WAR001",
+	}, nil
+}
+
+// TrackShipment returns a mock InPost tracking response with two canned events.
+func (m *MockInPostAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+	if m.TrackShipmentFunc != nil {
+		return m.TrackShipmentFunc(trackingNumber)
+	}
+
+	slog.Info("MockInPostAdapter: returning mock tracking response")
+
+	events := []TrackingEvent{
+		{
+			Timestamp: time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+			Status:    "Picked Up",
+			Location:  "Warsaw, PL",
+		},
+		{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Status:    "In Transit",
+			Location:  "Krakow, PL",
+		},
+	}
+
+	return &TrackingResponse{
+		TrackingNumber:    trackingNumber,
+		Carrier:           "inpost",
+		Status:            "In Transit",
+		EstimatedDelivery: time.Now().Add(24 * time.Hour).UTC().Format("2006-01-02"),
+		Events:            events,
+	}, nil
+}
+
+// GetServicePoints returns mock InPost locker locations.
+func (m *MockInPostAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+	if m.GetServicePointsFunc != nil {
+		return m.GetServicePointsFunc(location)
+	}
+
+	slog.Info("MockInPostAdapter: returning mock service points")
+
+	return []ServicePoint{
+		{
+			ID:   "WAR001",
+			Name: "WAR001",
+			Address: Address{
+				Name:       "InPost Locker Warsaw",
+				Street:     "Marszałkowska 1",
+				PostalCode: "00-001",
+				City:       "Warsaw",
+				Country:    "PL",
+			},
+			Services: []string{"Locker"},
+		},
+		{
+			ID:   "KRK001",
+			Name: "KRK001",
+			Address: Address{
+				Name:       "InPost Locker Krakow",
+				Street:     "Floriańska 1",
+				PostalCode: "31-019",
+				City:       "Krakow",
+				Country:    "PL",
+			},
+			Services: []string{"Locker"},
+		},
+	}, nil
+}
+
+// NewMockInPostAdapter returns a new MockInPostAdapter with default behaviour.
 func NewMockInPostAdapter() *MockInPostAdapter {
 	return &MockInPostAdapter{}
-}
-
-// WithExpectedRequest sets the expected request for validation.
-func (m *MockInPostAdapter) WithExpectedRequest(req *InPostBookingRequest) *MockInPostAdapter {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.expectedRequest = req
-	return m
-}
-
-// WithResponse sets the response to return.
-func (m *MockInPostAdapter) WithResponse(resp *InPostBookingResponse) *MockInPostAdapter {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.response = resp
-	return m
-}
-
-// WithError sets the error to return.
-func (m *MockInPostAdapter) WithError(err error) *MockInPostAdapter {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.err = err
-	return m
-}
-
-// BookShipment is the mock implementation of the InPostAdapter.BookShipment method.
-func (m *MockInPostAdapter) BookShipment(ctx context.Context, unifiedReq *UnifiedBookingRequest) (*InPostBookingResponse, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.bookShipmentCalled = true
-
-	// Translate the unified request to InPost format
-	inpostReq := m.TranslateUnifiedToInPost(unifiedReq)
-	m.lastRequest = inpostReq
-
-	// If an expected request is set, validate it
-	if m.expectedRequest != nil {
-		// Here you can add assertions to validate the request
-		// For simplicity, we just store the last request
-		_ = inpostReq
-	}
-
-	// Return the configured response or error
-	if m.err != nil {
-		return nil, m.err
-	}
-
-	return m.response, nil
-}
-
-// TranslateUnifiedToInPost is a copy of the translation function from InPostAdapter.
-// This ensures the mock behaves identically to the real adapter.
-func (m *MockInPostAdapter) TranslateUnifiedToInPost(unifiedReq *UnifiedBookingRequest) *InPostBookingRequest {
-	// Extract house number from street (if available)
-	extractHouseNumber := func(street string) (streetName, houseNumber string) {
-		parts := splitStreetAddress(street)
-		if len(parts) > 1 {
-			return parts[0], parts[1]
-		}
-		return street, ""
-	}
-
-	inpostReq := &InPostBookingRequest{}
-	streetName, houseNumber := extractHouseNumber(unifiedReq.Shipment.Sender.Street)
-	inpostReq.Shipment.Sender = InPostSender{
-		Name: unifiedReq.Shipment.Sender.Name,
-		Address: InPostAddress{
-			StreetName:  streetName,
-			HouseNumber: houseNumber,
-			City:        unifiedReq.Shipment.Sender.City,
-			PostalCode:  unifiedReq.Shipment.Sender.PostalCode,
-			Country:     unifiedReq.Shipment.Sender.Country,
-		},
-		Contact: InPostContact{
-			Phone: unifiedReq.Shipment.Sender.Phone,
-			Email: unifiedReq.Shipment.Sender.Email,
-		},
-	}
-	inpostReq.Shipment.Recipient = InPostRecipient{
-		Name: unifiedReq.Shipment.Receiver.Name,
-		Address: InPostAddress{
-			StreetName:  extractHouseNumber(unifiedReq.Shipment.Receiver.Street),
-			HouseNumber: extractHouseNumber(unifiedReq.Shipment.Receiver.Street),
-			City:        unifiedReq.Shipment.Receiver.City,
-			PostalCode:  unifiedReq.Shipment.Receiver.PostalCode,
-			Country:     unifiedReq.Shipment.Receiver.Country,
-		},
-		Contact: InPostContact{
-			Phone: unifiedReq.Shipment.Receiver.Phone,
-			Email: unifiedReq.Shipment.Receiver.Email,
-		},
-	}
-
-	// Convert colli to parcels
-	for _, colli := range unifiedReq.Shipment.Colli {
-		inpostParcel := InPostParcel{
-			ID:     colli.ID,
-			Weight: colli.Weight,
-			Dimensions: InPostDimensions{
-				Length: int(colli.Dimensions.Length),
-				Width:  int(colli.Dimensions.Width),
-				Height: int(colli.Dimensions.Height),
-			},
-		}
-		inpostReq.Shipment.Parcels = append(inpostReq.Shipment.Parcels, inpostParcel)
-	}
-
-	// Set service details
-	inpostReq.Shipment.Service = InPostService{
-		ID:           "INPOST_STANDARD",
-		PickupDate:   "2026-06-10", // Default to a fixed date for testing
-		TargetLocker: "",
-	}
-
-	// Set reference
-	if len(unifiedReq.Shipment.Colli) > 0 && unifiedReq.Shipment.Colli[0].Reference != "" {
-		inpostReq.Shipment.Reference = unifiedReq.Shipment.Colli[0].Reference
-	} else {
-		inpostReq.Shipment.Reference = "INPOST-MOCK-REFERENCE"
-	}
-
-	return inpostReq
-}
-
-// splitStreetAddress is a copy of the helper function from InPostAdapter.
-func splitStreetAddress(street string) []string {
-	var parts []string
-	lastSpace := -1
-	for i := len(street) - 1; i >= 0; i-- {
-		if street[i] == ' ' {
-			lastSpace = i
-			break
-		}
-	}
-	if lastSpace != -1 {
-		parts = append(parts, street[:lastSpace])
-		parts = append(parts, street[lastSpace+1:])
-	} else {
-		parts = append(parts, street)
-	}
-	return parts
-}
-
-// BookShipmentCalled returns whether BookShipment was called.
-func (m *MockInPostAdapter) BookShipmentCalled() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.bookShipmentCalled
-}
-
-// LastRequest returns the last request received by the mock.
-func (m *MockInPostAdapter) LastRequest() *InPostBookingRequest {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.lastRequest
-}
-
-// Reset resets the mock state.
-func (m *MockInPostAdapter) Reset() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.expectedRequest = nil
-	m.response = nil
-	m.err = nil
-	m.bookShipmentCalled = false
-	m.lastRequest = nil
 }

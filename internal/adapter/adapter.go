@@ -88,6 +88,16 @@ func InitAdapters() map[string]CarrierAdapter {
 		slog.Info("Airmee adapter initialized in mock mode")
 	}
 
+	// InPost
+	inpostAPIKey := os.Getenv("INPOST_API_KEY")
+	if inpostAPIKey != "" && !mockMode {
+		adapters["inpost"] = NewInPostAdapter(inpostAPIKey)
+		slog.Info("InPost adapter initialized in production mode")
+	} else {
+		adapters["inpost"] = &MockInPostAdapter{}
+		slog.Info("InPost adapter initialized in mock mode")
+	}
+
 	return adapters
 }
 
@@ -158,6 +168,7 @@ type BookingResponse struct {
 	Status         string          `json:"status,omitempty"`
 	Colli          []ColliResponse `json:"colli,omitempty"`
 	Errors         []string        `json:"errors,omitempty"`
+	LockerId	string	`json:"lockerId,omnitempty"`
 }
 
 // ColliResponse represents the response for an individual colli in a shipment.

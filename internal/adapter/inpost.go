@@ -1,3 +1,5 @@
+// Package adapter provides the InPost implementation of the CarrierAdapter interface.
+// This file is located at /internal/adapter/inpost.go.
 package adapter
 
 import (
@@ -6,296 +8,279 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
-	"time"
+	"os"
 )
 
-// InPostAdapter handles communication with the InPost API.
+// InPostAdapter implements CarrierAdapter for InPost.
 type InPostAdapter struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+	APIKey     string
+	BaseURL    string
+	HTTPClient *http.Client
 }
 
-// NewInPostAdapter creates a new InPostAdapter instance.
+// NewInPostAdapter creates a new InPostAdapter with the given API key.
 func NewInPostAdapter(apiKey string) *InPostAdapter {
 	return &InPostAdapter{
-		apiKey:     apiKey,
-		baseURL:    "https://api.inpost.pl",
-		httpClient: http.DefaultClient,
+		APIKey:     apiKey,
+		BaseURL:    "https://api.inpost.pl/v1",
+		HTTPClient: http.DefaultClient,
 	}
 }
 
-// --- Unified Payload Structs (from logistics-gateway) ---
-
-// UnifiedAddress represents a flat address structure for sender/receiver.
-type UnifiedAddress struct {
-	Name       string `json:"name"`
-	Street     string `json:"street"`
-	City       string `json:"city"`
-	PostalCode string `json:"postalCode"`
-	Country    string `json:"country"`
-	Phone      string `json:"phone,omitempty"`
-	Email      string `json:"email,omitempty"`
-}
-
-// UnifiedDimensions represents the dimensions of a colli.
-type UnifiedDimensions struct {
-	Length float64 `json:"length"` // in cm
-	Width  float64 `json:"width"`  // in cm
-	Height float64 `json:"height"` // in cm
-}
-
-// UnifiedItem represents an item in a colli.
-type UnifiedItem struct {
-	Description string  `json:"description"`
-	Weight      float64 `json:"weight"`
-	Quantity    int     `json:"quantity"`
-	Value       float64 `json:"value,omitempty"`
-	SKU         string  `json:"sku,omitempty"`
-}
-
-// UnifiedColli represents a single package in a shipment.
-type UnifiedColli struct {
-	ID         string            `json:"id"`
-	Reference  string            `json:"reference,omitempty"`
-	Weight     float64           `json:"weight"`
-	Dimensions UnifiedDimensions `json:"dimensions,omitempty"`
-	Items      []UnifiedItem     `json:"items,omitempty"`
-}
-
-// UnifiedShipment represents the shipment details in the unified payload.
-type UnifiedShipment struct {
-	Sender      UnifiedAddress `json:"sender"`
-	Receiver    UnifiedAddress `json:"receiver"`
-	TotalWeight float64        `json:"totalWeight"`
-	Colli       []UnifiedColli `json:"colli"`
-}
-
-// UnifiedBookingRequest represents the unified payload for booking a shipment.
-type UnifiedBookingRequest struct {
-	Carrier        string          `json:"carrier"`
-	Shipment       UnifiedShipment `json:"shipment"`
-	CallbackURL    string          `json:"callbackUrl,omitempty"`
-	IdempotencyKey string          `json:"idempotencyKey,omitempty"`
-	Incoterms      string          `json:"incoterms,omitempty"`
-	HsCode         string          `json:"hsCode,omitempty"`
-}
-
-// --- InPost-Specific Structs ---
-
-// InPostAddress represents a physical address for sender or recipient.
-type InPostAddress struct {
-	StreetName  string `json:"streetName"`
-	HouseNumber string `json:"houseNumber"`
-	City        string `json:"city"`
-	PostalCode  string `json:"postalCode"`
-	Country     string `json:"country"`
-}
-
-// InPostContact represents contact information for sender or recipient.
-type InPostContact struct {
-	Phone string `json:"phone"`
-	Email string `json:"email"`
-}
-
-// InPostDimensions represents the dimensions of a parcel.
-type InPostDimensions struct {
-	Length int `json:"length"` // in cm
-	Width  int `json:"width"`  // in cm
-	Height int `json:"height"` // in cm
-}
-
-// InPostParcel represents a single parcel in a shipment.
-type InPostParcel struct {
-	ID         string           `json:"id"`
-	Weight     float64          `json:"weight"` // in kg
-	Dimensions InPostDimensions `json:"dimensions"`
-}
-
-// InPostService represents the service details for a shipment.
-type InPostService struct {
-	ID           string `json:"id"`
-	PickupDate   string `json:"pickupDate"`
-	TargetLocker string `json:"targetLocker,omitempty"` // Optional
-}
-
-// InPostSender represents the sender of a shipment.
-type InPostSender struct {
-	Name    string        `json:"name"`
-	Address InPostAddress `json:"address"`
-	Contact InPostContact `json:"contact"`
-}
-
-// InPostRecipient represents the recipient of a shipment.
-type InPostRecipient struct {
-	Name    string        `json:"name"`
-	Address InPostAddress `json:"address"`
-	Contact InPostContact `json:"contact"`
-}
-
-// InPostBookingRequest represents the payload for booking a shipment with InPost.
-type InPostBookingRequest struct {
-	Shipment struct {
-		Sender    InPostSender    `json:"sender"`
-		Recipient InPostRecipient `json:"recipient"`
-		Parcels   []InPostParcel  `json:"parcels"`
-		Service   InPostService   `json:"service"`
-		Reference string          `json:"reference"`
-	} `json:"shipment"`
-}
-
-// InPostBookingResponse represents the response from InPost after booking a shipment.
-type InPostBookingResponse struct {
-	ShipmentID     string  `json:"shipmentId"`
-	TrackingNumber string  `json:"trackingNumber"`
-	LabelURL       string  `json:"labelUrl"`
-	Status         string  `json:"status"`
-	Cost           float64 `json:"cost"`
-	Currency       string  `json:"currency"`
-	LockerID       string  `json:"lockerId,omitempty"` // Optional
-}
-
-// --- Translation Function ---
-
-// TranslateUnifiedToInPost converts the unified BookingRequest to InPost's format.
-func (a *InPostAdapter) TranslateUnifiedToInPost(unifiedReq *UnifiedBookingRequest) *InPostBookingRequest {
-	// Extract house number from street (if available)
-	extractHouseNumber := func(street string) (streetName, houseNumber string) {
-		// Simple heuristic: assume the last space-separated part is the house number
-		// This can be improved based on actual data patterns
-		parts := splitStreetAddress(street)
-		if len(parts) > 1 {
-			return parts[0], parts[1]
-		}
-		return street, ""
+// NewInPostAdapterFromEnv creates an InPostAdapter from the INPOST_API_KEY
+// environment variable. Returns nil if the variable is unset.
+func NewInPostAdapterFromEnv() *InPostAdapter {
+	apiKey := os.Getenv("INPOST_API_KEY")
+	if apiKey == "" {
+		slog.Warn("INPOST_API_KEY not set")
+		return nil
 	}
+	return NewInPostAdapter(apiKey)
+}
 
-	inpostReq := &InPostBookingRequest{}
-	inpostReq.Shipment.Sender = InPostSender{
-		Name: unifiedReq.Shipment.Sender.Name,
-		Address: InPostAddress{
-			StreetName:  extractHouseNumber(unifiedReq.Shipment.Sender.Street),
-			HouseNumber: extractHouseNumber(unifiedReq.Shipment.Sender.Street),
-			City:        unifiedReq.Shipment.Sender.City,
-			PostalCode:  unifiedReq.Shipment.Sender.PostalCode,
-			Country:     unifiedReq.Shipment.Sender.Country,
+// inpostParty builds the sender/recipient object expected by the InPost API.
+// InPost requires address fields nested under "address" and "contact" keys,
+// and splits street into streetName and houseNumber. Since the unified
+// Address.Street combines both, it is forwarded as streetName with
+// houseNumber left empty. Callers needing precise house numbers should
+// populate Address.Street with the street name only and store the house
+// number via a future Address.HouseNumber field.
+func inpostParty(a Address) map[string]interface{} {
+	return map[string]interface{}{
+		"name": a.Name,
+		"address": map[string]interface{}{
+			"streetName":  a.Street,
+			"houseNumber": "",
+			"city":        a.City,
+			"postalCode":  a.PostalCode,
+			"country":     a.Country,
 		},
-		Contact: InPostContact{
-			Phone: unifiedReq.Shipment.Sender.Phone,
-			Email: unifiedReq.Shipment.Sender.Email,
+		"contact": map[string]interface{}{
+			"phone": a.Phone,
+			"email": a.Email,
 		},
 	}
-
-	inpostReq.Shipment.Recipient = InPostRecipient{
-		Name: unifiedReq.Shipment.Receiver.Name,
-		Address: InPostAddress{
-			StreetName:  extractHouseNumber(unifiedReq.Shipment.Receiver.Street),
-			HouseNumber: extractHouseNumber(unifiedReq.Shipment.Receiver.Street),
-			City:        unifiedReq.Shipment.Receiver.City,
-			PostalCode:  unifiedReq.Shipment.Receiver.PostalCode,
-			Country:     unifiedReq.Shipment.Receiver.Country,
-		},
-		Contact: InPostContact{
-			Phone: unifiedReq.Shipment.Receiver.Phone,
-			Email: unifiedReq.Shipment.Receiver.Email,
-		},
-	}
-
-	// Convert colli to parcels
-	for _, colli := range unifiedReq.Shipment.Colli {
-		inpostParcel := InPostParcel{
-			ID:     colli.ID,
-			Weight: colli.Weight,
-			Dimensions: InPostDimensions{
-				Length: int(colli.Dimensions.Length),
-				Width:  int(colli.Dimensions.Width),
-				Height: int(colli.Dimensions.Height),
-			},
-		}
-		inpostReq.Shipment.Parcels = append(inpostReq.Shipment.Parcels, inpostParcel)
-	}
-
-	// Set service details
-	inpostReq.Shipment.Service = InPostService{
-		ID:           "INPOST_STANDARD",               // Default service
-		PickupDate:   time.Now().Format("2006-01-02"), // Default to today
-		TargetLocker: "",                              // Optional: can be set based on additional logic
-	}
-
-	// Set reference (use first colli reference or generate one)
-	if len(unifiedReq.Shipment.Colli) > 0 && unifiedReq.Shipment.Colli[0].Reference != "" {
-		inpostReq.Shipment.Reference = unifiedReq.Shipment.Colli[0].Reference
-	} else {
-		inpostReq.Shipment.Reference = fmt.Sprintf("INPOST-%s-%d", unifiedReq.Carrier, time.Now().Unix())
-	}
-
-	return inpostReq
 }
 
-// splitStreetAddress splits a street address into street name and house number.
-// This is a simple helper and may need refinement based on actual data.
-func splitStreetAddress(street string) []string {
-	// Example: "Main Street 123" -> ["Main Street", "123"]
-	// This is a placeholder; consider using a more robust method if needed.
-	var parts []string
-	lastSpace := -1
-	for i := len(street) - 1; i >= 0; i-- {
-		if street[i] == ' ' {
-			lastSpace = i
-			break
-		}
+// inpostParcel converts a single Colli to the InPost parcel wire format.
+// Weight is in kg and dimensions in cm, matching the unified model directly —
+// no unit conversion is required.
+func inpostParcel(index int, c Colli) map[string]interface{} {
+	return map[string]interface{}{
+		"id":     fmt.Sprintf("%d", index+1),
+		"weight": c.Weight,
+		"dimensions": map[string]interface{}{
+			"length": c.Dimensions.Length,
+			"width":  c.Dimensions.Width,
+			"height": c.Dimensions.Height,
+		},
 	}
-	if lastSpace != -1 {
-		parts = append(parts, street[:lastSpace])
-		parts = append(parts, street[lastSpace+1:])
-	} else {
-		parts = append(parts, street)
-	}
-	return parts
 }
 
-// --- API Methods ---
+// BookShipment books a shipment with InPost and returns the booking response.
+//
+// The unified BookingRequest is transformed to the InPost wire format:
+//   - Address fields are nested under "address" and "contact" keys.
+//   - Receiver maps to "recipient".
+//   - Parcels use sequential IDs; weight in kg and dimensions in cm require no conversion.
+//   - An optional target locker ID is read from Shipment.Incoterms.
+//   - The IdempotencyKey is forwarded as the shipment reference.
+//   - The payload is wrapped in a top-level "shipment" object.
+func (a *InPostAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+	if len(request.Shipment.Colli) == 0 {
+		return nil, fmt.Errorf("shipment must contain at least one colli")
+	}
 
-// BookShipment sends a booking request to the InPost API and returns the response.
-func (a *InPostAdapter) BookShipment(ctx context.Context, unifiedReq *UnifiedBookingRequest) (*InPostBookingResponse, error) {
-	// Translate the unified request to InPost format
-	inpostReq := a.TranslateUnifiedToInPost(unifiedReq)
+	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
+	for i, c := range request.Shipment.Colli {
+		parcels[i] = inpostParcel(i, c)
+	}
 
-	// Marshal the request payload
-	payload, err := json.Marshal(inpostReq)
+	service := map[string]interface{}{
+		"id": "INPOST_STANDARD",
+	}
+	if request.Shipment.Incoterms != "" {
+		service["targetLocker"] = request.Shipment.Incoterms
+	}
+
+	shipment := map[string]interface{}{
+		"sender":    inpostParty(request.Shipment.Sender),
+		"recipient": inpostParty(request.Shipment.Receiver),
+		"parcels":   parcels,
+		"service":   service,
+	}
+
+	if request.IdempotencyKey != "" {
+		shipment["reference"] = request.IdempotencyKey
+	}
+
+	payloadBytes, err := json.Marshal(map[string]interface{}{"shipment": shipment})
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("failed to marshal InPost request: %w", err)
 	}
 
-	// Create a new HTTP request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.baseURL+"/shipments", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		a.BaseURL+"/shipments",
+		bytes.NewBuffer(payloadBytes),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create InPost request: %w", err)
 	}
-
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 
-	// Send the request
-	resp, err := a.httpClient.Do(req)
+	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("InPost API call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Check for non-2xx status codes
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("InPost API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Unmarshal the response
-	var bookingResp InPostBookingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&bookingResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	var inpostResp struct {
+		ShipmentID     string  `json:"shipmentId"`
+		TrackingNumber string  `json:"trackingNumber"`
+		LabelURL       string  `json:"labelUrl"`
+		Status         string  `json:"status"`
+		Cost           float64 `json:"cost"`
+		Currency       string  `json:"currency"`
+		LockerId       string  `json:"lockerId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&inpostResp); err != nil {
+		return nil, fmt.Errorf("failed to decode InPost response: %w", err)
 	}
 
-	return &bookingResp, nil
+	return &BookingResponse{
+		ShipmentID:     inpostResp.ShipmentID,
+		TrackingNumber: inpostResp.TrackingNumber,
+		LabelURL:       inpostResp.LabelURL,
+		Carrier:        "inpost",
+		Cost:           inpostResp.Cost,
+		Currency:       inpostResp.Currency,
+		Status:         inpostResp.Status,
+		LockerId:       inpostResp.LockerId,
+	}, nil
+}
+
+// TrackShipment retrieves the tracking status for an InPost shipment.
+func (a *InPostAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		fmt.Sprintf("%s/tracking/%s", a.BaseURL, trackingNumber),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create InPost tracking request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("InPost tracking API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("InPost tracking API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var inpostResp struct {
+		TrackingNumber string `json:"trackingNumber"`
+		Status         string `json:"status"`
+		Events         []struct {
+			Timestamp string `json:"timestamp"`
+			Status    string `json:"status"`
+			Location  string `json:"location"`
+		} `json:"events"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&inpostResp); err != nil {
+		return nil, fmt.Errorf("failed to decode InPost tracking response: %w", err)
+	}
+
+	events := make([]TrackingEvent, len(inpostResp.Events))
+	for i, e := range inpostResp.Events {
+		events[i] = TrackingEvent{
+			Timestamp: e.Timestamp,
+			Status:    e.Status,
+			Location:  e.Location,
+		}
+	}
+
+	return &TrackingResponse{
+		TrackingNumber: inpostResp.TrackingNumber,
+		Carrier:        "inpost",
+		Status:         inpostResp.Status,
+		Events:         events,
+	}, nil
+}
+
+// GetServicePoints retrieves InPost locker locations near the given location.
+func (a *InPostAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		fmt.Sprintf("%s/points?city=%s&postalCode=%s&countryCode=%s",
+			a.BaseURL, location.City, location.PostalCode, location.Country),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create InPost service points request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("InPost service points API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("InPost service points API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var inpostResp struct {
+		Items []struct {
+			Name    string `json:"name"`
+			Address struct {
+				Street     string `json:"street"`
+				PostalCode string `json:"postalCode"`
+				City       string `json:"city"`
+				Country    string `json:"country"`
+			} `json:"address"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&inpostResp); err != nil {
+		return nil, fmt.Errorf("failed to decode InPost service points response: %w", err)
+	}
+
+	servicePoints := make([]ServicePoint, len(inpostResp.Items))
+	for i, item := range inpostResp.Items {
+		servicePoints[i] = ServicePoint{
+			ID:   item.Name,
+			Name: item.Name,
+			Address: Address{
+				Street:     item.Address.Street,
+				PostalCode: item.Address.PostalCode,
+				City:       item.Address.City,
+				Country:    item.Address.Country,
+			},
+			Services: []string{"Locker"},
+		}
+	}
+
+	return servicePoints, nil
 }
