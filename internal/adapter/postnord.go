@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 )
@@ -19,7 +20,7 @@ type PostNordAdapter struct {
 	HTTPClient *http.Client
 }
 
-// NewPostNordAdapter creates a new PostNord adapter.
+// NewPostNordAdapter creates a new PostNordAdapter with the given API key.
 func NewPostNordAdapter(apiKey string) *PostNordAdapter {
 	return &PostNordAdapter{
 		APIKey:     apiKey,
@@ -28,77 +29,89 @@ func NewPostNordAdapter(apiKey string) *PostNordAdapter {
 	}
 }
 
-// NewPostNordAdapterFromEnv creates a new PostNord adapter from environment variables.
+// NewPostNordAdapterFromEnv creates a PostNordAdapter from the POSTNORD_API_KEY
+// environment variable. Returns nil if the variable is unset.
 func NewPostNordAdapterFromEnv() *PostNordAdapter {
 	apiKey := os.Getenv("POSTNORD_API_KEY")
 	if apiKey == "" {
-		slog.Warn("POSTNORD_API_KEY not set.")
+		slog.Warn("POSTNORD_API_KEY not set")
 		return nil
 	}
 	return NewPostNordAdapter(apiKey)
 }
 
-// BookShipment books a shipment with PostNord.
+// postNordParty builds the sender/recipient object expected by the PostNord API.
+func postNordParty(a Address) map[string]interface{} {
+	return map[string]interface{}{
+		"name": a.Name,
+		"address": map[string]interface{}{
+			"street":     a.Street,
+			"city":       a.City,
+			"postalCode": a.PostalCode,
+			"country":    a.Country,
+		},
+		"contact": map[string]interface{}{
+			"phone": a.Phone,
+			"email": a.Email,
+		},
+	}
+}
+
+// postNordParcel converts a single Colli to the PostNord parcel format.
+// The parcel ID is the 1-based position in the colli slice.
+// Weight is converted from kg to grams as required by the PostNord API.
+func postNordParcel(index int, c Colli) map[string]interface{} {
+	return map[string]interface{}{
+		"id":     fmt.Sprintf("%d", index+1),
+		"weight": int(math.Round(c.Weight * 1000)), // kg → grams
+		"dimensions": map[string]interface{}{
+			"length": c.Dimensions.Length,
+			"width":  c.Dimensions.Width,
+			"height": c.Dimensions.Height,
+		},
+	}
+}
+
+// BookShipment books a shipment with PostNord and returns the booking response.
+//
+// The unified BookingRequest is transformed to the PostNord wire format:
+//   - Address fields are nested under "address" and "contact" keys.
+//   - The receiver is mapped to "recipient".
+//   - Colli weights are converted from kg to grams.
+//   - All parcels are wrapped in a top-level "shipment" object.
 func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
 
-	if request.IdempotencyKey != "" {
-		slog.Warn(
-			"PostNord does not support idempotency. Ignoring Idempotency-Key.",
-			"idempotencyKey", request.IdempotencyKey,
-		)
-	}
-
-	// Map colli to PostNord parcels
 	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
-		parcels[i] = map[string]interface{}{
-			"weight":    c.Weight,
-			"length":    c.Dimensions.Length,
-			"width":     c.Dimensions.Width,
-			"height":    c.Dimensions.Height,
-			"reference": c.ID,
-		}
+		parcels[i] = postNordParcel(i, c)
 	}
 
-	// Build PostNord request body
-	postNordRequest := map[string]interface{}{
-		"sender": map[string]interface{}{
-			"name":       request.Shipment.Sender.Name,
-			"address":    request.Shipment.Sender.Street,
-			"postalCode": request.Shipment.Sender.PostalCode,
-			"city":       request.Shipment.Sender.City,
-			"country":    request.Shipment.Sender.Country,
-			"phone":      request.Shipment.Sender.Phone,
-			"email":      request.Shipment.Sender.Email,
-		},
-		"receiver": map[string]interface{}{
-			"name":       request.Shipment.Receiver.Name,
-			"address":    request.Shipment.Receiver.Street,
-			"postalCode": request.Shipment.Receiver.PostalCode,
-			"city":       request.Shipment.Receiver.City,
-			"country":    request.Shipment.Receiver.Country,
-			"phone":      request.Shipment.Receiver.Phone,
-			"email":      request.Shipment.Receiver.Email,
+	shipment := map[string]interface{}{
+		"sender":    postNordParty(request.Shipment.Sender),
+		"recipient": postNordParty(request.Shipment.Receiver),
+		"service": map[string]interface{}{
+			"id":      "1700",
+			"product": "Parcels",
 		},
 		"parcels": parcels,
 	}
 
-	if request.CallbackURL != "" {
-		postNordRequest["callbackUrl"] = request.CallbackURL
+	if request.IdempotencyKey != "" {
+		shipment["idempotencyKey"] = request.IdempotencyKey
 	}
 	if request.Shipment.Incoterms != "" {
-		postNordRequest["incoterms"] = request.Shipment.Incoterms
+		shipment["incoterms"] = request.Shipment.Incoterms
 	}
 	if request.Shipment.HSCode != "" {
-		postNordRequest["hsCode"] = request.Shipment.HSCode
+		shipment["hsCode"] = request.Shipment.HSCode
 	}
 
-	payloadBytes, err := json.Marshal(postNordRequest)
+	payloadBytes, err := json.Marshal(map[string]interface{}{"shipment": shipment})
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %v", err)
+		return nil, fmt.Errorf("failed to marshal PostNord request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -108,17 +121,16 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create PostNord request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord API call failed: %v", err)
+		return nil, fmt.Errorf("PostNord API call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// PostNord returns 201 Created on success
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("PostNord API returned status %d: %s", resp.StatusCode, string(body))
@@ -126,14 +138,14 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 
 	var response BookingResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
+		return nil, fmt.Errorf("failed to decode PostNord response: %w", err)
 	}
 
 	response.Carrier = "postnord"
 	return &response, nil
 }
 
-// TrackShipment retrieves the tracking status for a PostNord shipment.
+// TrackShipment retrieves the tracking status for a shipment from PostNord.
 func (a *PostNordAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -146,12 +158,12 @@ func (a *PostNordAdapter) TrackShipment(trackingNumber string) (*TrackingRespons
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create PostNord tracking request: %w", err)
 	}
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord tracking API call failed: %v", err)
+		return nil, fmt.Errorf("PostNord tracking API call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -160,16 +172,16 @@ func (a *PostNordAdapter) TrackShipment(trackingNumber string) (*TrackingRespons
 		return nil, fmt.Errorf("PostNord tracking API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var trackingResponse TrackingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&trackingResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode tracking response: %v", err)
+	var response TrackingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode PostNord tracking response: %w", err)
 	}
 
-	trackingResponse.Carrier = "postnord"
-	return &trackingResponse, nil
+	response.Carrier = "postnord"
+	return &response, nil
 }
 
-// GetServicePoints retrieves available PostNord service points for a location.
+// GetServicePoints retrieves available PostNord service points near the given location.
 func (a *PostNordAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
 	req, err := http.NewRequestWithContext(
 		context.Background(),
@@ -179,12 +191,12 @@ func (a *PostNordAdapter) GetServicePoints(location Location) ([]ServicePoint, e
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create PostNord service points request: %w", err)
 	}
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord service points API call failed: %v", err)
+		return nil, fmt.Errorf("PostNord service points API call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -195,7 +207,7 @@ func (a *PostNordAdapter) GetServicePoints(location Location) ([]ServicePoint, e
 
 	var servicePoints []ServicePoint
 	if err := json.NewDecoder(resp.Body).Decode(&servicePoints); err != nil {
-		return nil, fmt.Errorf("failed to decode service points response: %v", err)
+		return nil, fmt.Errorf("failed to decode PostNord service points response: %w", err)
 	}
 
 	return servicePoints, nil
