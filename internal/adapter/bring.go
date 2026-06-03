@@ -1,5 +1,4 @@
 // Package adapter provides the Bring implementation of the CarrierAdapter interface.
-// This file is located at /internal/adapter/bring.go.
 package adapter
 
 import (
@@ -8,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"os"
 )
 
 // BringAdapter implements CarrierAdapter for Bring.
@@ -16,22 +17,71 @@ type BringAdapter struct {
 	APIKey     string
 	CustomerID string
 	BaseURL    string
-	HTTPClient *http.Client // Use http.Client instead of resty.Client
+	HTTPClient *http.Client
 }
 
-// NewBringAdapter creates a new Bring adapter.
+// NewBringAdapter creates a new BringAdapter with the given API key and customer ID.
 func NewBringAdapter(apiKey, customerID string) *BringAdapter {
 	return &BringAdapter{
 		APIKey:     apiKey,
 		CustomerID: customerID,
 		BaseURL:    "https://api.bring.com",
-		HTTPClient: http.DefaultClient, // Use http.DefaultClient
+		HTTPClient: http.DefaultClient,
 	}
 }
 
-// BookShipment books a shipment with Bring.
+// NewBringAdapterFromEnv creates a BringAdapter from the BRING_API_KEY and
+// BRING_CUSTOMER_ID environment variables. Returns nil if either is unset.
+func NewBringAdapterFromEnv() *BringAdapter {
+	apiKey := os.Getenv("BRING_API_KEY")
+	customerID := os.Getenv("BRING_CUSTOMER_ID")
+	if apiKey == "" || customerID == "" {
+		slog.Warn("BRING_API_KEY or BRING_CUSTOMER_ID not set")
+		return nil
+	}
+	return NewBringAdapter(apiKey, customerID)
+}
+
+// bringParcel converts a single Colli to the Bring parcel wire format.
+// Bring uses explicit unit suffixes: weightInKg, lengthInCm, widthInCm, heightInCm.
+func bringParcel(c Colli) map[string]interface{} {
+	parcel := map[string]interface{}{
+		"weightInKg": c.Weight,
+		"lengthInCm": c.Dimensions.Length,
+		"widthInCm":  c.Dimensions.Width,
+		"heightInCm": c.Dimensions.Height,
+	}
+	if len(c.Items) > 0 {
+		items := make([]map[string]interface{}, len(c.Items))
+		for i, item := range c.Items {
+			items[i] = map[string]interface{}{
+				"description": item.Description,
+				"weight":      item.Weight,
+				"quantity":    item.Quantity,
+				"value":       item.Value,
+			}
+		}
+		parcel["items"] = items
+	}
+	return parcel
+}
+
+// BookShipment books a shipment with Bring and returns the booking response.
+//
+// The unified BookingRequest is transformed to the Bring wire format:
+//   - Sender maps to "from", receiver to "to".
+//   - All colli are mapped to "parcels" with Bring's unit-suffixed dimension keys.
+//   - The customer ID is sent both in the payload and as the X-MyBring-API-Uid header.
 func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
-	// Prepare the request payload for Bring's API
+	if len(request.Shipment.Colli) == 0 {
+		return nil, fmt.Errorf("shipment must contain at least one colli")
+	}
+
+	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
+	for i, c := range request.Shipment.Colli {
+		parcels[i] = bringParcel(c)
+	}
+
 	payload := map[string]interface{}{
 		"customerId": a.CustomerID,
 		"shipment": map[string]interface{}{
@@ -49,23 +99,15 @@ func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 				"city":       request.Shipment.Receiver.City,
 				"country":    request.Shipment.Receiver.Country,
 			},
-			"parcels": []map[string]interface{}{
-				{
-					"weight": request.Shipment.Colli[0].Weight,
-					"length": request.Shipment.Colli[0].Dimensions.Length,
-					"width":  request.Shipment.Colli[0].Dimensions.Width,
-					"height": request.Shipment.Colli[0].Dimensions.Height,
-				},
-			},
+			"parcels": parcels,
 		},
 	}
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %v", err)
+		return nil, fmt.Errorf("failed to marshal Bring request: %w", err)
 	}
 
-	// Create a new request to Bring's API
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -73,47 +115,111 @@ func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create Bring request: %w", err)
 	}
-
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 
-	// Send the request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("Bring API call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("Bring API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse the response
-	var bringResponse struct {
-		ConsignmentNumber string `json:"consignmentNumber"`
-		LabelURL          string `json:"labelUrl"`
+	var bringResp struct {
+		ConsignmentNumber string  `json:"consignmentNumber"`
+		LabelURL          string  `json:"labelUrl"`
+		Cost              float64 `json:"cost"`
+		Currency          string  `json:"currency"`
+		ServiceLevel      string  `json:"serviceLevel"`
+		Status            string  `json:"status"`
 	}
-	if err := json.Unmarshal(body, &bringResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
+	if err := json.NewDecoder(resp.Body).Decode(&bringResp); err != nil {
+		return nil, fmt.Errorf("failed to decode Bring response: %w", err)
 	}
 
-	// Return the standardized response
 	return &BookingResponse{
-		TrackingNumber: bringResponse.ConsignmentNumber,
-		LabelURL:       bringResponse.LabelURL,
+		TrackingNumber: bringResp.ConsignmentNumber,
+		LabelURL:       bringResp.LabelURL,
 		Carrier:        "bring",
+		Cost:           bringResp.Cost,
+		Currency:       bringResp.Currency,
+		ServiceLevel:   bringResp.ServiceLevel,
+		Status:         bringResp.Status,
 	}, nil
 }
 
-// GetServicePoints retrieves service points (parcel shops) for Bring.
+// TrackShipment retrieves the tracking status for a Bring shipment.
+func (a *BringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		fmt.Sprintf("%s/tracking/%s", a.BaseURL, trackingNumber),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Bring tracking request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+a.APIKey)
+	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Bring tracking API call failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("Bring tracking API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var bringResp struct {
+		ConsignmentNumber string  `json:"consignmentNumber"`
+		Status            string  `json:"status"`
+		EstimatedDelivery string  `json:"estimatedDelivery"`
+		Events            []struct {
+			Timestamp string `json:"timestamp"`
+			Status    string `json:"status"`
+			Location  string `json:"location"`
+		} `json:"events"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&bringResp); err != nil {
+		return nil, fmt.Errorf("failed to decode Bring tracking response: %w", err)
+	}
+
+	events := make([]TrackingEvent, len(bringResp.Events))
+	for i, e := range bringResp.Events {
+		events[i] = TrackingEvent{
+			Timestamp: e.Timestamp,
+			Status:    e.Status,
+			Location:  e.Location,
+		}
+	}
+
+	return &TrackingResponse{
+		TrackingNumber:    bringResp.ConsignmentNumber,
+		Carrier:           "bring",
+		Status:            bringResp.Status,
+		EstimatedDelivery: bringResp.EstimatedDelivery,
+		Events:            events,
+	}, nil
+}
+
+// GetServicePoints retrieves Bring pickup points near the given location.
 func (a *BringAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
-	// Create a new request to Bring's service points API
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
@@ -121,28 +227,24 @@ func (a *BringAdapter) GetServicePoints(location Location) ([]ServicePoint, erro
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create Bring service points request: %w", err)
 	}
-
-	// Set headers
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 
-	// Send the request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("Bring service points API call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Check for non-200 status codes
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("Bring service points API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse the response
-	var bringServicePoints []struct {
+	var bringResp []struct {
 		ID      string `json:"id"`
 		Name    string `json:"name"`
 		Address struct {
@@ -152,14 +254,13 @@ func (a *BringAdapter) GetServicePoints(location Location) ([]ServicePoint, erro
 			Country    string `json:"country"`
 		} `json:"address"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&bringServicePoints); err != nil {
-		return nil, fmt.Errorf("failed to decode service points response: %v", err)
+	if err := json.NewDecoder(resp.Body).Decode(&bringResp); err != nil {
+		return nil, fmt.Errorf("failed to decode Bring service points response: %w", err)
 	}
 
-	// Convert Bring's service points to the standardized ServicePoint format
-	var servicePoints []ServicePoint
-	for _, sp := range bringServicePoints {
-		servicePoints = append(servicePoints, ServicePoint{
+	servicePoints := make([]ServicePoint, len(bringResp))
+	for i, sp := range bringResp {
+		servicePoints[i] = ServicePoint{
 			ID:   sp.ID,
 			Name: sp.Name,
 			Address: Address{
@@ -168,71 +269,8 @@ func (a *BringAdapter) GetServicePoints(location Location) ([]ServicePoint, erro
 				City:       sp.Address.City,
 				Country:    sp.Address.Country,
 			},
-		})
+		}
 	}
 
 	return servicePoints, nil
-}
-
-// TrackShipment tracks a shipment with Bring.
-func (a *BringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
-	// Create a new request to Bring's tracking API
-	req, err := http.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		fmt.Sprintf("%s/tracking/consignments/%s", a.BaseURL, trackingNumber),
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	// Set headers
-	req.Header.Set("Authorization", "Bearer "+a.APIKey)
-	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send the request
-	resp, err := a.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Check for non-200 status codes
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Bring tracking API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse the response
-	var bringTrackingResponse struct {
-		ConsignmentNumber string `json:"consignmentNumber"`
-		Status            string `json:"status"`
-		Events            []struct {
-			Timestamp string `json:"timestamp"`
-			Status    string `json:"status"`
-			Location  string `json:"location"`
-		} `json:"events"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&bringTrackingResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode tracking response: %v", err)
-	}
-
-	// Convert Bring's tracking events to the standardized TrackingEvent format
-	var events []TrackingEvent
-	for _, event := range bringTrackingResponse.Events {
-		events = append(events, TrackingEvent{
-			Timestamp: event.Timestamp,
-			Status:    event.Status,
-			Location:  event.Location,
-		})
-	}
-
-	// Return the standardized response
-	return &TrackingResponse{
-		TrackingNumber: bringTrackingResponse.ConsignmentNumber,
-		Status:         bringTrackingResponse.Status,
-		Events:         events,
-	}, nil
 }

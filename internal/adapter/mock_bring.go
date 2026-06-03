@@ -1,64 +1,121 @@
-// Package adapter provides interfaces and implementations for carrier integrations.
-// This file is located at /internal/adapter/mock_bring.go.
+// Package adapter provides a mock Bring CarrierAdapter for testing and local development.
 package adapter
 
-import "fmt"
+import (
+	"fmt"
+	"log/slog"
+	"math/rand"
+	"time"
+)
 
-// MockBringAdapter is a mock implementation of the CarrierAdapter interface for Bring.
-type MockBringAdapter struct{}
+// MockBringAdapter implements CarrierAdapter with pre-canned Bring responses.
+// All three methods can be overridden via their corresponding Func fields:
+//
+//	adapter := &MockBringAdapter{
+//	    BookShipmentFunc: func(r BookingRequest) (*BookingResponse, error) {
+//	        return nil, errors.New("upstream timeout")
+//	    },
+//	}
+type MockBringAdapter struct {
+	BookShipmentFunc     func(request BookingRequest) (*BookingResponse, error)
+	TrackShipmentFunc    func(trackingNumber string) (*TrackingResponse, error)
+	GetServicePointsFunc func(location Location) ([]ServicePoint, error)
+}
 
-// BookShipment mocks booking a shipment with Bring.
-func (a *MockBringAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
-	// Validate TotalWeight is provided
+// BookShipment returns a mock Bring booking response, applying the same
+// validation as the real BringAdapter so tests catch input errors without a live API.
+func (m *MockBringAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+	if m.BookShipmentFunc != nil {
+		return m.BookShipmentFunc(request)
+	}
+
 	if request.Shipment.TotalWeight <= 0 {
 		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
 	}
 
-	// Calculate sum of all colli weights
-	var sumColliWeight float64
-	for _, colli := range request.Shipment.Colli {
-		sumColliWeight += colli.Weight
+	var sum float64
+	for _, c := range request.Shipment.Colli {
+		sum += c.Weight
 	}
-
-	// Validate TotalWeight matches sum of colli weights
-	if request.Shipment.TotalWeight != sumColliWeight {
+	if request.Shipment.TotalWeight != sum {
 		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
 	}
 
+	slog.Info("MockBringAdapter: returning mock booking response")
+
+	consignment := fmt.Sprintf("BR%09dNO", rand.Intn(1000000000))
+
 	return &BookingResponse{
-		TrackingNumber: "BR123456789NO",
-		LabelURL:       "https://example.com/mock-bring-label.png",
+		TrackingNumber: consignment,
+		LabelURL:       fmt.Sprintf("https://mock.bring.com/labels/%s.pdf", consignment),
 		Carrier:        "bring",
+		Cost:           125.50,
+		Currency:       "NOK",
+		ServiceLevel:   "Standard",
+		Status:         "booked",
 	}, nil
 }
 
-// TrackShipment mocks tracking a shipment with Bring.
-func (a *MockBringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
-	return &TrackingResponse{
-		TrackingNumber: trackingNumber,
-		Status:         "In Transit",
-		Events: []TrackingEvent{
-			{
-				Timestamp: "2026-05-31T12:00:00Z",
-				Status:    "Shipment Accepted",
-				Location:  "Oslo",
-			},
+// TrackShipment returns a mock Bring tracking response with three canned events.
+func (m *MockBringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+	if m.TrackShipmentFunc != nil {
+		return m.TrackShipmentFunc(trackingNumber)
+	}
+
+	slog.Info("MockBringAdapter: returning mock tracking response")
+
+	events := []TrackingEvent{
+		{
+			Timestamp: time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339),
+			Status:    "Picked Up",
+			Location:  "Oslo, NO",
 		},
+		{
+			Timestamp: time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+			Status:    "In Transit",
+			Location:  "Gothenburg, SE",
+		},
+		{
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
+			Status:    "Delivered",
+			Location:  "Stockholm, SE",
+		},
+	}
+
+	return &TrackingResponse{
+		TrackingNumber:    trackingNumber,
+		Carrier:           "bring",
+		Status:            "Delivered",
+		EstimatedDelivery: time.Now().UTC().Format("2006-01-02"),
+		Events:            events,
 	}, nil
 }
 
-// GetServicePoints mocks retrieving service points for Bring.
-func (a *MockBringAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+// GetServicePoints returns mock Bring pickup point locations.
+func (m *MockBringAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+	if m.GetServicePointsFunc != nil {
+		return m.GetServicePointsFunc(location)
+	}
+
+	slog.Info("MockBringAdapter: returning mock service points")
+
 	return []ServicePoint{
 		{
 			ID:   "BR001",
-			Name: "Bring Service Point 1",
+			Name: "Bring Service Point Oslo",
 			Address: Address{
+				Name:       "Bring Service Point Oslo",
 				Street:     "Mock Street 1",
 				PostalCode: "0123",
 				City:       "Oslo",
 				Country:    "NO",
 			},
+			Services: []string{"Pickup", "Dropoff"},
 		},
 	}, nil
+}
+
+// NewMockBringAdapter returns a new MockBringAdapter with default behaviour.
+func NewMockBringAdapter() *MockBringAdapter {
+	return &MockBringAdapter{}
 }
