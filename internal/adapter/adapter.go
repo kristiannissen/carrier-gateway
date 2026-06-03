@@ -48,8 +48,9 @@ func InitAdapters() map[string]CarrierAdapter {
 
 	// GLS
 	glsAPIKey := os.Getenv("GLS_API_KEY")
+	contractID := os.Getenv("GLS_CONTRACT_ID")
 	if glsAPIKey != "" && !mockMode {
-		adapters["gls"] = NewGLSAdapter(glsAPIKey)
+		adapters["gls"] = NewGLSAdapter(glsAPIKey, contractID)
 		slog.Info("GLS adapter initialized in production mode")
 	} else {
 		adapters["gls"] = &MockGLSAdapter{}
