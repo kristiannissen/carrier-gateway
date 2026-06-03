@@ -43,7 +43,7 @@ func InitAdapters() map[string]CarrierAdapter {
 		slog.Info("Bring adapter initialized in production mode")
 	} else {
 		adapters["bring"] = &MockBringAdapter{}
-		slog.Info("Bring adapter not initialized (missing API key or customer ID)")
+		slog.Info("Bring adapter not initialized (missing API key and customer ID)")
 	}
 
 	// GLS
