@@ -9,6 +9,9 @@ import (
 )
 
 func TestMockAirmeeAdapter_BookShipment(t *testing.T) {
+	// Test parallel
+	t.Parallel()
+
 	adapter := &MockAirmeeAdapter{}
 
 	// Test case: TotalWeight is missing
@@ -122,6 +125,7 @@ func TestMockAirmeeAdapter_BookShipment(t *testing.T) {
 }
 
 func TestMockAirmeeAdapter_TrackShipment(t *testing.T) {
+	t.Parallel()
 	adapter := &MockAirmeeAdapter{}
 
 	response, err := adapter.TrackShipment("AIRMEE123456789")
@@ -133,6 +137,7 @@ func TestMockAirmeeAdapter_TrackShipment(t *testing.T) {
 }
 
 func TestMockAirmeeAdapter_GetServicePoints(t *testing.T) {
+	t.Parallel()
 	adapter := &MockAirmeeAdapter{}
 
 	location := Location{

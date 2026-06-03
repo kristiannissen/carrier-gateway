@@ -9,6 +9,8 @@ import (
 )
 
 func TestMockDAOAdapter_BookShipment(t *testing.T) {
+	t.Parallel()
+
 	adapter := &MockDAOAdapter{}
 
 	// Test case: TotalWeight is missing
@@ -129,6 +131,7 @@ func TestMockDAOAdapter_BookShipment(t *testing.T) {
 }
 
 func TestMockDAOAdapter_TrackShipment(t *testing.T) {
+	t.Parallel()
 	adapter := &MockDAOAdapter{}
 
 	response, err := adapter.TrackShipment("DAO123456789DK")
@@ -140,6 +143,7 @@ func TestMockDAOAdapter_TrackShipment(t *testing.T) {
 }
 
 func TestMockDAOAdapter_GetServicePoints(t *testing.T) {
+	t.Parallel()
 	adapter := &MockDAOAdapter{}
 
 	location := Location{

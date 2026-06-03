@@ -9,6 +9,9 @@ import (
 )
 
 func TestMockGLSAdapter_BookShipment(t *testing.T) {
+	// 
+	t.Parallel()
+
 	adapter := &MockGLSAdapter{}
 
 	// Test case: TotalWeight is missing
@@ -129,6 +132,7 @@ func TestMockGLSAdapter_BookShipment(t *testing.T) {
 }
 
 func TestMockGLSAdapter_TrackShipment(t *testing.T) {
+	t.Parallel()
 	adapter := &MockGLSAdapter{}
 
 	response, err := adapter.TrackShipment("GLS123456789DK")
@@ -140,6 +144,7 @@ func TestMockGLSAdapter_TrackShipment(t *testing.T) {
 }
 
 func TestMockGLSAdapter_GetServicePoints(t *testing.T) {
+	t.Parallel()
 	adapter := &MockGLSAdapter{}
 
 	location := Location{
