@@ -1,4 +1,5 @@
 // Package adapter provides a mock PostNord CarrierAdapter for testing and local development.
+// This file is located at /internal/adapter/postnord.go.
 package adapter
 
 import (
