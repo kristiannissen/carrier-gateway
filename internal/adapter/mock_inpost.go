@@ -3,11 +3,12 @@
 package adapter
 
 import (
+	"context"
 	"fmt"
-	"log/slog"
 	"math/rand"
 	"time"
-	"context"
+
+	"go.uber.org/zap"
 )
 
 // MockInPostAdapter implements CarrierAdapter with pre-canned InPost responses.
@@ -43,7 +44,7 @@ func (m *MockInPostAdapter) BookShipment(ctx context.Context, request BookingReq
 		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
 	}
 
-	slog.Info("MockInPostAdapter: returning mock booking response")
+	zap.L().Info("MockInPostAdapter: returning mock booking response")
 
 	shipmentID := fmt.Sprintf("INPOST-%x", rand.Uint32())
 	trackingNumber := fmt.Sprintf("INPOST%09dPL", rand.Intn(1000000000))
@@ -66,7 +67,7 @@ func (m *MockInPostAdapter) TrackShipment(ctx context.Context, trackingNumber st
 		return m.TrackShipmentFunc(trackingNumber)
 	}
 
-	slog.Info("MockInPostAdapter: returning mock tracking response")
+	zap.L().Info("MockInPostAdapter: returning mock tracking response")
 
 	events := []TrackingEvent{
 		{
@@ -96,7 +97,7 @@ func (m *MockInPostAdapter) GetServicePoints(ctx context.Context, location Locat
 		return m.GetServicePointsFunc(location)
 	}
 
-	slog.Info("MockInPostAdapter: returning mock service points")
+	zap.L().Info("MockInPostAdapter: returning mock service points")
 
 	return []ServicePoint{
 		{

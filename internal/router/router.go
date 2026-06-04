@@ -4,23 +4,24 @@ package router
 
 import (
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
+
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/kristiannissen/logistics-gateway/internal/handler"
 )
 
 // NewRouter creates and configures the HTTP router for the API.
-func NewRouter(adapters map[string]adapter.CarrierAdapter) *mux.Router {
-	handlerConfig := handler.Config{
+func NewRouter(adapters map[string]adapter.CarrierAdapter, log *zap.Logger) *mux.Router {
+	h := &handler.Config{
 		Adapters: adapters,
+		Log:      log,
 	}
 
 	r := mux.NewRouter()
-
-	// Routes
-	r.HandleFunc("/api/bookings", handlerConfig.BookShipment).Methods("POST")
-	r.HandleFunc("/api/trackings/{trackingNumber}", handlerConfig.GetTracking).Methods("GET")
-	r.HandleFunc("/api/service-points", handlerConfig.GetServicePoints).Methods("GET")
-	r.HandleFunc("/api/health", handler.HealthCheck).Methods("GET")
+	r.HandleFunc("/api/bookings", h.BookShipment).Methods("POST")
+	r.HandleFunc("/api/trackings/{trackingNumber}", h.GetTracking).Methods("GET")
+	r.HandleFunc("/api/service-points", h.GetServicePoints).Methods("GET")
+	r.HandleFunc("/api/health", h.HealthCheck).Methods("GET")
 
 	return r
 }

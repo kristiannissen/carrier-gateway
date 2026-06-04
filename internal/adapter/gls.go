@@ -1,4 +1,5 @@
 // Package adapter provides the GLS implementation of the CarrierAdapter interface.
+// This file is located at /internal/adapter/gls.go.
 package adapter
 
 import (
@@ -6,9 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 // GLSAdapter implements CarrierAdapter for GLS using the ShipIT Farm API v1.
@@ -22,13 +25,18 @@ type GLSAdapter struct {
 }
 
 // NewGLSAdapter creates a new GLSAdapter with the given contact ID and API key.
+// A private http.Client with a 10-second transport timeout is used by default;
+// callers may inject their own client via the HTTPClient field for testing or
+// custom timeout budgets.
 func NewGLSAdapter(contactID, apiKey string, log *zap.Logger) *GLSAdapter {
 	return &GLSAdapter{
-		ContactID:  contactID,
-		APIKey:     apiKey,
-		BaseURL:    "https://api.gls-group.net/shipit-farm/v1/backend",
-		HTTPClient: http.DefaultClient,
-		log:        log,
+		ContactID: contactID,
+		APIKey:    apiKey,
+		BaseURL:   "https://api.gls-group.net/shipit-farm/v1/backend",
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		log: log,
 	}
 }
 
@@ -114,14 +122,14 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		return nil, fmt.Errorf("failed to marshal GLS request: %w", err)
 	}
 
-	// Create a new request to Posti's API
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodPost,
 		a.BaseURL+"/shipment/v1/shipments",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create GLS request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/glsVersion1+json")
@@ -198,7 +206,7 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodPost,
 		a.BaseURL+"/rs/tracking/parcels",
 		bytes.NewBuffer(body),
@@ -262,7 +270,7 @@ func (a *GLSAdapter) GetServicePoints(ctx context.Context, location Location) ([
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodPost,
 		a.BaseURL+"/rs/parcelshop/address",
 		bytes.NewBuffer(body),

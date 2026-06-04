@@ -4,12 +4,14 @@ package adapter
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
-	"context"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 // PostiAdapter implements the CarrierAdapter interface for Posti.
@@ -21,18 +23,22 @@ type PostiAdapter struct {
 }
 
 // NewPostiAdapter creates a new PostiAdapter instance.
+// A private http.Client with a 10-second transport timeout is used by default;
+// callers may inject their own client via the HTTPClient field for testing or
+// custom timeout budgets.
 func NewPostiAdapter(apiKey string, log *zap.Logger) *PostiAdapter {
 	return &PostiAdapter{
-		APIKey:     apiKey,
-		BaseURL:    "https://api.posti.com",
-		HTTPClient: http.DefaultClient,
-		log:        log,
+		APIKey:  apiKey,
+		BaseURL: "https://api.posti.com",
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		log: log,
 	}
 }
 
 // BookShipment books a shipment with Posti.
 func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
-	// Prepare the request payload for Posti's API
 	payload := map[string]interface{}{
 		"shipment": map[string]interface{}{
 			"sender": map[string]interface{}{
@@ -73,38 +79,34 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal payload: %v", err)
+		return nil, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	// Create a new request to Posti's API
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodPost,
 		a.BaseURL+"/shipment/v1/shipments",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 	req.Header.Set("X-Posti-API-Key", a.APIKey)
 
-	// Send the request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse the response
 	var postiResponse struct {
 		ShipmentID   string `json:"shipmentId"`
 		TrackingCode string `json:"trackingCode"`
@@ -117,15 +119,13 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &postiResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Check for errors
 	if postiResponse.Status != "OK" && postiResponse.Error.Code != "" {
 		return nil, fmt.Errorf("Posti API error: %s (%s)", postiResponse.Error.Message, postiResponse.Error.Code)
 	}
 
-	// Return the standardized response
 	return &BookingResponse{
 		TrackingNumber: postiResponse.TrackingCode,
 		LabelURL:       postiResponse.LabelURL,
@@ -135,34 +135,30 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 
 // TrackShipment tracks a shipment with Posti.
 func (a *PostiAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
-	// Create a new request to Posti's tracking API
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/tracking/v1/shipments/%s", a.BaseURL, trackingNumber),
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
 	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 	req.Header.Set("X-Posti-API-Key", a.APIKey)
 
-	// Send the request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse the response
 	var postiTrackingResponse struct {
 		ShipmentID   string `json:"shipmentId"`
 		TrackingCode string `json:"trackingCode"`
@@ -181,15 +177,13 @@ func (a *PostiAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &postiTrackingResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Check for errors
 	if postiTrackingResponse.Status != "OK" && postiTrackingResponse.Error.Code != "" {
 		return nil, fmt.Errorf("Posti API error: %s (%s)", postiTrackingResponse.Error.Message, postiTrackingResponse.Error.Code)
 	}
 
-	// Convert Posti's tracking events to the standardized format
 	var events []TrackingEvent
 	for _, event := range postiTrackingResponse.Events {
 		events = append(events, TrackingEvent{
@@ -199,7 +193,6 @@ func (a *PostiAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 		})
 	}
 
-	// Return the standardized response
 	return &TrackingResponse{
 		TrackingNumber: postiTrackingResponse.TrackingCode,
 		Status:         postiTrackingResponse.Status,
@@ -209,34 +202,30 @@ func (a *PostiAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 
 // GetServicePoints retrieves service points (e.g., Posti pickup points) for Posti.
 func (a *PostiAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	// Create a new request to Posti's service points API
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/pickup-points/v1/nearest?postalCode=%s&country=%s&limit=10", a.BaseURL, location.PostalCode, location.Country),
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers
 	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 	req.Header.Set("X-Posti-API-Key", a.APIKey)
 
-	// Send the request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse the response
 	var postiServicePoints struct {
 		PickupPoints []struct {
 			ID      string `json:"id"`
@@ -265,15 +254,13 @@ func (a *PostiAdapter) GetServicePoints(ctx context.Context, location Location) 
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &postiServicePoints); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Check for errors
 	if postiServicePoints.Error.Code != "" {
 		return nil, fmt.Errorf("Posti API error: %s (%s)", postiServicePoints.Error.Message, postiServicePoints.Error.Code)
 	}
 
-	// Convert Posti's service points to the standardized ServicePoint format
 	var servicePoints []ServicePoint
 	for _, sp := range postiServicePoints.PickupPoints {
 		servicePoints = append(servicePoints, ServicePoint{

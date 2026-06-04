@@ -3,8 +3,8 @@
 package adapter
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 )
 
 // MockAirmeeAdapter is a mock implementation of the CarrierAdapter interface for Airmee.
@@ -12,18 +12,15 @@ type MockAirmeeAdapter struct{}
 
 // BookShipment mocks booking a shipment with Airmee.
 func (a *MockAirmeeAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
-	// Validate TotalWeight is provided
 	if request.Shipment.TotalWeight <= 0 {
 		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
 	}
 
-	// Calculate sum of all colli weights
 	var sumColliWeight float64
 	for _, colli := range request.Shipment.Colli {
 		sumColliWeight += colli.Weight
 	}
 
-	// Validate TotalWeight matches sum of colli weights
 	if request.Shipment.TotalWeight != sumColliWeight {
 		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
 	}
@@ -56,7 +53,7 @@ func (a *MockAirmeeAdapter) TrackShipment(ctx context.Context, trackingNumber st
 }
 
 // GetServicePoints mocks retrieving service points for Airmee.
+// Airmee does not have traditional service points, so an empty list is returned.
 func (a *MockAirmeeAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	// Airmee does not have traditional service points, so return an empty list
 	return []ServicePoint{}, nil
 }

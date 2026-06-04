@@ -5,23 +5,22 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+
+	"go.uber.org/zap"
 )
 
 // HealthCheck handles GET /health.
 // Response: Simple JSON status.
-func HealthCheck(w http.ResponseWriter, r *http.Request) {
-	// Only allow GET requests
+func (c *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Write([]byte(`{"message": "Method not allowed"}`))
+		_, _ = w.Write([]byte(`{"message": "Method not allowed"}`))
 		return
 	}
 
-	// Return health status
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
-		// If we can't write the response, the server is in a bad state
-		w.WriteHeader(http.StatusInternalServerError)
+		c.Log.Error("failed to write health response", zap.Error(err))
 	}
 }

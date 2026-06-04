@@ -1,14 +1,15 @@
 // Package adapter provides a mock PostNord CarrierAdapter for testing and local development.
-// This file is located at /internal/adapter/postnord.go.
+// This file is located at /internal/adapter/mock_postnord.go.
 package adapter
 
 import (
+	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"math/rand"
 	"time"
-	"context"
+
+	"go.uber.org/zap"
 )
 
 // MockPostNordAdapter implements CarrierAdapter with pre-canned responses.
@@ -45,7 +46,7 @@ func (m *MockPostNordAdapter) BookShipment(ctx context.Context, request BookingR
 		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
 	}
 
-	slog.Info("MockPostNordAdapter: returning mock booking response")
+	zap.L().Info("MockPostNordAdapter: returning mock booking response")
 
 	colliResponses := make([]ColliResponse, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
@@ -80,7 +81,7 @@ func (m *MockPostNordAdapter) TrackShipment(ctx context.Context, trackingNumber 
 		return m.TrackShipmentFunc(trackingNumber)
 	}
 
-	slog.Info("MockPostNordAdapter: returning mock tracking response")
+	zap.L().Info("MockPostNordAdapter: returning mock tracking response")
 
 	events := []TrackingEvent{
 		{
@@ -121,7 +122,7 @@ func (m *MockPostNordAdapter) GetServicePoints(ctx context.Context, location Loc
 		return m.GetServicePointsFunc(location)
 	}
 
-	slog.Info("MockPostNordAdapter: returning mock service points")
+	zap.L().Info("MockPostNordAdapter: returning mock service points")
 
 	return []ServicePoint{
 		{

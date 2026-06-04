@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"go.uber.org/zap"
+
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
@@ -23,7 +24,6 @@ type ErrorResponse struct {
 	Details string `json:"details,omitempty"`
 }
 
-// writeError writes a standardized error response.
 // writeError writes a standardized JSON error response and logs encoding failures.
 func (c *Config) writeError(w http.ResponseWriter, statusCode int, message, details string) {
 	w.Header().Set("Content-Type", "application/json")
@@ -39,9 +39,9 @@ func (c *Config) writeError(w http.ResponseWriter, statusCode int, message, deta
 // getAdapter retrieves the appropriate carrier adapter from the config.
 // Returns an error if the carrier is not supported or not configured.
 func (c *Config) getAdapter(carrier string) (adapter.CarrierAdapter, error) {
-	adapter, exists := c.Adapters[carrier]
+	a, exists := c.Adapters[carrier]
 	if !exists {
 		return nil, fmt.Errorf("carrier %s is not supported or not configured", carrier)
 	}
-	return adapter, nil
+	return a, nil
 }

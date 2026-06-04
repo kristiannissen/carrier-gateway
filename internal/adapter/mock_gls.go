@@ -1,12 +1,14 @@
 // Package adapter provides a mock GLS CarrierAdapter for testing and local development.
+// This file is located at /internal/adapter/mock_gls.go.
 package adapter
 
 import (
+	"context"
 	"fmt"
-	"log/slog"
 	"math/rand"
 	"time"
-	"context"
+
+	"go.uber.org/zap"
 )
 
 // MockGLSAdapter implements CarrierAdapter with pre-canned GLS responses.
@@ -42,7 +44,7 @@ func (m *MockGLSAdapter) BookShipment(ctx context.Context, request BookingReques
 		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
 	}
 
-	slog.Info("MockGLSAdapter: returning mock booking response")
+	zap.L().Info("MockGLSAdapter: returning mock booking response")
 
 	colliResponses := make([]ColliResponse, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
@@ -71,7 +73,7 @@ func (m *MockGLSAdapter) TrackShipment(ctx context.Context, trackingNumber strin
 		return m.TrackShipmentFunc(trackingNumber)
 	}
 
-	slog.Info("MockGLSAdapter: returning mock tracking response")
+	zap.L().Info("MockGLSAdapter: returning mock tracking response")
 
 	events := []TrackingEvent{
 		{
@@ -96,7 +98,7 @@ func (m *MockGLSAdapter) GetServicePoints(ctx context.Context, location Location
 		return m.GetServicePointsFunc(location)
 	}
 
-	slog.Info("MockGLSAdapter: returning mock service points")
+	zap.L().Info("MockGLSAdapter: returning mock service points")
 
 	return []ServicePoint{
 		{

@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/spf13/cobra"
+
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
 func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
@@ -24,91 +25,81 @@ func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 		Short: "Book a shipment",
 		Long:  "Book a shipment with a specified carrier (e.g., postnord, fedex, dhl).",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Read request from file or stdin
 			var request adapter.BookingRequest
 			if inputFile != "" {
 				data, err := os.ReadFile(inputFile)
 				if err != nil {
-					return fmt.Errorf("failed to read input file: %v", err)
+					return fmt.Errorf("failed to read input file: %w", err)
 				}
 				if err := json.Unmarshal(data, &request); err != nil {
-					return fmt.Errorf("failed to parse input file: %v", err)
+					return fmt.Errorf("failed to parse input file: %w", err)
 				}
 			} else {
-				// Read from stdin
 				stat, _ := os.Stdin.Stat()
 				if (stat.Mode() & os.ModeCharDevice) == 0 {
-					// Data is being piped in
 					if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
-						return fmt.Errorf("failed to parse stdin: %v", err)
+						return fmt.Errorf("failed to parse stdin: %w", err)
 					}
 				} else {
 					return fmt.Errorf("no input provided. Use --input or pipe JSON to stdin")
 				}
 			}
 
-			// Validate carrier
 			if carrier == "" {
 				return fmt.Errorf("carrier is required (use --carrier)")
 			}
 			request.Carrier = carrier
 
-			// Validate request
 			if err := validateBookingRequest(&request); err != nil {
-				return fmt.Errorf("validation failed: %v", err)
+				return fmt.Errorf("validation failed: %w", err)
 			}
 
-			// Get adapter
-			adapter, exists := adapters[carrier]
+			a, exists := adapters[carrier]
 			if !exists {
 				return fmt.Errorf("unsupported carrier: %s", carrier)
 			}
 
-			// Book shipment
-			response, err := adapter.BookShipment(cmd.Context(), request)
+			response, err := a.BookShipment(cmd.Context(), request)
 			if err != nil {
-				return fmt.Errorf("booking failed: %v", err)
+				return fmt.Errorf("booking failed: %w", err)
 			}
 
-			// Output response
 			if outputFormat == "json" {
 				return json.NewEncoder(os.Stdout).Encode(response)
-			} else {
-				fmt.Printf("Shipment ID: %s\n", response.ShipmentID)
-				fmt.Printf("Tracking Number: %s\n", response.TrackingNumber)
-				fmt.Printf("Label URL: %s\n", response.LabelURL)
-				fmt.Printf("Carrier: %s\n", response.Carrier)
-				fmt.Printf("Cost: %.2f %s\n", response.Cost, response.Currency)
-				fmt.Printf("Service Level: %s\n", response.ServiceLevel)
-				fmt.Printf("Status: %s\n", response.Status)
-				if len(response.Colli) > 0 {
-					fmt.Println("\nColli:")
-					for _, colli := range response.Colli {
-						fmt.Printf("  - ID: %s, Reference: %s, Tracking: %s, Status: %s\n",
-							colli.ID, colli.Reference, colli.TrackingNumber, colli.Status)
-					}
+			}
+
+			fmt.Printf("Shipment ID: %s\n", response.ShipmentID)
+			fmt.Printf("Tracking Number: %s\n", response.TrackingNumber)
+			fmt.Printf("Label URL: %s\n", response.LabelURL)
+			fmt.Printf("Carrier: %s\n", response.Carrier)
+			fmt.Printf("Cost: %.2f %s\n", response.Cost, response.Currency)
+			fmt.Printf("Service Level: %s\n", response.ServiceLevel)
+			fmt.Printf("Status: %s\n", response.Status)
+			if len(response.Colli) > 0 {
+				fmt.Println("\nColli:")
+				for _, colli := range response.Colli {
+					fmt.Printf("  - ID: %s, Reference: %s, Tracking: %s, Status: %s\n",
+						colli.ID, colli.Reference, colli.TrackingNumber, colli.Status)
 				}
-				if async {
-					fmt.Println("\nNote: Async mode enabled. Use 'logistics-gateway track' to check status.")
-				}
+			}
+			if async {
+				fmt.Println("\nNote: Async mode enabled. Use 'logistics-gateway track' to check status.")
 			}
 			return nil
 		},
 	}
 
-	// Flags
 	cmd.Flags().StringVarP(&carrier, "carrier", "c", "", "Carrier (e.g., postnord, fedex, dhl)")
 	cmd.Flags().StringVarP(&inputFile, "input", "i", "", "Input JSON file (default: stdin)")
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "text", "Output format (json or text)")
 	cmd.Flags().BoolVarP(&async, "async", "a", false, "Enable async booking (if supported by carrier)")
-
-	// Mark carrier as required
-	cmd.MarkFlagRequired("carrier")
+	cmd.MarkFlagRequired("carrier") //nolint:errcheck
 
 	return cmd
 }
 
-// validateBookingRequest reuses the same validation logic as the API.
+// validateBookingRequest validates the fields of a BookingRequest before
+// forwarding it to a carrier adapter.
 func validateBookingRequest(request *adapter.BookingRequest) error {
 	if request.Carrier == "" {
 		return fmt.Errorf("carrier is required")

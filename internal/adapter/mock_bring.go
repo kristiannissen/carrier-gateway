@@ -1,12 +1,14 @@
 // Package adapter provides a mock Bring CarrierAdapter for testing and local development.
+// This file is located at /internal/adapter/mock_bring.go.
 package adapter
 
 import (
+	"context"
 	"fmt"
-	"log/slog"
 	"math/rand"
 	"time"
-	"context"
+
+	"go.uber.org/zap"
 )
 
 // MockBringAdapter implements CarrierAdapter with pre-canned Bring responses.
@@ -42,7 +44,7 @@ func (m *MockBringAdapter) BookShipment(ctx context.Context, request BookingRequ
 		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
 	}
 
-	slog.Info("MockBringAdapter: returning mock booking response")
+	zap.L().Info("MockBringAdapter: returning mock booking response")
 
 	consignment := fmt.Sprintf("BR%09dNO", rand.Intn(1000000000))
 
@@ -63,7 +65,7 @@ func (m *MockBringAdapter) TrackShipment(ctx context.Context, trackingNumber str
 		return m.TrackShipmentFunc(trackingNumber)
 	}
 
-	slog.Info("MockBringAdapter: returning mock tracking response")
+	zap.L().Info("MockBringAdapter: returning mock tracking response")
 
 	events := []TrackingEvent{
 		{
@@ -98,7 +100,7 @@ func (m *MockBringAdapter) GetServicePoints(ctx context.Context, location Locati
 		return m.GetServicePointsFunc(location)
 	}
 
-	slog.Info("MockBringAdapter: returning mock service points")
+	zap.L().Info("MockBringAdapter: returning mock service points")
 
 	return []ServicePoint{
 		{

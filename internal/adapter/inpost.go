@@ -7,9 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 // InPostAdapter implements CarrierAdapter for InPost.
@@ -21,12 +23,17 @@ type InPostAdapter struct {
 }
 
 // NewInPostAdapter creates a new InPostAdapter with the given API key.
+// A private http.Client with a 10-second transport timeout is used by default;
+// callers may inject their own client via the HTTPClient field for testing or
+// custom timeout budgets.
 func NewInPostAdapter(apiKey string, log *zap.Logger) *InPostAdapter {
 	return &InPostAdapter{
-		APIKey:     apiKey,
-		BaseURL:    "https://api.inpost.pl/v1",
-		HTTPClient: http.DefaultClient,
-		log:        log,
+		APIKey:  apiKey,
+		BaseURL: "https://api.inpost.pl/v1",
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		log: log,
 	}
 }
 
@@ -112,7 +119,7 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodPost,
 		a.BaseURL+"/shipments",
 		bytes.NewBuffer(payloadBytes),
@@ -166,7 +173,7 @@ func (a *InPostAdapter) TrackShipment(ctx context.Context, trackingNumber string
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/tracking/%s", a.BaseURL, trackingNumber),
 		nil,
@@ -220,7 +227,7 @@ func (a *InPostAdapter) TrackShipment(ctx context.Context, trackingNumber string
 // GetServicePoints retrieves InPost locker locations near the given location.
 func (a *InPostAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/points?city=%s&postalCode=%s&countryCode=%s",
 			a.BaseURL, location.City, location.PostalCode, location.Country),

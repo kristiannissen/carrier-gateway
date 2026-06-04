@@ -7,10 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"math"
 	"net/http"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 // PostNordAdapter implements CarrierAdapter for PostNord.
@@ -22,12 +24,17 @@ type PostNordAdapter struct {
 }
 
 // NewPostNordAdapter creates a new PostNordAdapter with the given API key.
+// A private http.Client with a 10-second transport timeout is used by default;
+// callers may inject their own client via the HTTPClient field for testing or
+// custom timeout budgets.
 func NewPostNordAdapter(apiKey string, log *zap.Logger) *PostNordAdapter {
 	return &PostNordAdapter{
-		APIKey:     apiKey,
-		BaseURL:    "https://api.postnord.com",
-		HTTPClient: http.DefaultClient,
-		log:        log,
+		APIKey:  apiKey,
+		BaseURL: "https://api.postnord.com",
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		log: log,
 	}
 }
 

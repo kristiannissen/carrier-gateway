@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/spf13/cobra"
+
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
 func newServicePointsCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
@@ -29,60 +30,53 @@ func newServicePointsCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Comm
 				return fmt.Errorf("city and country are required (use --city and --country)")
 			}
 			if carrier == "" {
-				carrier = "postnord" // Default to PostNord
+				carrier = "postnord"
 			}
 
-			// Get adapter
-			carrierAdapter, exists := adapters[carrier]
+			a, exists := adapters[carrier]
 			if !exists {
 				return fmt.Errorf("unsupported carrier: %s", carrier)
 			}
 
-			// Create location
 			location := adapter.Location{
 				City:       city,
 				PostalCode: postalCode,
 				Country:    country,
 			}
 
-			// Get service points
-			servicePoints, err := carrierAdapter.GetServicePoints(cmd.Context(), location)
+			servicePoints, err := a.GetServicePoints(cmd.Context(), location)
 			if err != nil {
-				return fmt.Errorf("failed to get service points: %v", err)
+				return fmt.Errorf("failed to get service points: %w", err)
 			}
 
-			// Output response
 			if outputFormat == "json" {
 				return json.NewEncoder(os.Stdout).Encode(servicePoints)
-			} else {
-				fmt.Printf("Service Points for %s, %s (%s):\n\n", city, postalCode, country)
-				for i, sp := range servicePoints {
-					fmt.Printf("%d. %s (ID: %s)\n", i+1, sp.Name, sp.ID)
-					fmt.Printf("   Address: %s, %s, %s %s\n",
-						sp.Address.Street, sp.Address.City, sp.Address.PostalCode, sp.Address.Country)
-					if sp.OpeningHours != "" {
-						fmt.Printf("   Opening Hours: %s\n", sp.OpeningHours)
-					}
-					if len(sp.Services) > 0 {
-						fmt.Printf("   Services: %v\n", sp.Services)
-					}
-					fmt.Println()
+			}
+
+			fmt.Printf("Service Points for %s, %s (%s):\n\n", city, postalCode, country)
+			for i, sp := range servicePoints {
+				fmt.Printf("%d. %s (ID: %s)\n", i+1, sp.Name, sp.ID)
+				fmt.Printf("   Address: %s, %s, %s %s\n",
+					sp.Address.Street, sp.Address.City, sp.Address.PostalCode, sp.Address.Country)
+				if sp.OpeningHours != "" {
+					fmt.Printf("   Opening Hours: %s\n", sp.OpeningHours)
 				}
+				if len(sp.Services) > 0 {
+					fmt.Printf("   Services: %v\n", sp.Services)
+				}
+				fmt.Println()
 			}
 			return nil
 		},
 	}
 
-	// Flags
 	cmd.Flags().StringVarP(&city, "city", "", "", "City")
 	cmd.Flags().StringVarP(&postalCode, "postal-code", "", "", "Postal code (optional)")
 	cmd.Flags().StringVarP(&country, "country", "", "", "Country code (e.g., DK)")
 	cmd.Flags().StringVarP(&carrier, "carrier", "c", "postnord", "Carrier (e.g., postnord, fedex, dhl)")
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "text", "Output format (json or text)")
-
-	// Mark required flags
-	cmd.MarkFlagRequired("city")
-	cmd.MarkFlagRequired("country")
+	cmd.MarkFlagRequired("city")    //nolint:errcheck
+	cmd.MarkFlagRequired("country") //nolint:errcheck
 
 	return cmd
 }

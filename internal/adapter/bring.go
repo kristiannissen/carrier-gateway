@@ -1,4 +1,5 @@
 // Package adapter provides the Bring implementation of the CarrierAdapter interface.
+// This file is located at /internal/adapter/bring.go.
 package adapter
 
 import (
@@ -6,9 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 // BringAdapter implements CarrierAdapter for Bring.
@@ -21,13 +24,18 @@ type BringAdapter struct {
 }
 
 // NewBringAdapter creates a new BringAdapter with the given API key and customer ID.
+// A private http.Client with a 10-second transport timeout is used by default;
+// callers may inject their own client via the HTTPClient field for testing or
+// custom timeout budgets.
 func NewBringAdapter(apiKey, customerID string, log *zap.Logger) *BringAdapter {
 	return &BringAdapter{
 		APIKey:     apiKey,
 		CustomerID: customerID,
 		BaseURL:    "https://api.bring.com",
-		HTTPClient: http.DefaultClient,
-		log:        log,
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		log: log,
 	}
 }
 
@@ -98,7 +106,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodPost,
 		a.BaseURL+"/shipping/shipment",
 		bytes.NewBuffer(payloadBytes),
@@ -152,7 +160,7 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/tracking/%s", a.BaseURL, trackingNumber),
 		nil,
@@ -210,7 +218,7 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 // GetServicePoints retrieves Bring pickup points near the given location.
 func (a *BringAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/pickup-points?postalCode=%s&country=%s&limit=10", a.BaseURL, location.PostalCode, location.Country),
 		nil,

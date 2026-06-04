@@ -3,14 +3,16 @@
 package adapter
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
-	"context"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 // DAOAdapter implements the CarrierAdapter interface for DAO.
@@ -23,19 +25,23 @@ type DAOAdapter struct {
 }
 
 // NewDAOAdapter creates a new DAOAdapter instance.
+// A private http.Client with a 10-second transport timeout is used by default;
+// callers may inject their own client via the HTTPClient field for testing or
+// custom timeout budgets.
 func NewDAOAdapter(customerID, apiKey string, log *zap.Logger) *DAOAdapter {
 	return &DAOAdapter{
 		CustomerID: customerID,
 		APIKey:     apiKey,
 		BaseURL:    "https://api.dao.as",
-		HTTPClient: http.DefaultClient,
-		log:        log,
+		HTTPClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
+		log: log,
 	}
 }
 
 // BookShipment books a shipment with DAO.
 func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
-	// Prepare query parameters for DAO's API
 	params := url.Values{}
 	params.Set("kundeid", a.CustomerID)
 	params.Set("kode", a.APIKey)
@@ -52,30 +58,27 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	params.Set("faktura", request.Shipment.Colli[0].ID)
 	params.Set("format", "json")
 
-	// Create a new request to DAO's API
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		a.BaseURL+"/DAODirekte/leveringsordre.php?"+params.Encode(),
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Send the request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse the response
 	var daoResponse struct {
 		Status    string `json:"status"`
 		ErrorCode string `json:"fejlkode"`
@@ -90,15 +93,13 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		} `json:"resultat"`
 	}
 	if err := json.Unmarshal(body, &daoResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Check for errors
 	if daoResponse.Status != "OK" {
 		return nil, fmt.Errorf("DAO API error: %s (%s)", daoResponse.ErrorText, daoResponse.ErrorCode)
 	}
 
-	// Return the standardized response
 	return &BookingResponse{
 		TrackingNumber: daoResponse.Result.Barcode,
 		LabelURL:       "", // DAO does not return a label URL directly; labels are generated separately
@@ -108,37 +109,33 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 // TrackShipment tracks a shipment with DAO.
 func (a *DAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
-	// Prepare query parameters for DAO's Track&Trace API
 	params := url.Values{}
 	params.Set("kundeid", a.CustomerID)
 	params.Set("kode", a.APIKey)
 	params.Set("stregkode", trackingNumber)
 	params.Set("format", "json")
 
-	// Create a new request to DAO's Track&Trace API
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		a.BaseURL+"/TrackNTrace_v2.php?"+params.Encode(),
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Send the request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse the response
 	var daoTrackingResponse struct {
 		Status    string `json:"status"`
 		ErrorCode string `json:"fejlkode"`
@@ -166,15 +163,13 @@ func (a *DAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		} `json:"resultat"`
 	}
 	if err := json.Unmarshal(body, &daoTrackingResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Check for errors
 	if daoTrackingResponse.Status != "OK" {
 		return nil, fmt.Errorf("DAO API error: %s (%s)", daoTrackingResponse.ErrorText, daoTrackingResponse.ErrorCode)
 	}
 
-	// Convert DAO's tracking events to the standardized format
 	var events []TrackingEvent
 	for _, event := range daoTrackingResponse.Result.Events {
 		events = append(events, TrackingEvent{
@@ -184,7 +179,6 @@ func (a *DAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		})
 	}
 
-	// Return the standardized response
 	return &TrackingResponse{
 		TrackingNumber: daoTrackingResponse.Result.TrackingNumber,
 		Status:         daoTrackingResponse.Result.ParcelType,
@@ -194,7 +188,6 @@ func (a *DAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 
 // GetServicePoints retrieves parcel shops for DAO.
 func (a *DAOAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	// Prepare query parameters for DAO's parcel shop API
 	params := url.Values{}
 	params.Set("kundeid", a.CustomerID)
 	params.Set("kode", a.APIKey)
@@ -203,30 +196,27 @@ func (a *DAOAdapter) GetServicePoints(ctx context.Context, location Location) ([
 	params.Set("antal", "10") // Return up to 10 parcel shops
 	params.Set("format", "json")
 
-	// Create a new request to DAO's parcel shop API
-	req, err := http.NewRequest(
+	req, err := http.NewRequestWithContext(
+		ctx,
 		http.MethodGet,
 		a.BaseURL+"/DAOPakkeshop/FindPakkeshop.php?"+params.Encode(),
 		nil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Send the request
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// Parse the response
 	var daoServicePoints struct {
 		Status    string `json:"status"`
 		ErrorCode string `json:"fejlkode"`
@@ -264,15 +254,13 @@ func (a *DAOAdapter) GetServicePoints(ctx context.Context, location Location) ([
 		} `json:"resultat"`
 	}
 	if err := json.Unmarshal(body, &daoServicePoints); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %v", err)
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	// Check for errors
 	if daoServicePoints.Status != "OK" {
 		return nil, fmt.Errorf("DAO API error: %s (%s)", daoServicePoints.ErrorText, daoServicePoints.ErrorCode)
 	}
 
-	// Convert DAO's service points to the standardized ServicePoint format
 	var servicePoints []ServicePoint
 	for _, sp := range daoServicePoints.Result.ServicePoints {
 		servicePoints = append(servicePoints, ServicePoint{
