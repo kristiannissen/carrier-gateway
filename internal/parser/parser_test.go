@@ -115,13 +115,13 @@ func TestEDIFACTParser(t *testing.T) {
 	// Minimal IFTMIN message
 	body := []byte(
 		"UNB+UNOA:1+SENDER+RECEIVER+260603:1000+1'" +
-		"TSR+POSTNORD:1'" +
-		"NAD+CZ+::91+Sender Shop+Industrivej 10+Copenhagen++2300+DK'" +
-		"NAD+CN+::91+John Doe+Storgatan 1+Stockholm++111 22+SE'" +
-		"GID+1'" +
-		"MEA+WT+AAB+KGM:2.5'" +
-		"DIM+1+CMT:30:20:10'" +
-		"UNZ+1+1'",
+			"TSR+POSTNORD:1'" +
+			"NAD+CZ+::91+Sender Shop+Industrivej 10+Copenhagen++2300+DK'" +
+			"NAD+CN+::91+John Doe+Storgatan 1+Stockholm++111 22+SE'" +
+			"GID+1'" +
+			"MEA+WT+AAB+KGM:2.5'" +
+			"DIM+1+CMT:30:20:10'" +
+			"UNZ+1+1'",
 	)
 
 	req, err := (&EDIFACTParser{}).Parse(body)

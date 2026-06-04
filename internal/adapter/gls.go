@@ -6,9 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
-	"go.uber.org/zap"
 )
 
 // GLSAdapter implements CarrierAdapter for GLS using the ShipIT Farm API v1.
@@ -18,7 +18,7 @@ type GLSAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
-	log *zap.Logger
+	log        *zap.Logger
 }
 
 // NewGLSAdapter creates a new GLSAdapter with the given contact ID and API key.
@@ -28,7 +28,7 @@ func NewGLSAdapter(contactID, apiKey string, log *zap.Logger) *GLSAdapter {
 		APIKey:     apiKey,
 		BaseURL:    "https://api.gls-group.net/shipit-farm/v1/backend",
 		HTTPClient: http.DefaultClient,
-		log: log,
+		log:        log,
 	}
 }
 

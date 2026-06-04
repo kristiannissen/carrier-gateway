@@ -6,9 +6,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
-	"go.uber.org/zap"
 )
 
 // PostiAdapter implements the CarrierAdapter interface for Posti.
@@ -16,7 +16,7 @@ type PostiAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
-	log *zap.Logger
+	log        *zap.Logger
 }
 
 // NewPostiAdapter creates a new PostiAdapter instance.
@@ -25,7 +25,7 @@ func NewPostiAdapter(apiKey string, log *zap.Logger) *PostiAdapter {
 		APIKey:     apiKey,
 		BaseURL:    "https://api.posti.com",
 		HTTPClient: http.DefaultClient,
-		log: log,
+		log:        log,
 	}
 }
 

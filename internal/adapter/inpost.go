@@ -7,9 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
-	"go.uber.org/zap"
 )
 
 // InPostAdapter implements CarrierAdapter for InPost.
@@ -17,7 +17,7 @@ type InPostAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
-	log *zap.Logger
+	log        *zap.Logger
 }
 
 // NewInPostAdapter creates a new InPostAdapter with the given API key.
@@ -26,7 +26,7 @@ func NewInPostAdapter(apiKey string, log *zap.Logger) *InPostAdapter {
 		APIKey:     apiKey,
 		BaseURL:    "https://api.inpost.pl/v1",
 		HTTPClient: http.DefaultClient,
-		log: log,
+		log:        log,
 	}
 }
 

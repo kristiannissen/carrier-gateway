@@ -7,10 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"math"
 	"net/http"
-	"go.uber.org/zap"
 )
 
 // PostNordAdapter implements CarrierAdapter for PostNord.
@@ -18,7 +18,7 @@ type PostNordAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
-	log *zap.Logger
+	log        *zap.Logger
 }
 
 // NewPostNordAdapter creates a new PostNordAdapter with the given API key.
@@ -27,7 +27,7 @@ func NewPostNordAdapter(apiKey string, log *zap.Logger) *PostNordAdapter {
 		APIKey:     apiKey,
 		BaseURL:    "https://api.postnord.com",
 		HTTPClient: http.DefaultClient,
-		log: log,
+		log:        log,
 	}
 }
 

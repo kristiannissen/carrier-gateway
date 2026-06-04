@@ -6,9 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
-	"go.uber.org/zap"
 )
 
 // BringAdapter implements CarrierAdapter for Bring.
@@ -17,7 +17,7 @@ type BringAdapter struct {
 	CustomerID string
 	BaseURL    string
 	HTTPClient *http.Client
-	log *zap.Logger
+	log        *zap.Logger
 }
 
 // NewBringAdapter creates a new BringAdapter with the given API key and customer ID.
@@ -27,7 +27,7 @@ func NewBringAdapter(apiKey, customerID string, log *zap.Logger) *BringAdapter {
 		CustomerID: customerID,
 		BaseURL:    "https://api.bring.com",
 		HTTPClient: http.DefaultClient,
-		log: log,
+		log:        log,
 	}
 }
 

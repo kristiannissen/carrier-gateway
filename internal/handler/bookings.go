@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/kristiannissen/logistics-gateway/internal/parser"
 )
@@ -46,13 +45,6 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 
 	// Validate the request
 	if err := validateBookingRequest(request); err != nil {
-		writeError(w, http.StatusBadRequest, "validation failed", err.Error())
-		return
-	}
-
-	// Validate the request using validator
-	validate := validator.New()
-	if err := validate.Struct(request); err != nil {
 		writeError(w, http.StatusBadRequest, "validation failed", err.Error())
 		return
 	}
@@ -113,9 +105,6 @@ func validateBookingRequest(request *adapter.BookingRequest) error {
 	for i, colli := range request.Shipment.Colli {
 		if colli.Weight <= 0 {
 			return fmt.Errorf("colli %d: weight must be greater than 0", i)
-		}
-		if len(colli.Items) == 0 {
-			return fmt.Errorf("colli %d: must contain at least one item", i)
 		}
 		for j, item := range colli.Items {
 			if item.Weight <= 0 {

@@ -16,16 +16,16 @@ type XMLParser struct{}
 // Element names follow a generic logistics XML convention; adjust to match
 // the spec of the system sending XML to this gateway.
 type xmlBookingRequest struct {
-	XMLName  xml.Name   `xml:"BookingRequest"`
-	Carrier  string     `xml:"Carrier"`
+	XMLName  xml.Name    `xml:"BookingRequest"`
+	Carrier  string      `xml:"Carrier"`
 	Shipment xmlShipment `xml:"Shipment"`
 }
 
 type xmlShipment struct {
-	Sender      xmlAddress  `xml:"Sender"`
-	Receiver    xmlAddress  `xml:"Receiver"`
-	TotalWeight float64     `xml:"TotalWeight"`
-	Colli       []xmlColli  `xml:"Colli>Item"`
+	Sender      xmlAddress `xml:"Sender"`
+	Receiver    xmlAddress `xml:"Receiver"`
+	TotalWeight float64    `xml:"TotalWeight"`
+	Colli       []xmlColli `xml:"Colli>Item"`
 }
 
 type xmlAddress struct {

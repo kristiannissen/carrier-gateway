@@ -5,11 +5,11 @@ package adapter
 import (
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
-	"go.uber.org/zap"
 )
 
 // DAOAdapter implements the CarrierAdapter interface for DAO.
@@ -18,7 +18,7 @@ type DAOAdapter struct {
 	APIKey     string
 	BaseURL    string
 	HTTPClient *http.Client
-	log *zap.Logger
+	log        *zap.Logger
 }
 
 // NewDAOAdapter creates a new DAOAdapter instance.
@@ -28,7 +28,7 @@ func NewDAOAdapter(customerID, apiKey string, log *zap.Logger) *DAOAdapter {
 		APIKey:     apiKey,
 		BaseURL:    "https://api.dao.as",
 		HTTPClient: http.DefaultClient,
-		log: log,
+		log:        log,
 	}
 }
 

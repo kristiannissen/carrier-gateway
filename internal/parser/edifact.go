@@ -13,12 +13,13 @@ import (
 // EDIFACTParser parses a UN/EDIFACT IFTMIN (booking) message body.
 //
 // Supported segments:
-//   TSR — carrier service code (mapped to Carrier)
-//   NAD+CZ — consignor / sender address
-//   NAD+CN — consignee / receiver address
-//   GID — goods item description (one per colli)
-//   MEA+WT — weight per goods item
-//   DIM — dimensions per goods item
+//
+//	TSR — carrier service code (mapped to Carrier)
+//	NAD+CZ — consignor / sender address
+//	NAD+CN — consignee / receiver address
+//	GID — goods item description (one per colli)
+//	MEA+WT — weight per goods item
+//	DIM — dimensions per goods item
 //
 // Segment separator: '
 // Element separator: +
