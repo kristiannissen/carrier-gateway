@@ -57,15 +57,15 @@ func TestCarrierAdapterInterface(t *testing.T) {
 	// by calling all methods. This will compile-time check the interface.
 	for _, adapter := range adapters {
 		// Test BookShipment
-		_, err := adapter.BookShipment(bookingRequest)
+		_, err := adapter.BookShipment(t.Context(), bookingRequest)
 		assert.NoError(t, err, "BookShipment method should not panic")
 
 		// Test TrackShipment
-		_, err = adapter.TrackShipment("test-tracking-number")
+		_, err = adapter.TrackShipment(t.Context(), "test-tracking-number")
 		assert.NoError(t, err, "TrackShipment method should not panic")
 
 		// Test GetServicePoints
-		_, err = adapter.GetServicePoints(Location{})
+		_, err = adapter.GetServicePoints(t.Context(), Location{})
 		assert.NoError(t, err, "GetServicePoints method should not panic")
 	}
 }
@@ -127,13 +127,13 @@ func TestInitAdapters_StrategySelection(t *testing.T) {
 		assert.NotNil(t, adapter, "Adapter for carrier %s should not be nil", carrier)
 
 		// Verify that the adapter implements CarrierAdapter
-		_, err := adapter.BookShipment(request)
+		_, err := adapter.BookShipment(t.Context(), request)
 		assert.NoError(t, err, "BookShipment should not panic for %s", carrier)
 
-		_, err = adapter.TrackShipment("test-tracking-number")
+		_, err = adapter.TrackShipment(t.Context(), "test-tracking-number")
 		assert.NoError(t, err, "TrackShipment should not panic for %s", carrier)
 
-		_, err = adapter.GetServicePoints(Location{})
+		_, err = adapter.GetServicePoints(t.Context(), Location{})
 		assert.NoError(t, err, "GetServicePoints should not panic for %s", carrier)
 	}
 }
@@ -186,18 +186,18 @@ func TestUseAdapter_StrategyExecution(t *testing.T) {
 	}
 
 	// Test BookShipment
-	bookingResponse, err := postNordAdapter.BookShipment(request)
+	bookingResponse, err := postNordAdapter.BookShipment(t.Context(), request)
 	assert.NoError(t, err, "BookShipment should not fail for PostNord")
 	assert.NotNil(t, bookingResponse, "BookingResponse should not be nil")
 	assert.Equal(t, "postnord", bookingResponse.Carrier, "Carrier should be postnord")
 
 	// Test TrackShipment
-	trackingResponse, err := postNordAdapter.TrackShipment("test-tracking-number")
+	trackingResponse, err := postNordAdapter.TrackShipment(t.Context(), "test-tracking-number")
 	assert.NoError(t, err, "TrackShipment should not fail for PostNord")
 	assert.NotNil(t, trackingResponse, "TrackingResponse should not be nil")
 
 	// Test GetServicePoints
-	servicePoints, err := postNordAdapter.GetServicePoints(Location{
+	servicePoints, err := postNordAdapter.GetServicePoints(t.Context(), Location{
 		City:    "Test City",
 		Country: "DK",
 	})
@@ -210,7 +210,7 @@ func TestUseAdapter_StrategyExecution(t *testing.T) {
 	assert.NotNil(t, airmeeAdapter, "Airmee adapter should not be nil")
 
 	// Test BookShipment for Airmee
-	airmeeBookingResponse, err := airmeeAdapter.BookShipment(request)
+	airmeeBookingResponse, err := airmeeAdapter.BookShipment(t.Context(), request)
 	assert.NoError(t, err, "BookShipment should not fail for Airmee")
 	assert.NotNil(t, airmeeBookingResponse, "BookingResponse should not be nil")
 	assert.Equal(t, "airmee", airmeeBookingResponse.Carrier, "Carrier should be airmee")

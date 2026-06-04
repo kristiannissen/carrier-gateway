@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand"
 	"time"
+	"context"
 )
 
 // MockPostNordAdapter implements CarrierAdapter with pre-canned responses.
@@ -27,7 +28,7 @@ type MockPostNordAdapter struct {
 
 // BookShipment returns a mock booking response, applying the same validation
 // as the real PostNordAdapter so tests catch input errors without a live API.
-func (m *MockPostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (m *MockPostNordAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if m.BookShipmentFunc != nil {
 		return m.BookShipmentFunc(request)
 	}
@@ -74,7 +75,7 @@ func (m *MockPostNordAdapter) BookShipment(request BookingRequest) (*BookingResp
 }
 
 // TrackShipment returns a mock tracking response with two canned events.
-func (m *MockPostNordAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (m *MockPostNordAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if m.TrackShipmentFunc != nil {
 		return m.TrackShipmentFunc(trackingNumber)
 	}
@@ -115,7 +116,7 @@ func (m *MockPostNordAdapter) TrackShipment(trackingNumber string) (*TrackingRes
 }
 
 // GetServicePoints returns two mock PostNord service points.
-func (m *MockPostNordAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (m *MockPostNordAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	if m.GetServicePointsFunc != nil {
 		return m.GetServicePointsFunc(location)
 	}

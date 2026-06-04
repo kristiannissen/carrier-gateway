@@ -12,7 +12,8 @@ import (
 func HealthCheck(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET requests
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "only GET is supported")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Write([]byte(`{"message": "Method not allowed"}`))
 		return
 	}
 

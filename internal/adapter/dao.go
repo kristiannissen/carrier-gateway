@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"context"
 )
 
 // DAOAdapter implements the CarrierAdapter interface for DAO.
@@ -33,7 +34,7 @@ func NewDAOAdapter(customerID, apiKey string, log *zap.Logger) *DAOAdapter {
 }
 
 // BookShipment books a shipment with DAO.
-func (a *DAOAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	// Prepare query parameters for DAO's API
 	params := url.Values{}
 	params.Set("kundeid", a.CustomerID)
@@ -106,7 +107,7 @@ func (a *DAOAdapter) BookShipment(request BookingRequest) (*BookingResponse, err
 }
 
 // TrackShipment tracks a shipment with DAO.
-func (a *DAOAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *DAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	// Prepare query parameters for DAO's Track&Trace API
 	params := url.Values{}
 	params.Set("kundeid", a.CustomerID)
@@ -192,7 +193,7 @@ func (a *DAOAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, er
 }
 
 // GetServicePoints retrieves parcel shops for DAO.
-func (a *DAOAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *DAOAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	// Prepare query parameters for DAO's parcel shop API
 	params := url.Values{}
 	params.Set("kundeid", a.CustomerID)

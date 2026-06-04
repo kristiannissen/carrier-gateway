@@ -46,7 +46,7 @@ func newServicePointsCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Comm
 			}
 
 			// Get service points
-			servicePoints, err := carrierAdapter.GetServicePoints(location)
+			servicePoints, err := carrierAdapter.GetServicePoints(cmd.Context(), location)
 			if err != nil {
 				return fmt.Errorf("failed to get service points: %v", err)
 			}

@@ -22,7 +22,7 @@ func TestMockPostNordAdapter_BookShipment(t *testing.T) {
 
 	t.Run("missing TotalWeight", func(t *testing.T) {
 		t.Parallel()
-		_, err := (&MockPostNordAdapter{}).BookShipment(BookingRequest{
+		_, err := (&MockPostNordAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "postnord",
 			Shipment: Shipment{
 				Sender:   postnordTestSender(),
@@ -36,7 +36,7 @@ func TestMockPostNordAdapter_BookShipment(t *testing.T) {
 
 	t.Run("TotalWeight mismatch", func(t *testing.T) {
 		t.Parallel()
-		_, err := (&MockPostNordAdapter{}).BookShipment(BookingRequest{
+		_, err := (&MockPostNordAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "postnord",
 			Shipment: Shipment{
 				Sender:      postnordTestSender(),
@@ -51,7 +51,7 @@ func TestMockPostNordAdapter_BookShipment(t *testing.T) {
 
 	t.Run("valid request", func(t *testing.T) {
 		t.Parallel()
-		response, err := (&MockPostNordAdapter{}).BookShipment(BookingRequest{
+		response, err := (&MockPostNordAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "postnord",
 			Shipment: Shipment{
 				Sender:      postnordTestSender(),
@@ -70,7 +70,7 @@ func TestMockPostNordAdapter_BookShipment(t *testing.T) {
 func TestMockPostNordAdapter_TrackShipment(t *testing.T) {
 	t.Parallel()
 
-	response, err := (&MockPostNordAdapter{}).TrackShipment("PN123456789DK")
+	response, err := (&MockPostNordAdapter{}).TrackShipment(t.Context(), "PN123456789DK")
 	require.NoError(t, err)
 	assert.Equal(t, "PN123456789DK", response.TrackingNumber)
 	assert.Equal(t, "In Transit", response.Status)
@@ -80,7 +80,7 @@ func TestMockPostNordAdapter_TrackShipment(t *testing.T) {
 func TestMockPostNordAdapter_GetServicePoints(t *testing.T) {
 	t.Parallel()
 
-	servicePoints, err := (&MockPostNordAdapter{}).GetServicePoints(Location{
+	servicePoints, err := (&MockPostNordAdapter{}).GetServicePoints(t.Context(), Location{
 		City: "Copenhagen", Country: "DK", PostalCode: "12345",
 	})
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 	adapter, captured := newPostNordTestServer(t, http.StatusCreated,
 		`{"trackingNumber":"PN123456789DK","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`)
 
-	_, err := adapter.BookShipment(BookingRequest{
+	_, err := adapter.BookShipment(t.Context(), BookingRequest{
 		Carrier: "postnord",
 		Shipment: Shipment{
 			Sender: Address{
@@ -177,7 +177,7 @@ func TestPostNordAdapter_BookShipment_IdempotencyKey(t *testing.T) {
 	req := postnordMinimalRequest()
 	req.IdempotencyKey = "unique-key-123"
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	shipment := requireShipment(t, *captured)
@@ -193,7 +193,7 @@ func TestPostNordAdapter_BookShipment_OptionalFields(t *testing.T) {
 		t.Parallel()
 		adapter, captured := newPostNordTestServer(t, http.StatusCreated, mockResp)
 
-		_, err := adapter.BookShipment(postnordMinimalRequest())
+		_, err := adapter.BookShipment(t.Context(), postnordMinimalRequest())
 		require.NoError(t, err)
 
 		shipment := requireShipment(t, *captured)
@@ -210,7 +210,7 @@ func TestPostNordAdapter_BookShipment_OptionalFields(t *testing.T) {
 		req.Shipment.Incoterms = "DDP"
 		req.Shipment.HSCode = "6104.43"
 
-		_, err := adapter.BookShipment(req)
+		_, err := adapter.BookShipment(t.Context(), req)
 		require.NoError(t, err)
 
 		shipment := requireShipment(t, *captured)
@@ -232,7 +232,7 @@ func TestPostNordAdapter_BookShipment_MultiColli(t *testing.T) {
 		postnordTestColli("box-2", 3.0),
 	}
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	shipment := requireShipment(t, *captured)
@@ -252,7 +252,7 @@ func TestPostNordAdapter_BookShipment_APIError(t *testing.T) {
 
 	adapter, _ := newPostNordTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
 
-	_, err := adapter.BookShipment(postnordMinimalRequest())
+	_, err := adapter.BookShipment(t.Context(), postnordMinimalRequest())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }

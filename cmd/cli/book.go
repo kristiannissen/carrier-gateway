@@ -65,7 +65,7 @@ func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 			}
 
 			// Book shipment
-			response, err := adapter.BookShipment(request)
+			response, err := adapter.BookShipment(cmd.Context(), request)
 			if err != nil {
 				return fmt.Errorf("booking failed: %v", err)
 			}

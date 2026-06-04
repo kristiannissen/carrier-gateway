@@ -17,7 +17,7 @@ import (
 func (c *Config) GetServicePoints(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET requests
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "only GET is supported")
+		c.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "only GET is supported")
 		return
 	}
 
@@ -34,14 +34,14 @@ func (c *Config) GetServicePoints(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required parameters
 	if city == "" || country == "" {
-		writeError(w, http.StatusBadRequest, "city and country are required", "")
+		c.writeError(w, http.StatusBadRequest, "city and country are required", "")
 		return
 	}
 
 	// Get the appropriate carrier adapter
 	carrierAdapter, err := c.getAdapter(carrier)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
+		c.writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return
 	}
 
@@ -53,14 +53,14 @@ func (c *Config) GetServicePoints(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get service points
-	servicePoints, err := carrierAdapter.GetServicePoints(location)
+	servicePoints, err := carrierAdapter.GetServicePoints(r.Context(), location)
 	if err != nil {
 		slog.Error("Failed to get service points",
 			"error", err,
 			"location", fmt.Sprintf("%s, %s, %s", city, postalCode, country),
 			"carrier", carrier,
 		)
-		writeError(w, http.StatusInternalServerError, "failed to get service points", err.Error())
+		c.writeError(w, http.StatusInternalServerError, "failed to get service points", err.Error())
 		return
 	}
 

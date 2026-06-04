@@ -70,7 +70,7 @@ func postNordParcel(index int, c Colli) map[string]interface{} {
 //   - The receiver is mapped to "recipient".
 //   - Colli weights are converted from kg to grams.
 //   - All parcels are wrapped in a top-level "shipment" object.
-func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
@@ -106,7 +106,7 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodPost,
 		fmt.Sprintf("%s/rest/shipment/v1/booking?apikey=%s", a.BaseURL, a.APIKey),
 		bytes.NewBuffer(payloadBytes),
@@ -137,13 +137,13 @@ func (a *PostNordAdapter) BookShipment(request BookingRequest) (*BookingResponse
 }
 
 // TrackShipment retrieves the tracking status for a shipment from PostNord.
-func (a *PostNordAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
 	}
 
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s?apikey=%s", a.BaseURL, trackingNumber, a.APIKey),
 		nil,
@@ -173,9 +173,9 @@ func (a *PostNordAdapter) TrackShipment(trackingNumber string) (*TrackingRespons
 }
 
 // GetServicePoints retrieves available PostNord service points near the given location.
-func (a *PostNordAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *PostNordAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	req, err := http.NewRequestWithContext(
-		context.Background(),
+		ctx,
 		http.MethodGet,
 		fmt.Sprintf("%s/rest/shipment/v1/servicepoints?postalCode=%s&city=%s&countryCode=%s&apikey=%s",
 			a.BaseURL, location.PostalCode, location.City, location.Country, a.APIKey),

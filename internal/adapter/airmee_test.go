@@ -45,7 +45,7 @@ func TestMockAirmeeAdapter_BookShipment(t *testing.T) {
 			},
 		},
 	}
-	_, err := adapter.BookShipment(request)
+	_, err := adapter.BookShipment(t.Context(), request)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "TotalWeight is required and must be greater than 0")
 
@@ -81,7 +81,7 @@ func TestMockAirmeeAdapter_BookShipment(t *testing.T) {
 			},
 		},
 	}
-	_, err = adapter.BookShipment(request)
+	_, err = adapter.BookShipment(t.Context(), request)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "TotalWeight must match the sum of all colli weights")
 
@@ -117,7 +117,7 @@ func TestMockAirmeeAdapter_BookShipment(t *testing.T) {
 			},
 		},
 	}
-	response, err := adapter.BookShipment(request)
+	response, err := adapter.BookShipment(t.Context(), request)
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "AIRMEE123456789", response.TrackingNumber)
@@ -128,7 +128,7 @@ func TestMockAirmeeAdapter_TrackShipment(t *testing.T) {
 	t.Parallel()
 	adapter := &MockAirmeeAdapter{}
 
-	response, err := adapter.TrackShipment("AIRMEE123456789")
+	response, err := adapter.TrackShipment(t.Context(), "AIRMEE123456789")
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "AIRMEE123456789", response.TrackingNumber)
@@ -144,7 +144,7 @@ func TestMockAirmeeAdapter_GetServicePoints(t *testing.T) {
 		City:    "Copenhagen",
 		Country: "DK",
 	}
-	servicePoints, err := adapter.GetServicePoints(location)
+	servicePoints, err := adapter.GetServicePoints(t.Context(), location)
 	assert.NoError(t, err)
 	assert.NotNil(t, servicePoints)
 	assert.Len(t, servicePoints, 0)

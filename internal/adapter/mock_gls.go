@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"time"
+	"context"
 )
 
 // MockGLSAdapter implements CarrierAdapter with pre-canned GLS responses.
@@ -24,7 +25,7 @@ type MockGLSAdapter struct {
 
 // BookShipment returns a mock GLS booking response, applying the same
 // validation as the real GLSAdapter so tests catch input errors without a live API.
-func (m *MockGLSAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (m *MockGLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if m.BookShipmentFunc != nil {
 		return m.BookShipmentFunc(request)
 	}
@@ -65,7 +66,7 @@ func (m *MockGLSAdapter) BookShipment(request BookingRequest) (*BookingResponse,
 }
 
 // TrackShipment returns a mock GLS tracking response with one canned event.
-func (m *MockGLSAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (m *MockGLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if m.TrackShipmentFunc != nil {
 		return m.TrackShipmentFunc(trackingNumber)
 	}
@@ -90,7 +91,7 @@ func (m *MockGLSAdapter) TrackShipment(trackingNumber string) (*TrackingResponse
 }
 
 // GetServicePoints returns mock GLS parcel shop locations.
-func (m *MockGLSAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (m *MockGLSAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	if m.GetServicePointsFunc != nil {
 		return m.GetServicePointsFunc(location)
 	}

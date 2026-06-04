@@ -2,13 +2,16 @@
 // This file is located at /internal/adapter/mock_posti.go.
 package adapter
 
-import "fmt"
+import (
+	"fmt"
+	"context"
+)
 
 // MockPostiAdapter is a mock implementation of the CarrierAdapter interface for Posti.
 type MockPostiAdapter struct{}
 
 // BookShipment mocks booking a shipment with Posti.
-func (a *MockPostiAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *MockPostiAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	// Validate TotalWeight is provided
 	if request.Shipment.TotalWeight <= 0 {
 		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
@@ -33,7 +36,7 @@ func (a *MockPostiAdapter) BookShipment(request BookingRequest) (*BookingRespons
 }
 
 // TrackShipment mocks tracking a shipment with Posti.
-func (a *MockPostiAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *MockPostiAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
 		TrackingNumber: trackingNumber,
 		Status:         "In Transit",
@@ -48,7 +51,7 @@ func (a *MockPostiAdapter) TrackShipment(trackingNumber string) (*TrackingRespon
 }
 
 // GetServicePoints mocks retrieving service points for Posti.
-func (a *MockPostiAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *MockPostiAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	return []ServicePoint{
 		{
 			ID:   "POSTI001",

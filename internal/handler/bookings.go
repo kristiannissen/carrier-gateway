@@ -6,8 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
+
+	"go.uber.org/zap"
 
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/kristiannissen/logistics-gateway/internal/parser"
@@ -19,48 +20,48 @@ import (
 func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	// Only allow POST requests
 	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "only POST is supported")
+		c.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "only POST is supported")
 		return
 	}
 
 	// Read and parse the request body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body", err.Error())
+		c.writeError(w, http.StatusBadRequest, "invalid request body", err.Error())
 		return
 	}
 
 	// Select parser based on Content-Type - JSON, XML, EDIFACT
 	p, err := parser.ForRequest(r)
 	if err != nil {
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported content type", err.Error())
+		c.writeError(w, http.StatusUnsupportedMediaType, "unsupported content type", err.Error())
 		return
 	}
 
 	request, err := p.Parse(body)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "failed to parse request", err.Error())
+		c.writeError(w, http.StatusBadRequest, "failed to parse request", err.Error())
 		return
 	}
 
 	// Validate the request
 	if err := validateBookingRequest(request); err != nil {
-		writeError(w, http.StatusBadRequest, "validation failed", err.Error())
+		c.writeError(w, http.StatusBadRequest, "validation failed", err.Error())
 		return
 	}
 
 	// Get the appropriate carrier adapter
 	carrierAdapter, err := c.getAdapter(request.Carrier)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
+		c.writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return
 	}
 
 	// Book the shipment
-	response, err := carrierAdapter.BookShipment(*request)
+	response, err := carrierAdapter.BookShipment(r.Context(), *request)
 	if err != nil {
-		slog.Error("Failed to book shipment", "error", err, "carrier", request.Carrier)
-		writeError(w, http.StatusInternalServerError, "booking failed", err.Error())
+		c.Log.Error("failed to book shipment", zap.Error(err), zap.String("carrier", request.Carrier))
+		c.writeError(w, http.StatusInternalServerError, "booking failed", err.Error())
 		return
 	}
 
@@ -68,7 +69,7 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		slog.Error("Failed to write response", "error", err)
+		c.Log.Error("failed to write response", zap.Error(err))
 	}
 }
 

@@ -22,7 +22,7 @@ func TestMockGLSAdapter_BookShipment(t *testing.T) {
 
 	t.Run("missing TotalWeight", func(t *testing.T) {
 		t.Parallel()
-		_, err := (&MockGLSAdapter{}).BookShipment(BookingRequest{
+		_, err := (&MockGLSAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "gls",
 			Shipment: Shipment{
 				Sender:   glsTestSender(),
@@ -36,7 +36,7 @@ func TestMockGLSAdapter_BookShipment(t *testing.T) {
 
 	t.Run("TotalWeight mismatch", func(t *testing.T) {
 		t.Parallel()
-		_, err := (&MockGLSAdapter{}).BookShipment(BookingRequest{
+		_, err := (&MockGLSAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "gls",
 			Shipment: Shipment{
 				Sender:      glsTestSender(),
@@ -51,7 +51,7 @@ func TestMockGLSAdapter_BookShipment(t *testing.T) {
 
 	t.Run("valid request", func(t *testing.T) {
 		t.Parallel()
-		response, err := (&MockGLSAdapter{}).BookShipment(BookingRequest{
+		response, err := (&MockGLSAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "gls",
 			Shipment: Shipment{
 				Sender:      glsTestSender(),
@@ -70,7 +70,7 @@ func TestMockGLSAdapter_BookShipment(t *testing.T) {
 func TestMockGLSAdapter_TrackShipment(t *testing.T) {
 	t.Parallel()
 
-	response, err := (&MockGLSAdapter{}).TrackShipment("GLS123456789DK")
+	response, err := (&MockGLSAdapter{}).TrackShipment(t.Context(), "GLS123456789DK")
 	require.NoError(t, err)
 	assert.Equal(t, "GLS123456789DK", response.TrackingNumber)
 	assert.Equal(t, "In Transit", response.Status)
@@ -80,7 +80,7 @@ func TestMockGLSAdapter_TrackShipment(t *testing.T) {
 func TestMockGLSAdapter_GetServicePoints(t *testing.T) {
 	t.Parallel()
 
-	servicePoints, err := (&MockGLSAdapter{}).GetServicePoints(Location{
+	servicePoints, err := (&MockGLSAdapter{}).GetServicePoints(t.Context(), Location{
 		City: "Copenhagen", Country: "DK",
 	})
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestGLSAdapter_BookShipment_PayloadShape(t *testing.T) {
 
 	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
 
-	_, err := adapter.BookShipment(BookingRequest{
+	_, err := adapter.BookShipment(t.Context(), BookingRequest{
 		Carrier: "gls",
 		Shipment: Shipment{
 			Sender: Address{
@@ -168,7 +168,7 @@ func TestGLSAdapter_BookShipment_VolumeIncluded(t *testing.T) {
 
 	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
 
-	_, err := adapter.BookShipment(glsMinimalRequest())
+	_, err := adapter.BookShipment(t.Context(), glsMinimalRequest())
 	require.NoError(t, err)
 
 	shipment := glsRequireNested(t, *captured, "Shipment")
@@ -196,7 +196,7 @@ func TestGLSAdapter_BookShipment_MultiColli(t *testing.T) {
 		glsTestColli("box-2", 5.0),
 	}
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	_ = adapter
@@ -218,7 +218,7 @@ func TestGLSAdapter_BookShipment_IncotermsForwarded(t *testing.T) {
 	req := glsMinimalRequest()
 	req.Shipment.Incoterms = "DDP"
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	_ = adapter
@@ -231,7 +231,7 @@ func TestGLSAdapter_BookShipment_PrintingOptionsPresent(t *testing.T) {
 
 	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
 
-	_, err := adapter.BookShipment(glsMinimalRequest())
+	_, err := adapter.BookShipment(t.Context(), glsMinimalRequest())
 	require.NoError(t, err)
 
 	_ = adapter
@@ -246,7 +246,7 @@ func TestGLSAdapter_BookShipment_APIError(t *testing.T) {
 
 	adapter, _ := newGLSTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
 
-	_, err := adapter.BookShipment(glsMinimalRequest())
+	_, err := adapter.BookShipment(t.Context(), glsMinimalRequest())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
@@ -271,7 +271,7 @@ func TestGLSAdapter_TrackShipment_RequestShape(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 
-	resp, err := adapter.TrackShipment("GLS123")
+	resp, err := adapter.TrackShipment(t.Context(), "GLS123")
 	require.NoError(t, err)
 	assert.Equal(t, "GLS123", resp.TrackingNumber)
 	assert.Equal(t, "In Transit", resp.Status)
@@ -303,7 +303,7 @@ func TestGLSAdapter_GetServicePoints_RequestShape(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 
-	points, err := adapter.GetServicePoints(Location{
+	points, err := adapter.GetServicePoints(t.Context(), Location{
 		City: "Copenhagen", Country: "DK", PostalCode: "1234",
 	})
 	require.NoError(t, err)

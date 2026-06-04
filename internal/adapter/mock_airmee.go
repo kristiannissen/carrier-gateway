@@ -2,13 +2,16 @@
 // This file is located at /internal/adapter/mock_airmee.go.
 package adapter
 
-import "fmt"
+import (
+	"fmt"
+	"context"
+)
 
 // MockAirmeeAdapter is a mock implementation of the CarrierAdapter interface for Airmee.
 type MockAirmeeAdapter struct{}
 
 // BookShipment mocks booking a shipment with Airmee.
-func (a *MockAirmeeAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *MockAirmeeAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	// Validate TotalWeight is provided
 	if request.Shipment.TotalWeight <= 0 {
 		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
@@ -33,7 +36,7 @@ func (a *MockAirmeeAdapter) BookShipment(request BookingRequest) (*BookingRespon
 }
 
 // TrackShipment mocks tracking a shipment with Airmee.
-func (a *MockAirmeeAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *MockAirmeeAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
 		TrackingNumber: trackingNumber,
 		Status:         "In Transit",
@@ -53,7 +56,7 @@ func (a *MockAirmeeAdapter) TrackShipment(trackingNumber string) (*TrackingRespo
 }
 
 // GetServicePoints mocks retrieving service points for Airmee.
-func (a *MockAirmeeAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *MockAirmeeAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	// Airmee does not have traditional service points, so return an empty list
 	return []ServicePoint{}, nil
 }

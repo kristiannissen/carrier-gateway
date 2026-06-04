@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"net/http"
+	"context"
 )
 
 // PostiAdapter implements the CarrierAdapter interface for Posti.
@@ -30,7 +31,7 @@ func NewPostiAdapter(apiKey string, log *zap.Logger) *PostiAdapter {
 }
 
 // BookShipment books a shipment with Posti.
-func (a *PostiAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	// Prepare the request payload for Posti's API
 	payload := map[string]interface{}{
 		"shipment": map[string]interface{}{
@@ -133,7 +134,7 @@ func (a *PostiAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 }
 
 // TrackShipment tracks a shipment with Posti.
-func (a *PostiAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *PostiAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	// Create a new request to Posti's tracking API
 	req, err := http.NewRequest(
 		http.MethodGet,
@@ -207,7 +208,7 @@ func (a *PostiAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, 
 }
 
 // GetServicePoints retrieves service points (e.g., Posti pickup points) for Posti.
-func (a *PostiAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *PostiAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	// Create a new request to Posti's service points API
 	req, err := http.NewRequest(
 		http.MethodGet,

@@ -15,7 +15,7 @@ import (
 func (c *Config) GetTracking(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET requests
 	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "method not allowed", "only GET is supported")
+		c.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "only GET is supported")
 		return
 	}
 
@@ -23,7 +23,7 @@ func (c *Config) GetTracking(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	trackingNumber := vars["trackingNumber"]
 	if trackingNumber == "" {
-		writeError(w, http.StatusBadRequest, "tracking number is required", "")
+		c.writeError(w, http.StatusBadRequest, "tracking number is required", "")
 		return
 	}
 
@@ -36,19 +36,19 @@ func (c *Config) GetTracking(w http.ResponseWriter, r *http.Request) {
 	// Get the appropriate carrier adapter
 	carrierAdapter, err := c.getAdapter(carrier)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
+		c.writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return
 	}
 
 	// Track the shipment
-	response, err := carrierAdapter.TrackShipment(trackingNumber)
+	response, err := carrierAdapter.TrackShipment(r.Context(), trackingNumber)
 	if err != nil {
 		slog.Error("Failed to track shipment",
 			"error", err,
 			"trackingNumber", trackingNumber,
 			"carrier", carrier,
 		)
-		writeError(w, http.StatusInternalServerError, "tracking failed", err.Error())
+		c.writeError(w, http.StatusInternalServerError, "tracking failed", err.Error())
 		return
 	}
 

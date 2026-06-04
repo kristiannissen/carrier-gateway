@@ -5,19 +5,20 @@ package adapter
 import (
 	"go.uber.org/zap"
 	"os"
+	"context"
 )
 
 // CarrierAdapter defines the interface for all carrier adapters.
 // All carrier-specific implementations (e.g., PostNord, FedEx, DHL) must satisfy this interface.
 type CarrierAdapter interface {
 	// BookShipment books a shipment with the carrier and returns a tracking number and label URL.
-	BookShipment(request BookingRequest) (*BookingResponse, error)
+	BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error)
 
 	// TrackShipment retrieves the tracking status for a shipment.
-	TrackShipment(trackingNumber string) (*TrackingResponse, error)
+	TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error)
 
 	// GetServicePoints retrieves available service points (e.g., pickup locations) for a carrier.
-	GetServicePoints(location Location) ([]ServicePoint, error)
+	GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error)
 }
 
 // InitAdapters initializes all carrier adapters based on environment variables.

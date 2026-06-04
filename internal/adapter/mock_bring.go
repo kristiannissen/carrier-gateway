@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"time"
+	"context"
 )
 
 // MockBringAdapter implements CarrierAdapter with pre-canned Bring responses.
@@ -24,7 +25,7 @@ type MockBringAdapter struct {
 
 // BookShipment returns a mock Bring booking response, applying the same
 // validation as the real BringAdapter so tests catch input errors without a live API.
-func (m *MockBringAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (m *MockBringAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if m.BookShipmentFunc != nil {
 		return m.BookShipmentFunc(request)
 	}
@@ -57,7 +58,7 @@ func (m *MockBringAdapter) BookShipment(request BookingRequest) (*BookingRespons
 }
 
 // TrackShipment returns a mock Bring tracking response with three canned events.
-func (m *MockBringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (m *MockBringAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if m.TrackShipmentFunc != nil {
 		return m.TrackShipmentFunc(trackingNumber)
 	}
@@ -92,7 +93,7 @@ func (m *MockBringAdapter) TrackShipment(trackingNumber string) (*TrackingRespon
 }
 
 // GetServicePoints returns mock Bring pickup point locations.
-func (m *MockBringAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (m *MockBringAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	if m.GetServicePointsFunc != nil {
 		return m.GetServicePointsFunc(location)
 	}

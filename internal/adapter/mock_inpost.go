@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"time"
+	"context"
 )
 
 // MockInPostAdapter implements CarrierAdapter with pre-canned InPost responses.
@@ -25,7 +26,7 @@ type MockInPostAdapter struct {
 
 // BookShipment returns a mock InPost booking response, applying the same
 // validation as the real InPostAdapter so tests catch input errors without a live API.
-func (m *MockInPostAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (m *MockInPostAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if m.BookShipmentFunc != nil {
 		return m.BookShipmentFunc(request)
 	}
@@ -60,7 +61,7 @@ func (m *MockInPostAdapter) BookShipment(request BookingRequest) (*BookingRespon
 }
 
 // TrackShipment returns a mock InPost tracking response with two canned events.
-func (m *MockInPostAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (m *MockInPostAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if m.TrackShipmentFunc != nil {
 		return m.TrackShipmentFunc(trackingNumber)
 	}
@@ -90,7 +91,7 @@ func (m *MockInPostAdapter) TrackShipment(trackingNumber string) (*TrackingRespo
 }
 
 // GetServicePoints returns mock InPost locker locations.
-func (m *MockInPostAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (m *MockInPostAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	if m.GetServicePointsFunc != nil {
 		return m.GetServicePointsFunc(location)
 	}

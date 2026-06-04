@@ -47,7 +47,7 @@ func TestMockDAOAdapter_BookShipment(t *testing.T) {
 			// TotalWeight is missing
 		},
 	}
-	_, err := adapter.BookShipment(request)
+	_, err := adapter.BookShipment(t.Context(), request)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "TotalWeight is required and must be greater than 0")
 
@@ -85,7 +85,7 @@ func TestMockDAOAdapter_BookShipment(t *testing.T) {
 			},
 		},
 	}
-	_, err = adapter.BookShipment(request)
+	_, err = adapter.BookShipment(t.Context(), request)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "TotalWeight must match the sum of all colli weights")
 
@@ -123,7 +123,7 @@ func TestMockDAOAdapter_BookShipment(t *testing.T) {
 			},
 		},
 	}
-	response, err := adapter.BookShipment(request)
+	response, err := adapter.BookShipment(t.Context(), request)
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "DAO123456789DK", response.TrackingNumber)
@@ -134,7 +134,7 @@ func TestMockDAOAdapter_TrackShipment(t *testing.T) {
 	t.Parallel()
 	adapter := &MockDAOAdapter{}
 
-	response, err := adapter.TrackShipment("DAO123456789DK")
+	response, err := adapter.TrackShipment(t.Context(), "DAO123456789DK")
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "DAO123456789DK", response.TrackingNumber)
@@ -151,7 +151,7 @@ func TestMockDAOAdapter_GetServicePoints(t *testing.T) {
 		Country:    "DK",
 		PostalCode: "1234",
 	}
-	servicePoints, err := adapter.GetServicePoints(location)
+	servicePoints, err := adapter.GetServicePoints(t.Context(), location)
 	assert.NoError(t, err)
 	assert.NotNil(t, servicePoints)
 	assert.Len(t, servicePoints, 1)

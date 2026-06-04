@@ -78,7 +78,7 @@ func inpostParcel(index int, c Colli) map[string]interface{} {
 //   - An optional target locker ID is read from Shipment.Incoterms.
 //   - The IdempotencyKey is forwarded as the shipment reference.
 //   - The payload is wrapped in a top-level "shipment" object.
-func (a *InPostAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
@@ -160,7 +160,7 @@ func (a *InPostAdapter) BookShipment(request BookingRequest) (*BookingResponse, 
 }
 
 // TrackShipment retrieves the tracking status for an InPost shipment.
-func (a *InPostAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *InPostAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
 	}
@@ -218,7 +218,7 @@ func (a *InPostAdapter) TrackShipment(trackingNumber string) (*TrackingResponse,
 }
 
 // GetServicePoints retrieves InPost locker locations near the given location.
-func (a *InPostAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *InPostAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,

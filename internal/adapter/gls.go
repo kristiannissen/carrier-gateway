@@ -73,7 +73,7 @@ func glsShipmentUnit(c Colli) map[string]interface{} {
 //   - Receiver maps to Consignee with a nested Address.
 //   - Each colli becomes a ShipmentUnit; weight stays in kg.
 //   - The payload is wrapped in ShipmentRequestData with PrintingOptions.
-func (a *GLSAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
@@ -114,15 +114,16 @@ func (a *GLSAdapter) BookShipment(request BookingRequest) (*BookingResponse, err
 		return nil, fmt.Errorf("failed to marshal GLS request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(
-		context.Background(),
+	// Create a new request to Posti's API
+	req, err := http.NewRequest(
 		http.MethodPost,
-		a.BaseURL+"/rs/shipments",
+		a.BaseURL+"/shipment/v1/shipments",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create GLS request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
+
 	req.Header.Set("Content-Type", "application/glsVersion1+json")
 	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 
@@ -181,7 +182,7 @@ func (a *GLSAdapter) BookShipment(request BookingRequest) (*BookingResponse, err
 
 // TrackShipment retrieves the tracking status for a GLS shipment.
 // GLS tracking uses a POST to /rs/tracking/parcels with a TULReferenceData body.
-func (a *GLSAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
 	}
@@ -250,7 +251,7 @@ func (a *GLSAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, er
 
 // GetServicePoints retrieves GLS parcel shops near the given location.
 // GLS uses a POST to /rs/parcelshop/address with a ParcelShopSearchLocation body.
-func (a *GLSAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *GLSAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	body, err := json.Marshal(map[string]interface{}{
 		"CountryCode": location.Country,
 		"City":        location.City,

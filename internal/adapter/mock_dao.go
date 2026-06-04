@@ -2,13 +2,16 @@
 // This file is located at /internal/adapter/mock_dao.go.
 package adapter
 
-import "fmt"
+import (
+	"fmt"
+	"context"
+)
 
 // MockDAOAdapter is a mock implementation of the CarrierAdapter interface for DAO.
 type MockDAOAdapter struct{}
 
 // BookShipment mocks booking a shipment with DAO.
-func (a *MockDAOAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *MockDAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	// Validate TotalWeight is provided
 	if request.Shipment.TotalWeight <= 0 {
 		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
@@ -33,7 +36,7 @@ func (a *MockDAOAdapter) BookShipment(request BookingRequest) (*BookingResponse,
 }
 
 // TrackShipment mocks tracking a shipment with DAO.
-func (a *MockDAOAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *MockDAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
 		TrackingNumber: trackingNumber,
 		Status:         "In Transit",
@@ -48,7 +51,7 @@ func (a *MockDAOAdapter) TrackShipment(trackingNumber string) (*TrackingResponse
 }
 
 // GetServicePoints mocks retrieving parcel shops for DAO.
-func (a *MockDAOAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *MockDAOAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	return []ServicePoint{
 		{
 			ID:   "DAO001",

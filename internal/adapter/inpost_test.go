@@ -22,7 +22,7 @@ func TestMockInPostAdapter_BookShipment(t *testing.T) {
 
 	t.Run("missing TotalWeight", func(t *testing.T) {
 		t.Parallel()
-		_, err := (&MockInPostAdapter{}).BookShipment(BookingRequest{
+		_, err := (&MockInPostAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "inpost",
 			Shipment: Shipment{
 				Sender:   inpostTestSender(),
@@ -36,7 +36,7 @@ func TestMockInPostAdapter_BookShipment(t *testing.T) {
 
 	t.Run("TotalWeight mismatch", func(t *testing.T) {
 		t.Parallel()
-		_, err := (&MockInPostAdapter{}).BookShipment(BookingRequest{
+		_, err := (&MockInPostAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "inpost",
 			Shipment: Shipment{
 				Sender:      inpostTestSender(),
@@ -51,7 +51,7 @@ func TestMockInPostAdapter_BookShipment(t *testing.T) {
 
 	t.Run("valid request", func(t *testing.T) {
 		t.Parallel()
-		response, err := (&MockInPostAdapter{}).BookShipment(BookingRequest{
+		response, err := (&MockInPostAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "inpost",
 			Shipment: Shipment{
 				Sender:      inpostTestSender(),
@@ -72,7 +72,7 @@ func TestMockInPostAdapter_BookShipment(t *testing.T) {
 func TestMockInPostAdapter_TrackShipment(t *testing.T) {
 	t.Parallel()
 
-	response, err := (&MockInPostAdapter{}).TrackShipment("INPOST123456789PL")
+	response, err := (&MockInPostAdapter{}).TrackShipment(t.Context(), "INPOST123456789PL")
 	require.NoError(t, err)
 	assert.Equal(t, "INPOST123456789PL", response.TrackingNumber)
 	assert.Equal(t, "In Transit", response.Status)
@@ -83,7 +83,7 @@ func TestMockInPostAdapter_TrackShipment(t *testing.T) {
 func TestMockInPostAdapter_GetServicePoints(t *testing.T) {
 	t.Parallel()
 
-	points, err := (&MockInPostAdapter{}).GetServicePoints(Location{
+	points, err := (&MockInPostAdapter{}).GetServicePoints(t.Context(), Location{
 		City: "Warsaw", Country: "PL", PostalCode: "00-001",
 	})
 	require.NoError(t, err)
@@ -101,7 +101,7 @@ func TestInPostAdapter_BookShipment_PayloadShape(t *testing.T) {
 
 	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
 
-	_, err := adapter.BookShipment(BookingRequest{
+	_, err := adapter.BookShipment(t.Context(), BookingRequest{
 		Carrier: "inpost",
 		Shipment: Shipment{
 			Sender: Address{
@@ -177,7 +177,7 @@ func TestInPostAdapter_BookShipment_LockerForwarded(t *testing.T) {
 	req := inpostMinimalRequest()
 	req.Shipment.Incoterms = "WAR001"
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	_ = adapter
@@ -191,7 +191,7 @@ func TestInPostAdapter_BookShipment_NoLockerWhenEmpty(t *testing.T) {
 
 	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
 
-	_, err := adapter.BookShipment(inpostMinimalRequest())
+	_, err := adapter.BookShipment(t.Context(), inpostMinimalRequest())
 	require.NoError(t, err)
 
 	_ = adapter
@@ -208,7 +208,7 @@ func TestInPostAdapter_BookShipment_ReferenceForwarded(t *testing.T) {
 	req := inpostMinimalRequest()
 	req.IdempotencyKey = "INPOST-ORDER-12345"
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	_ = adapter
@@ -228,7 +228,7 @@ func TestInPostAdapter_BookShipment_MultiColli(t *testing.T) {
 		inpostTestColli("box-2", 3.0),
 	}
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	_ = adapter
@@ -249,7 +249,7 @@ func TestInPostAdapter_BookShipment_ResponseMapped(t *testing.T) {
 
 	adapter, _ := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
 
-	response, err := adapter.BookShipment(inpostMinimalRequest())
+	response, err := adapter.BookShipment(t.Context(), inpostMinimalRequest())
 	require.NoError(t, err)
 
 	assert.Equal(t, "INPOST-550e8400-e29b-41d4-a716-446655440007", response.ShipmentID)
@@ -266,7 +266,7 @@ func TestInPostAdapter_BookShipment_APIError(t *testing.T) {
 
 	adapter, _ := newInPostTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
 
-	_, err := adapter.BookShipment(inpostMinimalRequest())
+	_, err := adapter.BookShipment(t.Context(), inpostMinimalRequest())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
@@ -289,7 +289,7 @@ func TestInPostAdapter_TrackShipment_RequestShape(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 
-	resp, err := adapter.TrackShipment("INPOST123456789PL")
+	resp, err := adapter.TrackShipment(t.Context(), "INPOST123456789PL")
 	require.NoError(t, err)
 
 	assert.Equal(t, "/tracking/INPOST123456789PL", capturedPath)
@@ -316,7 +316,7 @@ func TestInPostAdapter_GetServicePoints_RequestShape(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 
-	points, err := adapter.GetServicePoints(Location{
+	points, err := adapter.GetServicePoints(t.Context(), Location{
 		City: "Warsaw", Country: "PL", PostalCode: "00-001",
 	})
 	require.NoError(t, err)

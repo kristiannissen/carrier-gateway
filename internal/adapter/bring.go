@@ -61,7 +61,7 @@ func bringParcel(c Colli) map[string]interface{} {
 //   - Sender maps to "from", receiver to "to".
 //   - All colli are mapped to "parcels" with Bring's unit-suffixed dimension keys.
 //   - The customer ID is sent both in the payload and as the X-MyBring-API-Uid header.
-func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
@@ -146,7 +146,7 @@ func (a *BringAdapter) BookShipment(request BookingRequest) (*BookingResponse, e
 }
 
 // TrackShipment retrieves the tracking status for a Bring shipment.
-func (a *BringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
 	}
@@ -208,7 +208,7 @@ func (a *BringAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, 
 }
 
 // GetServicePoints retrieves Bring pickup points near the given location.
-func (a *BringAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *BringAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,

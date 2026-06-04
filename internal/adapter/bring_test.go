@@ -22,7 +22,7 @@ func TestMockBringAdapter_BookShipment(t *testing.T) {
 
 	t.Run("missing TotalWeight", func(t *testing.T) {
 		t.Parallel()
-		_, err := (&MockBringAdapter{}).BookShipment(BookingRequest{
+		_, err := (&MockBringAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "bring",
 			Shipment: Shipment{
 				Sender:   bringTestSender(),
@@ -36,7 +36,7 @@ func TestMockBringAdapter_BookShipment(t *testing.T) {
 
 	t.Run("TotalWeight mismatch", func(t *testing.T) {
 		t.Parallel()
-		_, err := (&MockBringAdapter{}).BookShipment(BookingRequest{
+		_, err := (&MockBringAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "bring",
 			Shipment: Shipment{
 				Sender:      bringTestSender(),
@@ -51,7 +51,7 @@ func TestMockBringAdapter_BookShipment(t *testing.T) {
 
 	t.Run("valid request", func(t *testing.T) {
 		t.Parallel()
-		response, err := (&MockBringAdapter{}).BookShipment(BookingRequest{
+		response, err := (&MockBringAdapter{}).BookShipment(t.Context(), BookingRequest{
 			Carrier: "bring",
 			Shipment: Shipment{
 				Sender:      bringTestSender(),
@@ -70,7 +70,7 @@ func TestMockBringAdapter_BookShipment(t *testing.T) {
 func TestMockBringAdapter_TrackShipment(t *testing.T) {
 	t.Parallel()
 
-	response, err := (&MockBringAdapter{}).TrackShipment("BR123456789NO")
+	response, err := (&MockBringAdapter{}).TrackShipment(t.Context(), "BR123456789NO")
 	require.NoError(t, err)
 	assert.Equal(t, "BR123456789NO", response.TrackingNumber)
 	assert.Equal(t, "Delivered", response.Status)
@@ -80,7 +80,7 @@ func TestMockBringAdapter_TrackShipment(t *testing.T) {
 func TestMockBringAdapter_GetServicePoints(t *testing.T) {
 	t.Parallel()
 
-	servicePoints, err := (&MockBringAdapter{}).GetServicePoints(Location{
+	servicePoints, err := (&MockBringAdapter{}).GetServicePoints(t.Context(), Location{
 		City: "Oslo", Country: "NO", PostalCode: "0123",
 	})
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestBringAdapter_BookShipment_PayloadShape(t *testing.T) {
 
 	adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
 
-	_, err := adapter.BookShipment(BookingRequest{
+	_, err := adapter.BookShipment(t.Context(), BookingRequest{
 		Carrier: "bring",
 		Shipment: Shipment{
 			Sender: Address{
@@ -171,7 +171,7 @@ func TestBringAdapter_BookShipment_MultiColli(t *testing.T) {
 		bringTestColli("box-2", 5.0),
 	}
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	_ = adapter
@@ -195,7 +195,7 @@ func TestBringAdapter_BookShipment_ItemsForwarded(t *testing.T) {
 		{Description: "T-Shirt", Weight: 0.5, Quantity: 5, Value: 25.0},
 	}
 
-	_, err := adapter.BookShipment(req)
+	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
 	_ = adapter
@@ -219,7 +219,7 @@ func TestBringAdapter_BookShipment_ResponseMapped(t *testing.T) {
 
 	adapter, _ := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
 
-	response, err := adapter.BookShipment(bringMinimalRequest())
+	response, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
 	require.NoError(t, err)
 
 	assert.Equal(t, "BR123456789NO", response.TrackingNumber)
@@ -235,7 +235,7 @@ func TestBringAdapter_BookShipment_APIError(t *testing.T) {
 
 	adapter, _ := newBringTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
 
-	_, err := adapter.BookShipment(bringMinimalRequest())
+	_, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
@@ -260,7 +260,7 @@ func TestBringAdapter_TrackShipment_RequestShape(t *testing.T) {
 		HTTPClient: srv.Client(),
 	}
 
-	resp, err := adapter.TrackShipment("BR123456789NO")
+	resp, err := adapter.TrackShipment(t.Context(), "BR123456789NO")
 	require.NoError(t, err)
 
 	// Correct endpoint: /tracking/{id}, not /tracking/consignments/{id}

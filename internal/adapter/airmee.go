@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"context"
 )
 
 // AirmeeAdapter implements the CarrierAdapter interface for Airmee.
@@ -31,7 +32,7 @@ func NewAirmeeAdapter(apiKey string, log *zap.Logger) *AirmeeAdapter {
 }
 
 // BookShipment books a shipment with Airmee.
-func (a *AirmeeAdapter) BookShipment(request BookingRequest) (*BookingResponse, error) {
+func (a *AirmeeAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	// Prepare the request payload for Airmee's API
 	// Airmee uses a time window for delivery, so we set a default window of 2 hours from now
 	deliveryWindowStart := time.Now().Add(2 * time.Hour).Format(time.RFC3339)
@@ -152,7 +153,7 @@ func (a *AirmeeAdapter) BookShipment(request BookingRequest) (*BookingResponse, 
 }
 
 // TrackShipment tracks a shipment with Airmee.
-func (a *AirmeeAdapter) TrackShipment(trackingNumber string) (*TrackingResponse, error) {
+func (a *AirmeeAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	// Create a new request to Airmee's tracking API
 	req, err := http.NewRequest(
 		http.MethodGet,
@@ -228,7 +229,7 @@ func (a *AirmeeAdapter) TrackShipment(trackingNumber string) (*TrackingResponse,
 // GetServicePoints retrieves service points (e.g., pickup/drop-off locations) for Airmee.
 // Note: Airmee does not have traditional service points like parcel shops.
 // Instead, it supports direct pickup and delivery from addresses.
-func (a *AirmeeAdapter) GetServicePoints(location Location) ([]ServicePoint, error) {
+func (a *AirmeeAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
 	// Airmee does not have a traditional service point API.
 	// Instead, we return an empty list or a placeholder.
 	// You can extend this to return nearby pickup/drop-off locations if Airmee provides such an API.

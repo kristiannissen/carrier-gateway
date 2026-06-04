@@ -5,15 +5,16 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 
+	"go.uber.org/zap"
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
-// Config holds shared configuration for handlers.
+// Config holds shared configuration for HTTP handlers.
 type Config struct {
 	Adapters map[string]adapter.CarrierAdapter
+	Log      *zap.Logger
 }
 
 // ErrorResponse represents a standardized error response.
@@ -23,14 +24,15 @@ type ErrorResponse struct {
 }
 
 // writeError writes a standardized error response.
-func writeError(w http.ResponseWriter, statusCode int, message, details string) {
+// writeError writes a standardized JSON error response and logs encoding failures.
+func (c *Config) writeError(w http.ResponseWriter, statusCode int, message, details string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(ErrorResponse{
 		Error:   message,
 		Details: details,
 	}); err != nil {
-		slog.Error("Failed to write error response", "error", err)
+		c.Log.Error("failed to write error response", zap.Error(err))
 	}
 }
 

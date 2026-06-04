@@ -37,7 +37,7 @@ func newTrackCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 			}
 
 			// Track shipment
-			response, err := adapter.TrackShipment(trackingNumber)
+			response, err := adapter.TrackShipment(cmd.Context(), trackingNumber)
 			if err != nil {
 				return fmt.Errorf("tracking failed: %v", err)
 			}
