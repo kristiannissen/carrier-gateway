@@ -44,12 +44,6 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//var request adapter.BookingRequest
-	//if err := json.Unmarshal(body, &request); err != nil {
-	//	writeError(w, http.StatusBadRequest, "invalid JSON", err.Error())
-	//	return
-	//}
-
 	// Validate the request
 	if err := validateBookingRequest(request); err != nil {
 		writeError(w, http.StatusBadRequest, "validation failed", err.Error())
