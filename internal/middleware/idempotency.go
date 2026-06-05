@@ -29,6 +29,13 @@ func IdempotencyKeyFromContext(ctx context.Context) string {
 	return key
 }
 
+// maxRequestBodyBytes is the maximum body size the idempotency middleware
+// will read. Requests larger than this are rejected with 413. This protects
+// the container from memory exhaustion caused by oversized payloads.
+// The handler layer enforces its own limit via http.Server.ReadTimeout;
+// this cap is a defence-in-depth measure for the middleware read path.
+const maxRequestBodyBytes = 1 << 20 // 1 MB
+
 // Idempotency is middleware that reads the Idempotency-Key header and bridges
 // it into the request body so that downstream handlers and adapters only need
 // to read from BookingRequest.IdempotencyKey.
@@ -71,9 +78,16 @@ func Idempotency(log *zap.Logger) func(http.Handler) http.Handler {
 			}
 
 			// Read the body so we can inspect and potentially patch it.
-			raw, err := io.ReadAll(r.Body)
+			// Cap at 1 MB to prevent memory exhaustion in the container.
+			limitedBody := http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+			raw, err := io.ReadAll(limitedBody)
 			if err != nil {
-				w.WriteHeader(http.StatusBadRequest)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusRequestEntityTooLarge)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error":   "request body too large",
+					"details": "request body must not exceed 1 MB",
+				})
 				return
 			}
 

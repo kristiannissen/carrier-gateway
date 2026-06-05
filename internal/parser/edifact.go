@@ -133,6 +133,8 @@ func splitSegments(msg string) []string {
 
 // parseNADAddress extracts an adapter.Address from a NAD segment's elements.
 // NAD+qualifier+partyID::codelist+name+street+city+state+postalCode+country
+// HouseNumber and Supplement are not available in standard IFTMIN NAD segments
+// and are left empty; senders requiring them should use JSON or XML format.
 func parseNADAddress(elements []string) adapter.Address {
 	get := func(i int) string {
 		if i < len(elements) {
@@ -144,6 +146,7 @@ func parseNADAddress(elements []string) adapter.Address {
 		Name:       get(3),
 		Street:     get(4),
 		City:       get(5),
+		State:      get(6),
 		PostalCode: get(7),
 		Country:    get(8),
 	}

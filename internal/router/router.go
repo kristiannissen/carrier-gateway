@@ -3,6 +3,8 @@
 package router
 
 import (
+	"os"
+
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 
@@ -16,6 +18,7 @@ func NewRouter(registry *adapter.Registry, log *zap.Logger) *mux.Router {
 	h := &handler.Config{
 		Registry: registry,
 		Log:      log,
+		MockMode: os.Getenv("MOCK_MODE") == "true",
 	}
 
 	r := mux.NewRouter()

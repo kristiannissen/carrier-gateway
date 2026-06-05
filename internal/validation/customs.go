@@ -44,8 +44,7 @@ var validIncoterms = map[string]bool{
 }
 
 // seaOnlyIncoterms is the set of Incoterms 2020 terms that are only valid
-// for sea and inland waterway transport. Using them with air, road, or rail
-// is a compliance error under the ICC Incoterms 2020 rules.
+// for sea and inland waterway transport.
 var seaOnlyIncoterms = map[string]bool{
 	"FAS": true,
 	"FOB": true,
@@ -61,10 +60,8 @@ var validTransportModes = map[string]bool{
 	"rail": true,
 }
 
-// deMinimisThresholds maps destination country codes to their de minimis
-// threshold. The threshold is only applied when CustomsCurrency matches the
-// threshold currency; a currency mismatch triggers ReviewRequired.
-// A zero threshold means no de minimis exemption applies for that country.
+// deMinimisThreshold holds the de minimis value and expected currency for a
+// destination country.
 type deMinimisThreshold struct {
 	value    float64
 	currency string
@@ -78,7 +75,6 @@ var deMinimisThresholds = map[string]deMinimisThreshold{
 	"GB": {value: 135.0, currency: "GBP"},
 	"CH": {value: 65.0, currency: "CHF"},
 	"JP": {value: 10000.0, currency: "JPY"},
-	// EU de minimis handled separately via euDeMinimisEUR.
 }
 
 // validISO4217 is a representative set of ISO 4217 currency codes.
@@ -105,19 +101,20 @@ var vatFormats = map[string]*regexp.Regexp{
 // permits for import into Norway.
 var prohibitedHSPrefixes = []string{"22", "24"}
 
+// hsCodeRegex matches a valid 6-10 digit HS code. Compiled once at startup
+// rather than on every call to validateHSCode.
+var hsCodeRegex = regexp.MustCompile(`^\d{6,10}$`)
+
 // euDeMinimisEUR is the de minimis threshold for EU B2C shipments.
 const euDeMinimisEUR = 150.0
 
 // ValidateCustoms validates the Customs block for a shipment from origin to
 // destination with the given shipment type ("B2B" or "B2C").
 func ValidateCustoms(c adapter.Customs, origin, destination, shipmentType string) error {
-	// Åland Islands — special VAT territory, hard error regardless of direction.
 	if destination == "AX" {
 		return fmt.Errorf("Åland Islands (AX) require special VAT handling: contact your carrier")
 	}
 
-	// Transport mode and Incoterms compatibility — checked before destination
-	// rules so the error is unambiguous regardless of route.
 	if err := validateTransportMode(c); err != nil {
 		return err
 	}
@@ -130,13 +127,11 @@ func ValidateCustoms(c adapter.Customs, origin, destination, shipmentType string
 		return validateEUCustoms(c, destination, shipmentType)
 	}
 
-	// Unknown destination — no customs rules to enforce.
 	return nil
 }
 
-// validateTransportMode checks that:
-//  1. If TransportMode is set, it is a recognised value.
-//  2. Sea-only Incoterms (FOB, FAS, CFR, CIF) are not used with non-sea modes.
+// validateTransportMode checks that TransportMode is recognised and that
+// sea-only Incoterms are not used with non-sea modes.
 func validateTransportMode(c adapter.Customs) error {
 	if c.TransportMode == "" {
 		return nil
@@ -163,12 +158,11 @@ func validateTransportMode(c adapter.Customs) error {
 // validateNonEUCustoms enforces full customs declaration rules for
 // destinations outside the EU customs union.
 func validateNonEUCustoms(c adapter.Customs, origin, destination, shipmentType string) error {
-	// De minimis check — B2C only.
 	if strings.EqualFold(shipmentType, "B2C") {
 		if threshold, ok := deMinimisThresholds[destination]; ok && threshold.value > 0 {
 			switch {
 			case c.CustomsCurrency == threshold.currency && c.CustomsValue <= threshold.value:
-				return nil // below threshold — customs fields not required
+				return nil
 			case c.CustomsCurrency != threshold.currency && c.CustomsCurrency != "":
 				return fmt.Errorf(
 					"%w: cannot determine %s de minimis without %s value (got %s)",
@@ -192,7 +186,6 @@ func validateNonEUCustoms(c adapter.Customs, origin, destination, shipmentType s
 		return err
 	}
 
-	// Prohibited items for Norway.
 	if destination == "NO" {
 		for _, prefix := range prohibitedHSPrefixes {
 			if strings.HasPrefix(c.HSCode, prefix) {
@@ -231,7 +224,6 @@ func validateNonEUCustoms(c adapter.Customs, origin, destination, shipmentType s
 
 // validateEUCustoms enforces intra-EU customs and VAT rules.
 func validateEUCustoms(c adapter.Customs, destination, shipmentType string) error {
-	// B2C de minimis — below 150 EUR no customs fields are required.
 	if strings.EqualFold(shipmentType, "B2C") {
 		if c.CustomsCurrency == "EUR" && c.CustomsValue <= euDeMinimisEUR {
 			return nil
@@ -241,7 +233,6 @@ func validateEUCustoms(c adapter.Customs, destination, shipmentType string) erro
 		}
 	}
 
-	// B2B — importer VAT number required.
 	if strings.EqualFold(shipmentType, "B2B") {
 		if c.ImporterVATNumber == "" {
 			return fmt.Errorf("importer VAT number is required for B2B shipments to %s", destination)
@@ -251,7 +242,6 @@ func validateEUCustoms(c adapter.Customs, destination, shipmentType string) erro
 		}
 	}
 
-	// CustomsValue above EU de minimis requires HSCode.
 	if c.CustomsCurrency == "EUR" && c.CustomsValue > euDeMinimisEUR && c.HSCode == "" {
 		return fmt.Errorf("HS code is required for EU shipments with customs value > %.0f EUR", euDeMinimisEUR)
 	}
@@ -265,8 +255,9 @@ func validateEUCustoms(c adapter.Customs, destination, shipmentType string) erro
 }
 
 // validateHSCode checks that the HS code is 6-10 digits.
+// Uses a package-level compiled regex to avoid recompilation on every call.
 func validateHSCode(code string) error {
-	if !regexp.MustCompile(`^\d{6,10}$`).MatchString(code) {
+	if !hsCodeRegex.MatchString(code) {
 		return fmt.Errorf("HS code must be 6-10 digits, got %q", code)
 	}
 	return nil

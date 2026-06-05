@@ -9,30 +9,44 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
+// maxLogBodyBytes is the maximum number of bytes captured from the request
+// or response body for debug logging. Bodies larger than this are truncated
+// with a note appended to the logged value. Keeps memory usage bounded
+// regardless of response size (e.g. large label PDFs).
+const maxLogBodyBytes = 64 * 1024 // 64 KB
+
 // sensitiveJSONFields is the set of JSON field names whose values are
-// redacted before a payload is logged. Matching is case-insensitive at
-// scrub time.
+// redacted before a payload is logged. Keys are stored in lower-case;
+// comparison is normalised to lower-case at scrub time to catch any casing.
 var sensitiveJSONFields = map[string]bool{
-	"password":  true,
-	"token":     true,
-	"apikey":    true,
-	"apiKey":    true,
-	"secret":    true,
+	"password":      true,
+	"token":         true,
+	"apikey":        true,
+	"secret":        true,
 	"authorization": true,
 }
 
 // responseCapture wraps http.ResponseWriter to record the status code and
 // response body without interfering with the normal write path.
+// It implements Unwrap so that callers (e.g. gorilla/mux) can access the
+// underlying ResponseWriter when checking for http.Flusher or http.Hijacker.
 type responseCapture struct {
 	http.ResponseWriter
 	status int
 	body   bytes.Buffer
+}
+
+// Unwrap returns the underlying ResponseWriter, allowing type assertions
+// against http.Flusher, http.Hijacker, and http.Pusher to pass through.
+func (rc *responseCapture) Unwrap() http.ResponseWriter {
+	return rc.ResponseWriter
 }
 
 func (rc *responseCapture) WriteHeader(code int) {
@@ -41,7 +55,16 @@ func (rc *responseCapture) WriteHeader(code int) {
 }
 
 func (rc *responseCapture) Write(b []byte) (int, error) {
-	rc.body.Write(b)
+	// Only buffer up to maxLogBodyBytes; still forward everything to the
+	// underlying writer so the actual response is unaffected.
+	if rc.body.Len() < maxLogBodyBytes {
+		remaining := maxLogBodyBytes - rc.body.Len()
+		if len(b) > remaining {
+			rc.body.Write(b[:remaining])
+		} else {
+			rc.body.Write(b)
+		}
+	}
 	return rc.ResponseWriter.Write(b)
 }
 
@@ -58,11 +81,17 @@ func LogPayloads(log *zap.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 
-			// Read and restore request body.
+			// Read and restore request body. On read error, restore an empty
+			// reader so downstream handlers don't receive a closed body.
 			var reqBody []byte
 			if r.Body != nil {
-				reqBody, _ = io.ReadAll(r.Body)
-				r.Body = io.NopCloser(bytes.NewReader(reqBody))
+				var readErr error
+				reqBody, readErr = io.ReadAll(io.LimitReader(r.Body, maxLogBodyBytes+1))
+				if readErr == nil {
+					r.Body = io.NopCloser(bytes.NewReader(reqBody))
+				} else {
+					r.Body = io.NopCloser(bytes.NewReader(nil))
+				}
 			}
 
 			rc := &responseCapture{ResponseWriter: w, status: http.StatusOK}
@@ -75,6 +104,14 @@ func LogPayloads(log *zap.Logger) func(http.Handler) http.Handler {
 
 			requestID := FromContext(r.Context())
 
+			// Truncate request body if it exceeded the cap.
+			reqBodyStr := scrubJSON(reqBody)
+			if len(reqBody) > maxLogBodyBytes {
+				reqBodyStr += " [truncated]"
+			}
+
+			respBodyStr := scrubJSON(rc.body.Bytes())
+
 			log.Debug("request/response payload",
 				zap.String("requestID", requestID),
 				zap.String("method", r.Method),
@@ -82,8 +119,8 @@ func LogPayloads(log *zap.Logger) func(http.Handler) http.Handler {
 				zap.Int("status", rc.status),
 				zap.Duration("duration", time.Since(start)),
 				zap.String("authorization", hashHeader(r.Header.Get("Authorization"))),
-				zap.String("requestBody", scrubJSON(reqBody)),
-				zap.String("responseBody", scrubJSON(rc.body.Bytes())),
+				zap.String("requestBody", reqBodyStr),
+				zap.String("responseBody", respBodyStr),
 			)
 		})
 	}
@@ -123,11 +160,12 @@ func scrubJSON(b []byte) string {
 }
 
 // scrubValue walks the parsed JSON tree and redacts sensitive fields in place.
+// Field name comparison is normalised to lower-case to catch any casing variant.
 func scrubValue(v interface{}) {
 	switch node := v.(type) {
 	case map[string]interface{}:
 		for k, val := range node {
-			if sensitiveJSONFields[k] {
+			if sensitiveJSONFields[strings.ToLower(k)] {
 				node[k] = "[redacted]"
 				continue
 			}

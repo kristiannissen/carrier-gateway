@@ -39,6 +39,21 @@ func NewPostiAdapter(apiKey string, log *zap.Logger) *PostiAdapter {
 
 // BookShipment books a shipment with Posti.
 func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
+	if len(request.Shipment.Colli) == 0 {
+		return nil, fmt.Errorf("shipment must contain at least one colli")
+	}
+
+	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
+	for i, c := range request.Shipment.Colli {
+		parcels[i] = map[string]interface{}{
+			"weight":    c.Weight,
+			"length":    c.Dimensions.Length,
+			"width":     c.Dimensions.Width,
+			"height":    c.Dimensions.Height,
+			"reference": c.ID,
+		}
+	}
+
 	payload := map[string]interface{}{
 		"shipment": map[string]interface{}{
 			"sender": map[string]interface{}{
@@ -59,15 +74,7 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 				"phone":      request.Shipment.Receiver.Phone,
 				"email":      request.Shipment.Receiver.Email,
 			},
-			"parcels": []map[string]interface{}{
-				{
-					"weight":    request.Shipment.Colli[0].Weight,
-					"length":    request.Shipment.Colli[0].Dimensions.Length,
-					"width":     request.Shipment.Colli[0].Dimensions.Width,
-					"height":    request.Shipment.Colli[0].Dimensions.Height,
-					"reference": request.Shipment.Colli[0].ID,
-				},
-			},
+			"parcels": parcels,
 			"service": map[string]interface{}{
 				"productCode": "2412", // Posti's standard parcel product code
 				"addOnServices": []string{

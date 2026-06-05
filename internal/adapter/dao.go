@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -50,8 +51,8 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	params.Set("navn", request.Shipment.Receiver.Name)
 	params.Set("mobil", request.Shipment.Receiver.Phone)
 	params.Set("email", request.Shipment.Receiver.Email)
-	params.Set("dato", "2026-06-01")                                              // Default to tomorrow
-	params.Set("vaegt", strconv.Itoa(int(request.Shipment.Colli[0].Weight*1000))) // Convert kg to grams
+	params.Set("dato", time.Now().AddDate(0, 0, 1).Format("2006-01-02"))
+	params.Set("vaegt", strconv.Itoa(int(math.Round(request.Shipment.Colli[0].Weight*1000))))
 	params.Set("l", strconv.Itoa(int(request.Shipment.Colli[0].Dimensions.Length)))
 	params.Set("h", strconv.Itoa(int(request.Shipment.Colli[0].Dimensions.Height)))
 	params.Set("b", strconv.Itoa(int(request.Shipment.Colli[0].Dimensions.Width)))

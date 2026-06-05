@@ -16,6 +16,10 @@ import (
 type Config struct {
 	Registry *adapter.Registry
 	Log      *zap.Logger
+	// MockMode is true when the service is running with mock adapters.
+	// Captured at startup so the health endpoint reflects the actual
+	// adapter state rather than re-reading the env var per request.
+	MockMode bool
 }
 
 // ErrorResponse represents a standardized error response.

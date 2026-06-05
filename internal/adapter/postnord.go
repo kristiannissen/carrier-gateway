@@ -115,13 +115,14 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		fmt.Sprintf("%s/rest/shipment/v1/booking?apikey=%s", a.BaseURL, a.APIKey),
+		a.BaseURL+"/rest/shipment/v1/booking",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PostNord request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", a.APIKey)
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
@@ -152,12 +153,13 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s?apikey=%s", a.BaseURL, trackingNumber, a.APIKey),
+		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s", a.BaseURL, trackingNumber),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PostNord tracking request: %w", err)
 	}
+	req.Header.Set("X-API-Key", a.APIKey)
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {

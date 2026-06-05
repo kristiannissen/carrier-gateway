@@ -5,6 +5,7 @@ package parser
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
 
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
@@ -17,17 +18,29 @@ type Parser interface {
 }
 
 // ForRequest returns the appropriate Parser for the request's Content-Type.
-// Defaults to JSON if the header is absent.
+// Defaults to JSON when the header is absent or empty.
+// Uses mime.ParseMediaType so that charset parameters (e.g.
+// "application/json; charset=utf-8") are handled correctly.
 func ForRequest(r *http.Request) (Parser, error) {
 	ct := r.Header.Get("Content-Type")
-	switch {
-	case ct == "" || ct == "application/json":
+	if ct == "" {
 		return &JSONParser{}, nil
-	case ct == "application/xml" || ct == "text/xml":
+	}
+
+	mediaType, _, err := mime.ParseMediaType(ct)
+	if err != nil {
+		// Unparseable Content-Type — fall back to JSON rather than rejecting.
+		return &JSONParser{}, nil
+	}
+
+	switch mediaType {
+	case "application/json":
+		return &JSONParser{}, nil
+	case "application/xml", "text/xml":
 		return &XMLParser{}, nil
-	case ct == "application/edifact" || ct == "text/plain":
+	case "application/edifact", "text/plain":
 		return &EDIFACTParser{}, nil
 	default:
-		return nil, fmt.Errorf("unsupported Content-Type: %s", ct)
+		return nil, fmt.Errorf("unsupported Content-Type: %s", mediaType)
 	}
 }

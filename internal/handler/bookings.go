@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -124,7 +125,7 @@ func validateBookingRequest(request *adapter.BookingRequest) (flagged bool, err 
 	for _, colli := range request.Shipment.Colli {
 		colliTotalWeight += colli.Weight
 	}
-	if colliTotalWeight != request.Shipment.TotalWeight {
+	if math.Abs(colliTotalWeight-request.Shipment.TotalWeight) > 0.001 {
 		return false, fmt.Errorf("total weight does not match sum of colli weights (expected %.2f, got %.2f)",
 			colliTotalWeight, request.Shipment.TotalWeight)
 	}

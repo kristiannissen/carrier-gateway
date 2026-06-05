@@ -29,13 +29,16 @@ type xmlShipment struct {
 }
 
 type xmlAddress struct {
-	Name       string `xml:"Name"`
-	Street     string `xml:"Street"`
-	City       string `xml:"City"`
-	PostalCode string `xml:"PostalCode"`
-	Country    string `xml:"Country"`
-	Phone      string `xml:"Phone,omitempty"`
-	Email      string `xml:"Email,omitempty"`
+	Name        string `xml:"Name"`
+	Street      string `xml:"Street"`
+	HouseNumber string `xml:"HouseNumber,omitempty"`
+	Supplement  string `xml:"Supplement,omitempty"`
+	City        string `xml:"City"`
+	PostalCode  string `xml:"PostalCode"`
+	Country     string `xml:"Country"`
+	State       string `xml:"State,omitempty"`
+	Phone       string `xml:"Phone,omitempty"`
+	Email       string `xml:"Email,omitempty"`
 }
 
 type xmlColli struct {
@@ -70,22 +73,28 @@ func (p *XMLParser) Parse(body []byte) (*adapter.BookingRequest, error) {
 		Carrier: x.Carrier,
 		Shipment: adapter.Shipment{
 			Sender: adapter.Address{
-				Name:       x.Shipment.Sender.Name,
-				Street:     x.Shipment.Sender.Street,
-				City:       x.Shipment.Sender.City,
-				PostalCode: x.Shipment.Sender.PostalCode,
-				Country:    x.Shipment.Sender.Country,
-				Phone:      x.Shipment.Sender.Phone,
-				Email:      x.Shipment.Sender.Email,
+				Name:        x.Shipment.Sender.Name,
+				Street:      x.Shipment.Sender.Street,
+				HouseNumber: x.Shipment.Sender.HouseNumber,
+				Supplement:  x.Shipment.Sender.Supplement,
+				City:        x.Shipment.Sender.City,
+				PostalCode:  x.Shipment.Sender.PostalCode,
+				Country:     x.Shipment.Sender.Country,
+				State:       x.Shipment.Sender.State,
+				Phone:       x.Shipment.Sender.Phone,
+				Email:       x.Shipment.Sender.Email,
 			},
 			Receiver: adapter.Address{
-				Name:       x.Shipment.Receiver.Name,
-				Street:     x.Shipment.Receiver.Street,
-				City:       x.Shipment.Receiver.City,
-				PostalCode: x.Shipment.Receiver.PostalCode,
-				Country:    x.Shipment.Receiver.Country,
-				Phone:      x.Shipment.Receiver.Phone,
-				Email:      x.Shipment.Receiver.Email,
+				Name:        x.Shipment.Receiver.Name,
+				Street:      x.Shipment.Receiver.Street,
+				HouseNumber: x.Shipment.Receiver.HouseNumber,
+				Supplement:  x.Shipment.Receiver.Supplement,
+				City:        x.Shipment.Receiver.City,
+				PostalCode:  x.Shipment.Receiver.PostalCode,
+				Country:     x.Shipment.Receiver.Country,
+				State:       x.Shipment.Receiver.State,
+				Phone:       x.Shipment.Receiver.Phone,
+				Email:       x.Shipment.Receiver.Email,
 			},
 			TotalWeight: x.Shipment.TotalWeight,
 			Colli:       colli,

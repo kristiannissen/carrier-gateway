@@ -3,8 +3,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -30,8 +35,53 @@ func main() {
 		port = "8080"
 	}
 
-	log.Info("server listening", zap.String("port", port))
-	if err := http.ListenAndServe(":"+port, rtr); err != nil {
+	// SHUTDOWN_TIMEOUT controls how long the server waits for in-flight
+	// requests to complete after receiving SIGTERM. Docker's default
+	// stop-timeout is 10 s; set this lower so the drain completes before
+	// Docker sends SIGKILL.
+	shutdownTimeout := 8 * time.Second
+	if v := os.Getenv("SHUTDOWN_TIMEOUT"); v != "" {
+		if d, parseErr := time.ParseDuration(v); parseErr == nil {
+			shutdownTimeout = d
+		}
+	}
+
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: rtr,
+		// Defend against slow-loris and large-header attacks.
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	// Start the server in a goroutine so we can listen for signals below.
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Info("server listening", zap.String("port", port))
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+	}()
+
+	// Block until SIGTERM or SIGINT (Ctrl-C in local dev).
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+
+	select {
+	case err := <-serverErr:
 		log.Fatal("server failed", zap.Error(err))
+	case sig := <-quit:
+		log.Info("shutdown signal received", zap.String("signal", sig.String()))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Error("graceful shutdown failed", zap.Error(err))
+	} else {
+		log.Info("server stopped cleanly")
 	}
 }

@@ -5,7 +5,6 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 	"time"
 
 	"go.uber.org/zap"
@@ -40,7 +39,7 @@ func (c *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mockMode := os.Getenv("MOCK_MODE") == "true"
+	mockMode := c.MockMode
 
 	carriers := make(map[string]string, len(c.Registry.Carriers()))
 	for _, name := range c.Registry.Carriers() {
