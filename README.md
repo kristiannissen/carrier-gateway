@@ -1,706 +1,560 @@
-# Multi-Carrier Integration Service
+# logistics-gateway
 
-A **stateless, modular Go microservice** for integrating with multiple logistics carriers (PostNord, FedEx, DHL). Supports **synchronous/asynchronous operations**, **webhooks**, and **environment-based authentication**. Designed for **open-source distribution** under Apache 2.0.
-
----
-
-## **Features**
-- **Multi-Carrier Support**: PostNord, FedEx, DHL (extensible to others).
-- **Colli (Multi-Package) Shipments**: Supports both single-package and multi-package shipments.
-- **Idempotency**: Supported for FedEx; ignored for PostNord/DHL (with warnings).
-- **Webhooks**: Callback URLs for tracking updates.
-- **Stateless Design**: No persistence layer (async job tracking via external storage).
-- **Docker & CLI Tools**: Easy deployment and local development.
-- **Vercel-Compatible**: Deploy as a serverless function.
+A stateless Go microservice for booking and tracking shipments across multiple Nordic and European carriers through a single consistent API. Change the `carrier` field in your request and the rest of your integration stays the same.
 
 ---
 
-## **Table of Contents**
-1. [Installation](#installation)
-2. [Configuration](#configuration)
-3. [API Reference](#api-reference)
-4. [Colli (Multi-Package) Shipments](#colli-multi-package-shipments)
-5. [Carrier-Specific Notes](#carrier-specific-notes)
-6. [Examples](#examples)
-7. [Development](#development)
-8. [Testing](#testing)
-9. [Deployment](#deployment)
-10. [Contributing](#contributing)
-11. [License](#license)
+## Supported carriers
+
+| Key | Carrier | Countries |
+|---|---|---|
+| `postnord` | PostNord | DK, SE, NO, FI |
+| `bring` | Bring | NO, SE, DK, FI |
+| `gls` | GLS | DK, SE, DE, NL, and more |
+| `dao` | DAO | DK |
+| `posti` | Posti | FI |
+| `inpost` | InPost | PL |
 
 ---
 
-## **Installation**
+## Quick start
 
-### **Prerequisites**
-- Go 1.21+
-- Docker (optional, for local development)
-- API keys for carriers (PostNord, FedEx, DHL)
-
-### **Clone the Repository**
 ```bash
 git clone https://github.com/kristiannissen/logistics-gateway.git
 cd logistics-gateway
+go mod download
+
+# Run in mock mode — no carrier credentials needed
+MOCK_MODE=true LOG_ENV=development go run ./cmd/api
 ```
 
-### **Install Dependencies**
-```bash
-go mod download
-```
+The server starts on `http://localhost:8080`.
 
 ---
 
-## **Configuration**
+## Environment variables
 
-### **Environment Variables**
-| Variable               | Description                          | Required | Default       |
-|------------------------|--------------------------------------|----------|---------------|
-| `PORT`                 | Port for the HTTP server             | No       | `8080`        |
-| `API_KEY`              | API key for the service              | Yes      | -             |
-| `POSTNORD_API_KEY`     | PostNord API key                     | No       | -             |
-| `FED_EX_API_KEY`       | FedEx API key                        | No       | -             |
-| `DHL_API_KEY`          | DHL API key                          | No       | -             |
-| `ENVIRONMENT`          | Environment (e.g., `development`)     | No       | `development` |
+| Variable | Description | Required | Default |
+|---|---|---|---|
+| `PORT` | HTTP server port | No | `8080` |
+| `LOG_ENV` | Set to `development` for console logging and debug payload dumps | No | — |
+| `MOCK_MODE` | Set to `true` to use mock adapters — no real carrier credentials needed | No | `false` |
+| `POSTNORD_API_KEY` | PostNord API key | No | — |
+| `BRING_API_KEY` | Bring API key | No | — |
+| `BRING_CUSTOMER_ID` | Bring customer ID | No | — |
+| `GLS_API_KEY` | GLS API key | No | — |
+| `GLS_CONTRACT_ID` | GLS contract ID | No | — |
+| `DAO_API_KEY` | DAO API key | No | — |
+| `DAO_CUSTOMER_ID` | DAO customer ID | No | — |
+| `POSTI_API_KEY` | Posti API key | No | — |
+| `INPOST_API_KEY` | InPost API key | No | — |
 
-### **Example `.env` File**
+When a carrier's key is absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter automatically.
+
+### `.env` example
+
 ```env
 PORT=8080
-API_KEY=your-api-key
-POSTNORD_API_KEY=your-postnord-api-key
-FED_EX_API_KEY=your-fedex-api-key
-DHL_API_KEY=your-dhl-api-key
-ENVIRONMENT=development
+LOG_ENV=development
+MOCK_MODE=false
+POSTNORD_API_KEY=your-postnord-key
+BRING_API_KEY=your-bring-key
+BRING_CUSTOMER_ID=your-bring-customer-id
+GLS_API_KEY=your-gls-key
+GLS_CONTRACT_ID=your-gls-contract-id
+DAO_API_KEY=your-dao-key
+DAO_CUSTOMER_ID=your-dao-customer-id
+POSTI_API_KEY=your-posti-key
+INPOST_API_KEY=your-inpost-key
 ```
 
 ---
 
-## **API Reference**
+## Docker
 
-### **Endpoints**
-| Method | Endpoint                          | Description                          |
-|--------|-----------------------------------|--------------------------------------|
-| POST   | `/api/bookings`                   | Book a shipment (single or multi-colli). |
-| GET    | `/api/trackings/{trackingNumber}` | Track a shipment.                     |
-| GET    | `/api/service-points`             | Get service points (pickup locations). |
-| GET    | `/api/health`                     | Health check.                         |
-
----
-
-### **1. Book a Shipment**
-**Endpoint**: `POST /api/bookings`
-
-#### **Request Body (JSON)**
-```json
-{
-  "carrier": "postnord",
-  "shipment": {
-    "sender": {
-      "name": "Sender Name",
-      "street": "Sender Street",
-      "city": "Copenhagen",
-      "postalCode": "2300",
-      "country": "DK",
-      "phone": "+4512345678",
-      "email": "sender@example.com"
-    },
-    "receiver": {
-      "name": "Receiver Name",
-      "street": "Receiver Street",
-      "city": "Stockholm",
-      "postalCode": "111 22",
-      "country": "SE",
-      "phone": "+46123456789",
-      "email": "receiver@example.com"
-    },
-    "totalWeight": 15.0,
-    "colli": [
-      {
-        "id": "colli_1",
-        "reference": "BOX-001",
-        "weight": 5.0,
-        "dimensions": {
-          "length": 30.0,
-          "width": 20.0,
-          "height": 10.0
-        },
-        "items": [
-          {
-            "description": "T-Shirt (Blue, L)",
-            "weight": 0.5,
-            "quantity": 5,
-            "value": 25.0,
-            "sku": "TSHIRT-BLUE-L"
-          }
-        ]
-      },
-      {
-        "id": "colli_2",
-        "reference": "BOX-002",
-        "weight": 10.0,
-        "dimensions": {
-          "length": 50.0,
-          "width": 40.0,
-          "height": 20.0
-        },
-        "items": [
-          {
-            "description": "Winter Jacket",
-            "weight": 2.0,
-            "quantity": 1,
-            "value": 150.0,
-            "sku": "JACKET-WINTER-01"
-          }
-        ]
-      }
-    ]
-  },
-  "callbackUrl": "https://api.example.com/webhooks/tracking",
-  "idempotencyKey": "unique-key-123",
-  "incoterms": "DDP",
-  "hsCode": "61091000"
-}
-```
-
-#### **Request Fields**
-| Field               | Type          | Description                                                                                     | Required |
-|---------------------|---------------|-------------------------------------------------------------------------------------------------|----------|
-| `carrier`           | `string`      | Carrier name (`postnord`, `fedex`, `dhl`).                                                     | Yes      |
-| `shipment`          | `object`      | Shipment details (see below).                                                                   | Yes      |
-| `callbackUrl`       | `string`      | URL for tracking updates (webhook).                                                           | No       |
-| `idempotencyKey`    | `string`      | Unique key for idempotency (supported by FedEx; ignored by PostNord/DHL).                      | No       |
-| `incoterms`         | `string`      | Incoterms (e.g., `DDP`, `DAP`) for customs/duty handling.                                       | No       |
-| `hsCode`            | `string`      | Harmonized System (HS) code for customs classification.                                       | No       |
-
-#### **Shipment Fields**
-| Field               | Type          | Description                                                                                     | Required |
-|---------------------|---------------|-------------------------------------------------------------------------------------------------|----------|
-| `sender`            | `object`      | Sender address (see [Address](#address)).                                                      | Yes      |
-| `receiver`          | `object`      | Receiver address (see [Address](#address)).                                                    | Yes      |
-| `totalWeight`       | `float`       | Total weight of all colli combined (kg).                                                       | Yes      |
-| `colli`            | `array`       | List of individual packages (colli). See [Colli](#colli).                                      | Yes      |
-
-#### **Address Fields**
-| Field               | Type     | Description                     | Required |
-|---------------------|----------|---------------------------------|----------|
-| `name`              | `string` | Name of the contact.            | Yes      |
-| `street`            | `string` | Street address.                 | Yes      |
-| `city`              | `string` | City.                           | Yes      |
-| `postalCode`        | `string` | Postal code.                    | Yes      |
-| `country`           | `string` | Country code (ISO 3166-1 alpha-2). | Yes      |
-| `phone`             | `string` | Phone number.                   | No       |
-| `email`             | `string` | Email address.                  | No       |
-
-#### **Colli Fields**
-| Field               | Type          | Description                                                                                     | Required |
-|---------------------|---------------|-------------------------------------------------------------------------------------------------|----------|
-| `id`                | `string`      | Unique identifier for the colli (e.g., `colli_1`).                                             | Yes      |
-| `reference`         | `string`      | Optional reference (e.g., barcode).                                                             | No       |
-| `weight`            | `float`       | Weight of this colli (kg).                                                                     | Yes      |
-| `dimensions`        | `object`      | Dimensions (`length`, `width`, `height` in cm).                                                 | No       |
-| `items`             | `array`       | List of items in this colli. See [Item](#item).                                                | Yes      |
-
-#### **Item Fields**
-| Field               | Type     | Description                     | Required |
-|---------------------|----------|---------------------------------|----------|
-| `description`       | `string` | Description of the item.        | Yes      |
-| `weight`            | `float`  | Weight of the item (kg).        | Yes      |
-| `quantity`          | `int`    | Quantity of the item.           | Yes      |
-| `value`             | `float`  | Value of the item (for customs).| No       |
-| `sku`               | `string` | Stock Keeping Unit (SKU).       | No       |
-
-#### **Response (JSON)**
-```json
-{
-  "shipmentId": "550e8400-e29b-41d4-a716-446655440000",
-  "trackingNumber": "PN123456789DK",
-  "labelUrl": "https://api.postnord.com/labels/550e8400-e29b-41d4-a716-446655440000.pdf",
-  "carrier": "postnord",
-  "cost": 125.50,
-  "currency": "DKK",
-  "serviceLevel": "Standard",
-  "status": "booked",
-  "colli": [
-    {
-      "id": "colli_1",
-      "reference": "BOX-001",
-      "trackingNumber": "PN123456789DK-1",
-      "labelUrl": "https://api.postnord.com/labels/550e8400-e29b-41d4-a716-446655440000-1.pdf",
-      "status": "booked"
-    },
-    {
-      "id": "colli_2",
-      "reference": "BOX-002",
-      "trackingNumber": "PN123456789DK-2",
-      "labelUrl": "https://api.postnord.com/labels/550e8400-e29b-41d4-a716-446655440000-2.pdf",
-      "status": "booked"
-    }
-  ]
-}
-```
-
-#### **Response Fields**
-| Field               | Type          | Description                                                                                     |
-|---------------------|---------------|-------------------------------------------------------------------------------------------------|
-| `shipmentId`        | `string`      | Unique identifier for the shipment (UUID).                                                     |
-| `trackingNumber`    | `string`      | Parent tracking number for the entire shipment.                                                |
-| `labelUrl`          | `string`      | URL to download the shipping label (PDF).                                                       |
-| `carrier`           | `string`      | Carrier name (e.g., `postnord`).                                                                |
-| `cost`              | `float`       | Total shipping cost.                                                                           |
-| `currency`          | `string`      | Currency for the shipping cost (e.g., `DKK`, `USD`).                                            |
-| `serviceLevel`      | `string`      | Service level (e.g., `Standard`, `Express`).                                                    |
-| `status`            | `string`      | Status of the shipment (e.g., `booked`, `error`).                                               |
-| `colli`             | `array`       | List of colli responses. See [ColliResponse](#colliresponse).                                  |
-
-#### **ColliResponse Fields**
-| Field               | Type     | Description                     |
-|---------------------|----------|---------------------------------|
-| `id`                | `string` | Unique identifier for the colli. |
-| `reference`         | `string` | Optional reference.              |
-| `trackingNumber`    | `string` | Individual tracking number.      |
-| `labelUrl`          | `string` | URL to download the label.       |
-| `status`            | `string` | Status of this colli.            |
-
----
-
-### **2. Track a Shipment**
-**Endpoint**: `GET /api/trackings/{trackingNumber}?carrier={carrier}`
-
-#### **Query Parameters**
-| Parameter   | Type     | Description                     | Required | Default   |
-|-------------|----------|---------------------------------|----------|-----------|
-| `carrier`   | `string` | Carrier name (`postnord`, `fedex`, `dhl`). | No       | `postnord` |
-
-#### **Response (JSON)**
-```json
-{
-  "shipmentId": "550e8400-e29b-41d4-a716-446655440000",
-  "trackingNumber": "PN123456789DK",
-  "carrier": "postnord",
-  "status": "In Transit",
-  "estimatedDelivery": "2026-06-02",
-  "events": [
-    {
-      "timestamp": "2026-05-28T14:30:00Z",
-      "status": "Picked Up",
-      "location": "Copenhagen, DK",
-      "details": "Package picked up at sender location"
-    }
-  ],
-  "colli": [
-    {
-      "id": "colli_1",
-      "reference": "BOX-001",
-      "trackingNumber": "PN123456789DK-1",
-      "status": "In Transit",
-      "events": [
-        {
-          "timestamp": "2026-05-28T14:30:00Z",
-          "status": "Picked Up",
-          "location": "Copenhagen, DK",
-          "details": "Package picked up at sender location"
-        }
-      ]
-    }
-  ]
-}
-```
-
-#### **Response Fields**
-| Field               | Type          | Description                                                                                     |
-|---------------------|---------------|-------------------------------------------------------------------------------------------------|
-| `shipmentId`        | `string`      | Unique identifier for the shipment.                                                           |
-| `trackingNumber`    | `string`      | Parent tracking number for the entire shipment.                                                |
-| `carrier`           | `string`      | Carrier name (e.g., `postnord`).                                                                |
-| `status`            | `string`      | Overall status of the shipment (e.g., `In Transit`, `Delivered`).                              |
-| `estimatedDelivery` | `string`      | Estimated delivery date (ISO 8601 format).                                                     |
-| `events`            | `array`       | Parent shipment tracking events. See [TrackingEvent](#trackingevent).                        |
-| `colli`             | `array`       | List of colli tracking information. See [ColliTracking](#collitracking).                     |
-
-#### **TrackingEvent Fields**
-| Field       | Type     | Description                     |
-|-------------|----------|---------------------------------|
-| `timestamp` | `string` | Timestamp (ISO 8601 format).     |
-| `status`    | `string` | Event status (e.g., `Picked Up`). |
-| `location`  | `string` | Location of the event.           |
-| `details`   | `string` | Additional details.              |
-
-#### **ColliTracking Fields**
-| Field               | Type          | Description                                                                                     |
-|---------------------|---------------|-------------------------------------------------------------------------------------------------|
-| `id`                | `string`      | Unique identifier for the colli.                                                               |
-| `reference`         | `string`      | Optional reference.                                                                              |
-| `trackingNumber`    | `string`      | Individual tracking number for this colli.                                                     |
-| `status`            | `string`      | Current status of this colli.                                                                   |
-| `events`            | `array`       | Tracking events for this colli. See [TrackingEvent](#trackingevent).                          |
-
----
-
-### **3. Get Service Points**
-**Endpoint**: `GET /api/service-points?city={city}&postalCode={postalCode}&country={country}&carrier={carrier}`
-
-#### **Query Parameters**
-| Parameter    | Type     | Description                     | Required | Default   |
-|--------------|----------|---------------------------------|----------|-----------|
-| `city`       | `string` | City name.                      | Yes      | -         |
-| `postalCode` | `string` | Postal code.                    | No       | -         |
-| `country`    | `string` | Country code (ISO 3166-1 alpha-2). | Yes      | -         |
-| `carrier`    | `string` | Carrier name (`postnord`, `fedex`, `dhl`). | No       | `postnord` |
-
-#### **Response (JSON)**
-```json
-[
-  {
-    "id": "sp_123",
-    "name": "PostNord Copenhagen",
-    "address": {
-      "name": "PostNord Copenhagen",
-      "street": "Main Street 1",
-      "city": "Copenhagen",
-      "postalCode": "12345",
-      "country": "DK"
-    },
-    "openingHours": "09:00-17:00",
-    "services": ["Pickup", "Dropoff"]
-  }
-]
-```
-
-#### **Response Fields**
-| Field          | Type          | Description                                                                                     |
-|----------------|---------------|-------------------------------------------------------------------------------------------------|
-| `id`           | `string`      | Unique identifier for the service point.                                                       |
-| `name`         | `string`      | Name of the service point.                                                                     |
-| `address`      | `object`      | Address of the service point. See [Address](#address).                                         |
-| `openingHours` | `string`      | Opening hours (e.g., `09:00-17:00`).                                                             |
-| `services`     | `array`       | List of services offered (e.g., `Pickup`, `Dropoff`).                                           |
-
----
-
-## **Colli (Multi-Package) Shipments**
-
-### **What is a Colli?**
-A **colli** (or **multi-package shipment**) is a shipment that consists of **multiple individual packages**. This is useful for:
-- Splitting a large order into multiple boxes.
-- Shipping bulky or irregularly shaped items separately.
-- Mixing different types of items (e.g., pallets + cartons).
-
-### **How It Works**
-1. **Request**: Include a list of `colli` in the `Shipment` object. Each colli can have its own:
-   - `id` (unique identifier)
-   - `weight`
-   - `dimensions`
-   - `items` (list of items in the colli)
-2. **Response**: The API returns:
-   - A **parent tracking number** for the entire shipment.
-   - **Individual tracking numbers** for each colli (if supported by the carrier).
-   - **Label URLs** for each colli (or a single label for the entire shipment).
-
-### **Example: Single-Package Shipment (1 Colli)**
-```json
-{
-  "carrier": "postnord",
-  "shipment": {
-    "sender": { "name": "Sender", "street": "Street", "city": "Copenhagen", "postalCode": "2300", "country": "DK" },
-    "receiver": { "name": "Receiver", "street": "Street", "city": "Stockholm", "postalCode": "111 22", "country": "SE" },
-    "totalWeight": 5.0,
-    "colli": [
-      {
-        "id": "colli_1",
-        "weight": 5.0,
-        "items": [ { "description": "T-Shirt", "weight": 0.5, "quantity": 5 } ]
-      }
-    ]
-  }
-}
-```
-
-### **Example: Multi-Package Shipment (2+ Colli)**
-```json
-{
-  "carrier": "postnord",
-  "shipment": {
-    "sender": { "name": "Sender", "street": "Street", "city": "Copenhagen", "postalCode": "2300", "country": "DK" },
-    "receiver": { "name": "Receiver", "street": "Street", "city": "Stockholm", "postalCode": "111 22", "country": "SE" },
-    "totalWeight": 15.0,
-    "colli": [
-      {
-        "id": "colli_1",
-        "weight": 5.0,
-        "items": [ { "description": "T-Shirt", "weight": 0.5, "quantity": 5 } ]
-      },
-      {
-        "id": "colli_2",
-        "weight": 10.0,
-        "items": [ { "description": "Jacket", "weight": 2.0, "quantity": 1 } ]
-      }
-    ]
-  }
-}
-```
-
----
-
-## **Carrier-Specific Notes**
-
-### **PostNord**
-- **Multi-Colli Support**: Native support for multi-package shipments.
-- **Tracking**: Each colli can have its own tracking number (e.g., `PN123456789DK-1`, `PN123456789DK-2`).
-- **Labels**: Individual labels for each colli or a single label for the entire shipment.
-- **Idempotency**: Not supported (warnings are logged if `idempotencyKey` is provided).
-
-### **FedEx**
-- **Multi-Colli Support**: Uses `packageLineItems` for multi-package shipments.
-- **Tracking**: Each package can have its own tracking number.
-- **Labels**: Individual labels for each package.
-- **Idempotency**: Supported via `Idempotency-Key` header.
-- **Webhooks**: Supported via `notificationUrl`.
-
-### **DHL**
-- **Multi-Colli Support**: Uses `pieces` or `packages` for multi-package shipments.
-- **Tracking**: Each piece can have its own tracking number.
-- **Labels**: Individual labels for each piece.
-- **Idempotency**: Not supported (warnings are logged if `idempotencyKey` is provided).
-
----
-
-## **Examples**
-
-### **1. Book a Single-Package Shipment (PostNord)**
 ```bash
-curl -X POST https://api.example.com/api/bookings \
+# Build
+docker build -t logistics-gateway .
+
+# Run with an env file
+docker run -p 8080:8080 --env-file .env logistics-gateway
+
+# Run in mock mode
+docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development logistics-gateway
+```
+
+---
+
+## API reference
+
+### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/bookings` | Book a shipment |
+| `GET` | `/api/trackings/{trackingNumber}` | Track a shipment |
+| `GET` | `/api/health` | Health check |
+
+Every request receives an `X-Request-ID` header in the response. Pass it in your request to forward your own correlation ID — useful for tying gateway logs to your own system's logs.
+
+---
+
+### POST /api/bookings
+
+Books a shipment with the specified carrier. The request body is identical regardless of carrier — only the `carrier` field changes.
+
+#### Address fields
+
+| Field | Type | Description | Required |
+|---|---|---|---|
+| `name` | string | Contact name | Yes |
+| `street` | string | Street name only — no house number | Yes |
+| `houseNumber` | string | House number — required for GLS, DAO, InPost (except France) | No |
+| `supplement` | string | Building, floor, apartment, attention line | No |
+| `city` | string | City | Yes |
+| `postalCode` | string | Postal code | Yes |
+| `country` | string | ISO 3166-1 alpha-2 country code | Yes |
+| `phone` | string | Phone number | No |
+| `email` | string | Email address | No |
+
+#### Colli fields
+
+| Field | Type | Description | Required |
+|---|---|---|---|
+| `id` | string | Unique identifier for this package | Yes |
+| `reference` | string | Your own reference e.g. barcode | No |
+| `weight` | float | Weight in kg | Yes |
+| `dimensions.length` | float | Length in cm | No |
+| `dimensions.width` | float | Width in cm | No |
+| `dimensions.height` | float | Height in cm | No |
+| `items` | array | Line items in this package | Yes |
+
+#### Book a single-package shipment
+
+```bash
+curl -X POST http://localhost:8080/api/bookings \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
+  -H "X-Request-ID: my-correlation-id-001" \
   -d '{
     "carrier": "postnord",
     "shipment": {
       "sender": {
-        "name": "Kristian Nissen",
-        "street": "Industrivej 10",
+        "name": "Unisport Group",
+        "street": "Industrivej",
+        "houseNumber": "10",
+        "city": "Copenhagen",
+        "postalCode": "2300",
+        "country": "DK",
+        "phone": "+4512345678",
+        "email": "logistics@unisport.dk"
+      },
+      "receiver": {
+        "name": "Anna Svensson",
+        "street": "Storgatan",
+        "houseNumber": "1",
+        "city": "Stockholm",
+        "postalCode": "11122",
+        "country": "SE",
+        "phone": "+46701234567",
+        "email": "anna@example.com"
+      },
+      "totalWeight": 2.5,
+      "colli": [
+        {
+          "id": "box-001",
+          "weight": 2.5,
+          "dimensions": { "length": 30, "width": 20, "height": 10 },
+          "items": [
+            {
+              "description": "Football boots",
+              "weight": 0.8,
+              "quantity": 1,
+              "value": 129.95,
+              "sku": "FB-BOOT-42"
+            }
+          ]
+        }
+      ]
+    },
+    "idempotencyKey": "order-98765"
+  }'
+```
+
+#### Switch carrier — nothing else changes
+
+```bash
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "bring",
+    "shipment": { ... }
+  }'
+```
+
+#### Multi-package shipment
+
+```bash
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "gls",
+    "shipment": {
+      "sender": {
+        "name": "Unisport Group",
+        "street": "Industrivej",
+        "houseNumber": "10",
         "city": "Copenhagen",
         "postalCode": "2300",
         "country": "DK"
       },
       "receiver": {
-        "name": "Receiver AB",
-        "street": "Storgatan 1",
-        "city": "Stockholm",
-        "postalCode": "111 22",
-        "country": "SE"
+        "name": "Klaus Müller",
+        "street": "Hauptstraße",
+        "houseNumber": "42",
+        "city": "Berlin",
+        "postalCode": "10115",
+        "country": "DE"
       },
-      "totalWeight": 5.0,
+      "totalWeight": 12.0,
       "colli": [
         {
-          "id": "colli_1",
+          "id": "box-001",
           "weight": 5.0,
-          "items": [
-            {
-              "description": "T-Shirt",
-              "weight": 0.5,
-              "quantity": 5,
-              "value": 25.0
-            }
-          ]
+          "dimensions": { "length": 40, "width": 30, "height": 20 },
+          "items": [{ "description": "Jerseys", "weight": 0.3, "quantity": 10, "value": 49.95 }]
+        },
+        {
+          "id": "box-002",
+          "weight": 7.0,
+          "dimensions": { "length": 50, "width": 40, "height": 30 },
+          "items": [{ "description": "Shin guards", "weight": 0.2, "quantity": 20, "value": 19.95 }]
         }
       ]
     }
   }'
 ```
 
-### **2. Book a Multi-Package Shipment (FedEx)**
+#### With supplement address line
+
 ```bash
-curl -X POST https://api.example.com/api/bookings \
+curl -X POST http://localhost:8080/api/bookings \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer your-api-key" \
   -d '{
-    "carrier": "fedex",
+    "carrier": "posti",
     "shipment": {
-      "sender": {
-        "name": "Kristian Nissen",
-        "street": "123 Main St",
-        "city": "New York",
-        "postalCode": "10001",
-        "country": "US",
-        "phone": "+1234567890",
-        "email": "sender@example.com"
-      },
+      "sender": { ... },
       "receiver": {
-        "name": "Receiver Inc.",
-        "street": "456 Oak Ave",
-        "city": "Los Angeles",
-        "postalCode": "90001",
-        "country": "US",
-        "phone": "+1987654321",
-        "email": "receiver@example.com"
+        "name": "Marie Dupont",
+        "street": "Rue de Rivoli",
+        "supplement": "Bâtiment B, 3ème étage",
+        "city": "Paris",
+        "postalCode": "75001",
+        "country": "FR"
       },
-      "totalWeight": 15.0,
-      "colli": [
-        {
-          "id": "colli_1",
-          "weight": 5.0,
-          "dimensions": { "length": 30.0, "width": 20.0, "height": 10.0 },
-          "items": [
-            {
-              "description": "T-Shirt",
-              "weight": 0.5,
-              "quantity": 5,
-              "value": 25.0,
-              "sku": "TSHIRT-001"
-            }
-          ]
-        },
-        {
-          "id": "colli_2",
-          "weight": 10.0,
-          "dimensions": { "length": 50.0, "width": 40.0, "height": 20.0 },
-          "items": [
-            {
-              "description": "Jacket",
-              "weight": 2.0,
-              "quantity": 1,
-              "value": 100.0,
-              "sku": "JACKET-001"
-            }
-          ]
-        }
-      ]
-    },
-    "idempotencyKey": "unique-key-123",
-    "incoterms": "DDP"
+      "totalWeight": 1.5,
+      "colli": [...]
+    }
   }'
 ```
 
-### **3. Track a Shipment (PostNord)**
+#### InPost — street and house number required as separate fields
+
 ```bash
-curl -X GET https://api.example.com/api/trackings/PN123456789DK \
-  -H "Authorization: Bearer your-api-key"
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "inpost",
+    "shipment": {
+      "sender": { ... },
+      "receiver": {
+        "name": "Jan Kowalski",
+        "street": "Marszałkowska",
+        "houseNumber": "10",
+        "city": "Warsaw",
+        "postalCode": "00-001",
+        "country": "PL",
+        "phone": "+48123456789"
+      },
+      "totalWeight": 1.0,
+      "colli": [
+        {
+          "id": "box-001",
+          "weight": 1.0,
+          "dimensions": { "length": 20, "width": 15, "height": 10 },
+          "items": [{ "description": "Football", "weight": 0.5, "quantity": 1, "value": 24.95 }]
+        }
+      ]
+    }
+  }'
 ```
 
-### **4. Get Service Points (PostNord)**
-```bash
-curl -X GET "https://api.example.com/api/service-points?city=Copenhagen&country=DK" \
-  -H "Authorization: Bearer your-api-key"
+#### Successful response
+
+```json
+{
+  "shipmentId": "shipment_482910",
+  "trackingNumber": "PN482910123DK",
+  "labelUrl": "https://api.postnord.com/labels/PN482910123DK.pdf",
+  "carrier": "postnord",
+  "cost": 125.50,
+  "currency": "DKK",
+  "serviceLevel": "1700",
+  "status": "booked",
+  "colli": [
+    {
+      "id": "1",
+      "reference": "box-001",
+      "trackingNumber": "PN482910123DK-1",
+      "labelUrl": "https://api.postnord.com/labels/PN482910123DK-1.pdf",
+      "status": "booked"
+    }
+  ]
+}
 ```
 
 ---
 
-## **Development**
+### GET /api/trackings/{trackingNumber}
 
-### **Project Structure**
 ```bash
+# Default carrier is postnord
+curl http://localhost:8080/api/trackings/PN482910123DK
+
+# Specify carrier
+curl "http://localhost:8080/api/trackings/BR123456789NO?carrier=bring"
+
+# With correlation ID
+curl "http://localhost:8080/api/trackings/GLS123456789DK?carrier=gls" \
+  -H "X-Request-ID: my-correlation-id-002"
+```
+
+#### Response
+
+```json
+{
+  "trackingNumber": "PN482910123DK",
+  "carrier": "postnord",
+  "status": "In Transit",
+  "estimatedDelivery": "2026-06-07",
+  "events": [
+    {
+      "timestamp": "2026-06-05T08:30:00Z",
+      "status": "Picked Up",
+      "location": "Copenhagen, DK",
+      "details": "Package picked up at sender location"
+    },
+    {
+      "timestamp": "2026-06-05T14:00:00Z",
+      "status": "In Transit",
+      "location": "Malmö, SE",
+      "details": "Package arrived at Malmö hub"
+    }
+  ],
+  "colli": [
+    {
+      "id": "1",
+      "trackingNumber": "PN482910123DK-1",
+      "status": "In Transit",
+      "events": [...]
+    }
+  ]
+}
+```
+
+---
+
+### GET /api/health
+
+```bash
+curl http://localhost:8080/api/health
+```
+
+```json
+{
+  "status": "ok",
+  "uptime": "3h22m10s",
+  "mockMode": false,
+  "carriers": {
+    "postnord": "production",
+    "bring": "production",
+    "gls": "mock",
+    "dao": "mock",
+    "posti": "mock",
+    "inpost": "mock"
+  }
+}
+```
+
+`carriers` shows each registered carrier and whether it is running against the real API (`production`) or the built-in mock (`mock`). A carrier shows `mock` either because `MOCK_MODE=true` is set or because its API key is not configured.
+
+---
+
+## Edge cases and validation
+
+### Postal codes
+
+| Country | Format | Example | Error |
+|---|---|---|---|
+| DK | 4 digits | `2300` | `invalid Danish postal code: 230` |
+| NO | 4 digits | `0158` | `invalid Norwegian postal code: 158` |
+| SE | 5 digits | `11122` | `invalid Swedish postal code: 1112` |
+| FI | 5 digits | `00100` | `invalid Finnish postal code: 0010` |
+| PL | `NN-NNN` | `00-001` | `invalid Polish postal code: 00001` |
+
+### House number requirements
+
+`houseNumber` must be provided as a distinct field for GLS, DAO, and InPost. Embedding the house number in `street` will pass to the carrier but may cause delivery failures. France is exempt — house numbers are not always present in French addresses.
+
+```bash
+# Missing houseNumber for GLS
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "gls",
+    "shipment": {
+      "receiver": {
+        "name": "Test",
+        "street": "Hauptstraße 42",
+        "city": "Berlin",
+        "postalCode": "10115",
+        "country": "DE"
+      }, ...
+    }
+  }'
+
+# Error response
+{ "error": "validation failed", "details": "house number is required for gls shipments to DE" }
+```
+
+### Carrier weight and dimension limits
+
+| Carrier | Max weight | Max dimensions | Max girth |
+|---|---|---|---|
+| PostNord | 30 kg | L+W+H ≤ 300 cm | 2×(W+H)+L ≤ 300 cm |
+| Bring | 30 kg | L ≤ 250 cm, W ≤ 120 cm, H ≤ 100 cm | — |
+| GLS | 40 kg | L ≤ 270 cm, W ≤ 120 cm, H ≤ 120 cm | 2×(W+H)+L ≤ 400 cm |
+| DAO | 35 kg | L ≤ 250 cm, W ≤ 120 cm, H ≤ 120 cm | — |
+| Posti | 30 kg | L ≤ 200 cm, W ≤ 100 cm, H ≤ 100 cm | 2×(W+H)+L ≤ 300 cm |
+
+PostNord also enforces a maximum of 5 colli per shipment.
+
+### Idempotency
+
+Pass `idempotencyKey` in the request body to deduplicate bookings on your side. Keys must be 64 characters or fewer. Omitting the key is valid — the request is processed normally.
+
+```bash
+# Key too long
+{ "error": "validation failed", "details": "idempotency key must be 64 characters or fewer" }
+```
+
+---
+
+## Payload logging
+
+In development (`LOG_ENV=development`), full request and response bodies are logged at `DEBUG` level. In production the logger runs at `INFO` by default so no payload data is written — there is zero cost when debug logging is off.
+
+Sensitive fields are scrubbed before any log entry is written:
+
+| Data | Treatment |
+|---|---|
+| `Authorization` header | SHA-256 hash |
+| JSON fields: `password`, `token`, `apiKey`, `secret` | `[redacted]` |
+
+To enable payload logging in production for a debugging session:
+
+```bash
+LOG_LEVEL=debug ./logistics-gateway
+```
+
+---
+
+## Input formats
+
+The booking endpoint accepts JSON (default), XML, and UN/EDIFACT IFTMIN. Set the `Content-Type` header accordingly:
+
+| Format | Content-Type |
+|---|---|
+| JSON | `application/json` |
+| XML | `application/xml` |
+| EDIFACT | `application/edifact` |
+
+---
+
+## Development
+
+### Project structure
+
+```
 logistics-gateway/
 ├── cmd/
 │   └── api/
-│       └── main.go              # Vercel Serverless Function entry point
+│       └── main.go               # HTTP server entry point
 ├── internal/
 │   ├── adapter/
-│   │   ├── adapter.go           # CarrierAdapter interface and shared types
-│   │   ├── postnord.go          # PostNord adapter
-│   │   ├── fedex.go             # FedEx adapter
-│   │   └── dhl.go               # DHL adapter (placeholder)
+│   │   ├── adapter.go            # CarrierAdapter interface, Registry, shared types
+│   │   ├── postnord.go           # PostNord adapter
+│   │   ├── bring.go              # Bring adapter
+│   │   ├── gls.go                # GLS adapter
+│   │   ├── dao.go                # DAO adapter
+│   │   ├── posti.go              # Posti adapter
+│   │   ├── inpost.go             # InPost adapter
+│   │   ├── mock_*.go             # Mock adapters for testing and MOCK_MODE
+│   │   └── *_test.go             # Adapter tests
 │   ├── handler/
-│   │   ├── handler.go           # Shared handler config and helpers
-│   │   ├── bookings.go          # Booking handler
-│   │   ├── trackings.go          # Tracking handler
-│   │   └── service_points.go    # Service points handler
-│   └── middleware/
-│       ├── auth.go              # Authentication middleware
-│       └── logging.go           # Logging middleware
+│   │   ├── handler.go            # Shared config, loggerFor, writeError
+│   │   ├── bookings.go           # POST /api/bookings
+│   │   ├── trackings.go          # GET /api/trackings/{trackingNumber}
+│   │   └── health.go             # GET /api/health
+│   ├── middleware/
+│   │   ├── request_id.go         # X-Request-ID propagation
+│   │   └── logging.go            # Debug payload logging with scrubbing
+│   ├── parser/
+│   │   ├── parser.go             # Content-Type routing
+│   │   ├── json.go               # JSON parser
+│   │   ├── xml.go                # XML parser
+│   │   └── edifact.go            # UN/EDIFACT IFTMIN parser
+│   ├── router/
+│   │   └── router.go             # Route definitions and middleware wiring
+│   ├── logger/
+│   │   └── logger.go             # Zap logger constructor
+│   └── validation/
+│       ├── address.go            # Postal codes, street, house number rules
+│       ├── package.go            # Per-carrier weight, dimensions, girth
+│       └── idempotency.go        # Idempotency key rules
+├── Dockerfile
 ├── go.mod
 ├── go.sum
-├── Dockerfile
-├── docker-compose.yml
 └── README.md
 ```
 
-### **Local Development**
-1. **Run the service locally**:
-   ```bash
-   go run cmd/api/main.go
-   ```
-   The service will start on `http://localhost:8080`.
+### Running tests
 
-2. **Use Docker**:
-   ```bash
-   docker-compose up --build
-   ```
-
-3. **Test with cURL**:
-   Use the [examples](#examples) above to test the API.
-
----
-
-## **Testing**
-
-### **Run Tests**
 ```bash
-# Run all tests
+# All tests
 go test ./...
 
-# Run tests with coverage
+# With race detector
+go test -race ./...
+
+# With coverage
 go test -cover ./...
 
-# Run tests for a specific package
-go test ./internal/adapter
+# Specific package
+go test ./internal/adapter/...
 ```
 
-### **Test Files**
-- `internal/adapter/adapter_test.go`: Tests for shared types and validation.
-- `internal/adapter/postnord_test.go`: Tests for PostNord adapter.
-- `internal/adapter/fedex_test.go`: Tests for FedEx adapter.
-- `internal/handler/bookings_test.go`: Tests for booking handler.
+### Adding a carrier
+
+1. Create `internal/adapter/{carrier}.go` implementing `CarrierAdapter`
+2. Create `internal/adapter/mock_{carrier}.go`
+3. Create `internal/adapter/{carrier}_test.go`
+4. Add the carrier block to `InitAdapters` in `adapter.go`
+5. Add a limits entry in `internal/validation/package.go`
+
+The handler, router, and validation layer require no changes.
 
 ---
 
-## **Deployment**
+## License
 
-### **Vercel**
-1. **Install Vercel CLI**:
-   ```bash
-   npm install -g vercel
-   ```
-
-2. **Deploy**:
-   ```bash
-   vercel
-   ```
-
-3. **Configure Environment Variables**:
-   Set the required environment variables in the Vercel dashboard:
-   - `API_KEY`
-   - `POSTNORD_API_KEY`
-   - `FED_EX_API_KEY`
-   - `DHL_API_KEY`
-
-### **Docker**
-1. **Build the Docker image**:
-   ```bash
-   docker build -t logistics-gateway .
-   ```
-
-2. **Run the container**:
-   ```bash
-   docker run -p 8080:8080 --env-file .env logistics-gateway
-   ```
-
----
-
-## **Contributing**
-
-### **How to Contribute**
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature/your-feature`).
-3. Commit your changes (`git commit -am 'Add some feature'`).
-4. Push to the branch (`git push origin feature/your-feature`).
-5. Open a Pull Request.
-
-### **Guidelines**
-- Follow Go community standards for **formatting** (`gofmt`) and **documentation**.
-- Add **unit tests** for all new functionality.
-- Use **meaningful commit messages**.
-- Keep the code **modular** and **reusable**.
-
----
-
-## **License**
-
-This project is licensed under the **Apache License 2.0** – see the [LICENSE](LICENSE) file for details.
+Apache 2.0 — see [LICENSE](LICENSE).
