@@ -160,21 +160,15 @@ func TestInPostAdapter_BookShipment_PayloadShape(t *testing.T) {
 func TestInPostAdapter_BookShipment_NoLockerByDefault(t *testing.T) {
 	t.Parallel()
 
-	_, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
+	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
 
-	_, err := (&InPostAdapter{
-		APIKey:     "test-key",
-		BaseURL:    "",
-		HTTPClient: nil,
-	}).BookShipment(t.Context(), inpostMinimalRequest())
-	// We only care the service block has no targetLocker — use the captured payload.
-	_ = err
-	if *captured != nil {
-		shipment := inpostRequireNested(t, *captured, "shipment")
-		service := inpostRequireNested(t, shipment, "service")
-		assert.NotContains(t, service, "targetLocker",
-			"targetLocker must be absent until a dedicated LockerID field is introduced")
-	}
+	_, err := adapter.BookShipment(t.Context(), inpostMinimalRequest())
+	require.NoError(t, err)
+
+	shipment := inpostRequireNested(t, *captured, "shipment")
+	service := inpostRequireNested(t, shipment, "service")
+	assert.NotContains(t, service, "targetLocker",
+		"targetLocker must be absent until a dedicated LockerID field is introduced")
 }
 
 func TestInPostAdapter_BookShipment_ReferenceForwarded(t *testing.T) {

@@ -110,10 +110,10 @@ func TestValidateShipment_DimensionLimits(t *testing.T) {
 		{name: "bring height exceeded", carrier: "bring", l: 100, w: 100, h: 101, wantErr: true, errContains: "height 101 cm exceeds Bring limit"},
 
 		// GLS
-		{name: "gls length ok", carrier: "gls", l: 270, w: 100, h: 100},
-		{name: "gls length exceeded", carrier: "gls", l: 271, w: 100, h: 100, wantErr: true, errContains: "length 271 cm exceeds GLS limit"},
-		{name: "gls width exceeded", carrier: "gls", l: 100, w: 121, h: 100, wantErr: true, errContains: "width 121 cm exceeds GLS limit"},
-		{name: "gls height exceeded", carrier: "gls", l: 100, w: 100, h: 121, wantErr: true, errContains: "height 121 cm exceeds GLS limit"},
+		{name: "gls length ok", carrier: "gls", l: 100, w: 80, h: 70},
+		{name: "gls length exceeded", carrier: "gls", l: 271, w: 30, h: 30, wantErr: true, errContains: "length 271 cm exceeds GLS limit"},
+		{name: "gls width exceeded", carrier: "gls", l: 100, w: 121, h: 30, wantErr: true, errContains: "width 121 cm exceeds GLS limit"},
+		{name: "gls height exceeded", carrier: "gls", l: 100, w: 30, h: 121, wantErr: true, errContains: "height 121 cm exceeds GLS limit"},
 
 		// DAO
 		{name: "dao length ok", carrier: "dao", l: 250, w: 100, h: 100},
@@ -122,10 +122,10 @@ func TestValidateShipment_DimensionLimits(t *testing.T) {
 		{name: "dao height exceeded", carrier: "dao", l: 100, w: 100, h: 121, wantErr: true, errContains: "height 121 cm exceeds DAO limit"},
 
 		// Posti
-		{name: "posti length ok", carrier: "posti", l: 200, w: 80, h: 80},
-		{name: "posti length exceeded", carrier: "posti", l: 201, w: 80, h: 80, wantErr: true, errContains: "length 201 cm exceeds Posti limit"},
-		{name: "posti width exceeded", carrier: "posti", l: 100, w: 101, h: 80, wantErr: true, errContains: "width 101 cm exceeds Posti limit"},
-		{name: "posti height exceeded", carrier: "posti", l: 100, w: 80, h: 101, wantErr: true, errContains: "height 101 cm exceeds Posti limit"},
+		{name: "posti length ok", carrier: "posti", l: 100, w: 40, h: 40},
+		{name: "posti length exceeded", carrier: "posti", l: 201, w: 20, h: 20, wantErr: true, errContains: "length 201 cm exceeds Posti limit"},
+		{name: "posti width exceeded", carrier: "posti", l: 100, w: 101, h: 20, wantErr: true, errContains: "width 101 cm exceeds Posti limit"},
+		{name: "posti height exceeded", carrier: "posti", l: 100, w: 20, h: 101, wantErr: true, errContains: "height 101 cm exceeds Posti limit"},
 	}
 
 	for _, tc := range cases {
@@ -152,16 +152,18 @@ func TestValidateShipment_PostNord_DimensionSum(t *testing.T) {
 
 	t.Run("at limit", func(t *testing.T) {
 		t.Parallel()
-		// 100+100+100 = 300 — exactly at the limit
-		assert.NoError(t, ValidateShipment("postnord", shipmentWith(colliOf(1.0, 100, 100, 100))))
+		// L=180, W=30, H=30: sum=240 (under 300), girth=2*(30+30)+180=300 (exactly at limit).
+		assert.NoError(t, ValidateShipment("postnord", shipmentWith(colliOf(1.0, 180, 30, 30))))
 	})
 
-	t.Run("exceeds limit", func(t *testing.T) {
+	t.Run("girth tighter than sum for long thin parcels", func(t *testing.T) {
 		t.Parallel()
-		// 101+100+100 = 301
-		err := ValidateShipment("postnord", shipmentWith(colliOf(1.0, 101, 100, 100)))
+		// PostNord enforces both L+W+H<=300 and 2*(W+H)+L<=300.
+		// For any parcel with W,H > 0, girth is tighter than sum:
+		// L=298, W=1, H=1: sum=300 (at limit), girth=2*(1+1)+298=302 (exceeds limit).
+		err := ValidateShipment("postnord", shipmentWith(colliOf(1.0, 298, 1, 1)))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "combined dimensions 301 cm (L+W+H) exceed PostNord limit")
+		assert.Contains(t, err.Error(), "girth")
 	})
 }
 
