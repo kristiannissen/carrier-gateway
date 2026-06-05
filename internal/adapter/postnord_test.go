@@ -77,18 +77,6 @@ func TestMockPostNordAdapter_TrackShipment(t *testing.T) {
 	assert.Len(t, response.Events, 2)
 }
 
-func TestMockPostNordAdapter_GetServicePoints(t *testing.T) {
-	t.Parallel()
-
-	servicePoints, err := (&MockPostNordAdapter{}).GetServicePoints(t.Context(), Location{
-		City: "Copenhagen", Country: "DK", PostalCode: "12345",
-	})
-	require.NoError(t, err)
-	assert.Len(t, servicePoints, 2)
-	assert.Equal(t, "sp_123", servicePoints[0].ID)
-	assert.Equal(t, "PostNord Copenhagen", servicePoints[0].Name)
-}
-
 // =========================================================================
 // Real adapter — payload transformation tests
 // =========================================================================

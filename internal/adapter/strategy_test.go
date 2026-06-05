@@ -6,24 +6,26 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-// Test that all adapters implement the CarrierAdapter interface.
-// This ensures the Strategy Pattern is correctly applied.
+// TestCarrierAdapterInterface verifies that all mock adapters satisfy the
+// CarrierAdapter interface by exercising both methods at compile and run time.
 func TestCarrierAdapterInterface(t *testing.T) {
-	// Create a slice of CarrierAdapter interfaces
+	t.Parallel()
+
 	adapters := []CarrierAdapter{
 		&MockPostNordAdapter{},
 		&MockBringAdapter{},
 		&MockGLSAdapter{},
 		&MockDAOAdapter{},
 		&MockPostiAdapter{},
-		&MockAirmeeAdapter{},
+		&MockInPostAdapter{},
 	}
 
-	bookingRequest := BookingRequest{
-		Carrier: "airmee",
+	request := BookingRequest{
+		Carrier: "postnord",
 		Shipment: Shipment{
 			Sender: Address{
 				Name:       "Sender Name",
@@ -53,45 +55,35 @@ func TestCarrierAdapterInterface(t *testing.T) {
 			},
 		},
 	}
-	// Verify that each adapter implements the CarrierAdapter interface
-	// by calling all methods. This will compile-time check the interface.
-	for _, adapter := range adapters {
-		// Test BookShipment
-		_, err := adapter.BookShipment(t.Context(), bookingRequest)
-		assert.NoError(t, err, "BookShipment method should not panic")
 
-		// Test TrackShipment
-		_, err = adapter.TrackShipment(t.Context(), "test-tracking-number")
-		assert.NoError(t, err, "TrackShipment method should not panic")
+	for _, a := range adapters {
+		_, err := a.BookShipment(t.Context(), request)
+		assert.NoError(t, err)
 
-		// Test GetServicePoints
-		_, err = adapter.GetServicePoints(t.Context(), Location{})
-		assert.NoError(t, err, "GetServicePoints method should not panic")
+		_, err = a.TrackShipment(t.Context(), "test-tracking-number")
+		assert.NoError(t, err)
 	}
 }
 
-// Test that InitAdapters returns the correct adapter for each carrier.
+// TestInitAdapters_StrategySelection verifies that InitAdapters registers all
+// expected carriers and that each adapter satisfies the CarrierAdapter interface.
 func TestInitAdapters_StrategySelection(t *testing.T) {
-	// Set mock mode to ensure all adapters are initialized as mocks
 	t.Setenv("MOCK_MODE", "true")
 
-	// Initialize zap
 	log := zaptest.NewLogger(t)
-	// Initialize adapters
 	adapters := InitAdapters(log)
 
-	// Verify that all expected carriers are present
 	expectedCarriers := []string{
 		"postnord",
 		"bring",
 		"gls",
 		"dao",
 		"posti",
-		"airmee",
+		"inpost",
 	}
 
 	request := BookingRequest{
-		Carrier: "airmee",
+		Carrier: "postnord",
 		Shipment: Shipment{
 			Sender: Address{
 				Name:       "Sender Name",
@@ -121,38 +113,32 @@ func TestInitAdapters_StrategySelection(t *testing.T) {
 			},
 		},
 	}
+
 	for _, carrier := range expectedCarriers {
-		adapter, exists := adapters[carrier]
-		assert.True(t, exists, "Adapter for carrier %s should exist", carrier)
-		assert.NotNil(t, adapter, "Adapter for carrier %s should not be nil", carrier)
+		a, exists := adapters[carrier]
+		assert.True(t, exists, "adapter for %s should exist", carrier)
+		require.NotNil(t, a, "adapter for %s should not be nil", carrier)
 
-		// Verify that the adapter implements CarrierAdapter
-		_, err := adapter.BookShipment(t.Context(), request)
-		assert.NoError(t, err, "BookShipment should not panic for %s", carrier)
+		_, err := a.BookShipment(t.Context(), request)
+		assert.NoError(t, err, "BookShipment should not fail for %s", carrier)
 
-		_, err = adapter.TrackShipment(t.Context(), "test-tracking-number")
-		assert.NoError(t, err, "TrackShipment should not panic for %s", carrier)
-
-		_, err = adapter.GetServicePoints(t.Context(), Location{})
-		assert.NoError(t, err, "GetServicePoints should not panic for %s", carrier)
+		_, err = a.TrackShipment(t.Context(), "test-tracking-number")
+		assert.NoError(t, err, "TrackShipment should not fail for %s", carrier)
 	}
 }
 
-// Test that the correct adapter is used for a specific carrier.
+// TestUseAdapter_StrategyExecution verifies the PostNord adapter end-to-end
+// through the InitAdapters map.
 func TestUseAdapter_StrategyExecution(t *testing.T) {
-	// Set mock mode to ensure all adapters are initialized as mocks
 	t.Setenv("MOCK_MODE", "true")
 
 	log := zaptest.NewLogger(t)
-	// Initialize adapters
 	adapters := InitAdapters(log)
 
-	// Test PostNord adapter
-	postNordAdapter, exists := adapters["postnord"]
-	assert.True(t, exists, "PostNord adapter should exist")
-	assert.NotNil(t, postNordAdapter, "PostNord adapter should not be nil")
+	a, exists := adapters["postnord"]
+	require.True(t, exists)
+	require.NotNil(t, a)
 
-	// Create a test request
 	request := BookingRequest{
 		Carrier: "postnord",
 		Shipment: Shipment{
@@ -185,33 +171,12 @@ func TestUseAdapter_StrategyExecution(t *testing.T) {
 		},
 	}
 
-	// Test BookShipment
-	bookingResponse, err := postNordAdapter.BookShipment(t.Context(), request)
-	assert.NoError(t, err, "BookShipment should not fail for PostNord")
-	assert.NotNil(t, bookingResponse, "BookingResponse should not be nil")
-	assert.Equal(t, "postnord", bookingResponse.Carrier, "Carrier should be postnord")
+	bookingResponse, err := a.BookShipment(t.Context(), request)
+	require.NoError(t, err)
+	require.NotNil(t, bookingResponse)
+	assert.Equal(t, "postnord", bookingResponse.Carrier)
 
-	// Test TrackShipment
-	trackingResponse, err := postNordAdapter.TrackShipment(t.Context(), "test-tracking-number")
-	assert.NoError(t, err, "TrackShipment should not fail for PostNord")
-	assert.NotNil(t, trackingResponse, "TrackingResponse should not be nil")
-
-	// Test GetServicePoints
-	servicePoints, err := postNordAdapter.GetServicePoints(t.Context(), Location{
-		City:    "Test City",
-		Country: "DK",
-	})
-	assert.NoError(t, err, "GetServicePoints should not fail for PostNord")
-	assert.NotNil(t, servicePoints, "ServicePoints should not be nil")
-
-	// Repeat for Airmee (a different type of carrier)
-	airmeeAdapter, exists := adapters["airmee"]
-	assert.True(t, exists, "Airmee adapter should exist")
-	assert.NotNil(t, airmeeAdapter, "Airmee adapter should not be nil")
-
-	// Test BookShipment for Airmee
-	airmeeBookingResponse, err := airmeeAdapter.BookShipment(t.Context(), request)
-	assert.NoError(t, err, "BookShipment should not fail for Airmee")
-	assert.NotNil(t, airmeeBookingResponse, "BookingResponse should not be nil")
-	assert.Equal(t, "airmee", airmeeBookingResponse.Carrier, "Carrier should be airmee")
+	trackingResponse, err := a.TrackShipment(t.Context(), "test-tracking-number")
+	require.NoError(t, err)
+	assert.NotNil(t, trackingResponse)
 }

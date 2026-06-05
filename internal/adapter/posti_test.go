@@ -149,18 +149,3 @@ func TestMockPostiAdapter_TrackShipment(t *testing.T) {
 	assert.Len(t, response.Events, 1)
 }
 
-func TestMockPostiAdapter_GetServicePoints(t *testing.T) {
-	t.Parallel()
-	adapter := &MockPostiAdapter{}
-
-	location := Location{
-		City:       "Helsinki",
-		Country:    "FI",
-		PostalCode: "00100",
-	}
-	servicePoints, err := adapter.GetServicePoints(t.Context(), location)
-	assert.NoError(t, err)
-	assert.NotNil(t, servicePoints)
-	assert.Len(t, servicePoints, 1)
-	assert.Equal(t, "POSTI001", servicePoints[0].ID)
-}

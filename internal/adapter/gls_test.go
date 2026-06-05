@@ -77,17 +77,6 @@ func TestMockGLSAdapter_TrackShipment(t *testing.T) {
 	assert.Len(t, response.Events, 1)
 }
 
-func TestMockGLSAdapter_GetServicePoints(t *testing.T) {
-	t.Parallel()
-
-	servicePoints, err := (&MockGLSAdapter{}).GetServicePoints(t.Context(), Location{
-		City: "Copenhagen", Country: "DK",
-	})
-	require.NoError(t, err)
-	assert.Len(t, servicePoints, 1)
-	assert.Equal(t, "GLS001", servicePoints[0].ID)
-}
-
 // =========================================================================
 // Real adapter — payload transformation tests
 // =========================================================================
@@ -281,40 +270,6 @@ func TestGLSAdapter_TrackShipment_RequestShape(t *testing.T) {
 	assert.Equal(t, "GLS123", captured["TrackID"])
 	assert.NotEmpty(t, captured["DateFrom"])
 	assert.NotEmpty(t, captured["DateTo"])
-}
-
-func TestGLSAdapter_GetServicePoints_RequestShape(t *testing.T) {
-	t.Parallel()
-
-	var captured map[string]interface{}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		require.NoError(t, json.Unmarshal(body, &captured))
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ParcelShop":[{"ParcelShopID":"GLS001","Address":{"Name1":"GLS Copenhagen","Street":"Main St 1","Zipcode":"1234","City":"Copenhagen","CountryCode":"DK"}}]}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	adapter := &GLSAdapter{
-		ContactID:  "test-contact",
-		APIKey:     "test-key",
-		BaseURL:    srv.URL,
-		HTTPClient: srv.Client(),
-	}
-
-	points, err := adapter.GetServicePoints(t.Context(), Location{
-		City: "Copenhagen", Country: "DK", PostalCode: "1234",
-	})
-	require.NoError(t, err)
-	require.Len(t, points, 1)
-	assert.Equal(t, "GLS001", points[0].ID)
-	assert.Equal(t, "1234", points[0].Address.PostalCode) // Zipcode → PostalCode
-
-	// Verify request uses POST with location body
-	assert.Equal(t, "DK", captured["CountryCode"])
-	assert.Equal(t, "Copenhagen", captured["City"])
-	assert.Equal(t, "1234", captured["Zipcode"])
 }
 
 // =========================================================================

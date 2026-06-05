@@ -142,18 +142,3 @@ func TestMockDAOAdapter_TrackShipment(t *testing.T) {
 	assert.Len(t, response.Events, 1)
 }
 
-func TestMockDAOAdapter_GetServicePoints(t *testing.T) {
-	t.Parallel()
-	adapter := &MockDAOAdapter{}
-
-	location := Location{
-		City:       "Copenhagen",
-		Country:    "DK",
-		PostalCode: "1234",
-	}
-	servicePoints, err := adapter.GetServicePoints(t.Context(), location)
-	assert.NoError(t, err)
-	assert.NotNil(t, servicePoints)
-	assert.Len(t, servicePoints, 1)
-	assert.Equal(t, "DAO001", servicePoints[0].ID)
-}

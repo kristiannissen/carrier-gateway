@@ -77,17 +77,6 @@ func TestMockBringAdapter_TrackShipment(t *testing.T) {
 	assert.Len(t, response.Events, 3)
 }
 
-func TestMockBringAdapter_GetServicePoints(t *testing.T) {
-	t.Parallel()
-
-	servicePoints, err := (&MockBringAdapter{}).GetServicePoints(t.Context(), Location{
-		City: "Oslo", Country: "NO", PostalCode: "0123",
-	})
-	require.NoError(t, err)
-	assert.Len(t, servicePoints, 1)
-	assert.Equal(t, "BR001", servicePoints[0].ID)
-}
-
 // =========================================================================
 // Real adapter — payload transformation tests
 // =========================================================================

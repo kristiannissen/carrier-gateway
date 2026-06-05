@@ -80,18 +80,6 @@ func TestMockInPostAdapter_TrackShipment(t *testing.T) {
 	assert.Len(t, response.Events, 2)
 }
 
-func TestMockInPostAdapter_GetServicePoints(t *testing.T) {
-	t.Parallel()
-
-	points, err := (&MockInPostAdapter{}).GetServicePoints(t.Context(), Location{
-		City: "Warsaw", Country: "PL", PostalCode: "00-001",
-	})
-	require.NoError(t, err)
-	assert.Len(t, points, 2)
-	assert.Equal(t, "WAR001", points[0].ID)
-	assert.Equal(t, "Locker", points[0].Services[0])
-}
-
 // =========================================================================
 // Real adapter — payload transformation tests
 // =========================================================================
@@ -297,36 +285,6 @@ func TestInPostAdapter_TrackShipment_RequestShape(t *testing.T) {
 	assert.Equal(t, "In Transit", resp.Status)
 	assert.Equal(t, "inpost", resp.Carrier)
 	assert.Len(t, resp.Events, 1)
-}
-
-func TestInPostAdapter_GetServicePoints_RequestShape(t *testing.T) {
-	t.Parallel()
-
-	var capturedURL string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedURL = r.URL.String()
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"items":[{"name":"WAR001","address":{"street":"Marszałkowska 1","postalCode":"00-001","city":"Warsaw","country":"PL"}}]}`))
-	}))
-	t.Cleanup(srv.Close)
-
-	adapter := &InPostAdapter{
-		APIKey:     "test-key",
-		BaseURL:    srv.URL,
-		HTTPClient: srv.Client(),
-	}
-
-	points, err := adapter.GetServicePoints(t.Context(), Location{
-		City: "Warsaw", Country: "PL", PostalCode: "00-001",
-	})
-	require.NoError(t, err)
-	require.Len(t, points, 1)
-	assert.Equal(t, "WAR001", points[0].ID)
-	assert.Equal(t, "Locker", points[0].Services[0])
-
-	assert.Contains(t, capturedURL, "city=Warsaw")
-	assert.Contains(t, capturedURL, "postalCode=00-001")
-	assert.Contains(t, capturedURL, "countryCode=PL")
 }
 
 // =========================================================================
