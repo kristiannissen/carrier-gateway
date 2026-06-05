@@ -47,18 +47,4 @@ func (a *MockDAOAdapter) TrackShipment(ctx context.Context, trackingNumber strin
 	}, nil
 }
 
-// GetServicePoints mocks retrieving parcel shops for DAO.
-func (a *MockDAOAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	return []ServicePoint{
-		{
-			ID:   "DAO001",
-			Name: "DAO Pakkeshop 1",
-			Address: Address{
-				Street:     "Mock Street 1",
-				PostalCode: "1234",
-				City:       "Copenhagen",
-				Country:    "DK",
-			},
-		},
-	}, nil
-}
+

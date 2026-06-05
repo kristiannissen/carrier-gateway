@@ -47,18 +47,4 @@ func (a *MockPostiAdapter) TrackShipment(ctx context.Context, trackingNumber str
 	}, nil
 }
 
-// GetServicePoints mocks retrieving service points for Posti.
-func (a *MockPostiAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	return []ServicePoint{
-		{
-			ID:   "POSTI001",
-			Name: "Posti Pickup Point 1",
-			Address: Address{
-				Street:     "Mock Street 1",
-				PostalCode: "00100",
-				City:       "Helsinki",
-				Country:    "FI",
-			},
-		},
-	}, nil
-}
+

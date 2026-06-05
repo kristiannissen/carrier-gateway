@@ -23,7 +23,6 @@ func NewRouter(adapters map[string]adapter.CarrierAdapter, log *zap.Logger) *mux
 
 	r.HandleFunc("/api/bookings", h.BookShipment).Methods("POST")
 	r.HandleFunc("/api/trackings/{trackingNumber}", h.GetTracking).Methods("GET")
-	r.HandleFunc("/api/service-points", h.GetServicePoints).Methods("GET")
 	r.HandleFunc("/api/health", h.HealthCheck).Methods("GET")
 
 	return r

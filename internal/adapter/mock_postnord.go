@@ -22,9 +22,8 @@ import (
 //	    },
 //	}
 type MockPostNordAdapter struct {
-	BookShipmentFunc     func(request BookingRequest) (*BookingResponse, error)
-	TrackShipmentFunc    func(trackingNumber string) (*TrackingResponse, error)
-	GetServicePointsFunc func(location Location) ([]ServicePoint, error)
+	BookShipmentFunc  func(request BookingRequest) (*BookingResponse, error)
+	TrackShipmentFunc func(trackingNumber string) (*TrackingResponse, error)
 }
 
 // BookShipment returns a mock booking response, applying the same validation
@@ -116,43 +115,6 @@ func (m *MockPostNordAdapter) TrackShipment(ctx context.Context, trackingNumber 
 	}, nil
 }
 
-// GetServicePoints returns two mock PostNord service points.
-func (m *MockPostNordAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	if m.GetServicePointsFunc != nil {
-		return m.GetServicePointsFunc(location)
-	}
-
-	zap.L().Info("MockPostNordAdapter: returning mock service points")
-
-	return []ServicePoint{
-		{
-			ID:   "sp_123",
-			Name: "PostNord Copenhagen",
-			Address: Address{
-				Name:       "PostNord Copenhagen",
-				Street:     "Main Street 1",
-				City:       "Copenhagen",
-				PostalCode: "12345",
-				Country:    "DK",
-			},
-			OpeningHours: "09:00-17:00",
-			Services:     []string{"Pickup", "Dropoff"},
-		},
-		{
-			ID:   "sp_456",
-			Name: "PostNord Aarhus",
-			Address: Address{
-				Name:       "PostNord Aarhus",
-				Street:     "Second Street 2",
-				City:       "Aarhus",
-				PostalCode: "8000",
-				Country:    "DK",
-			},
-			OpeningHours: "08:00-16:00",
-			Services:     []string{"Pickup"},
-		},
-	}, nil
-}
 
 // NewMockPostNordAdapter returns a new MockPostNordAdapter with default behaviour.
 func NewMockPostNordAdapter() *MockPostNordAdapter {

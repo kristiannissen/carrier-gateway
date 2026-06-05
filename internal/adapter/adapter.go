@@ -3,22 +3,19 @@
 package adapter
 
 import (
-	"go.uber.org/zap"
-	"os"
 	"context"
+	"os"
+
+	"go.uber.org/zap"
 )
 
 // CarrierAdapter defines the interface for all carrier adapters.
-// All carrier-specific implementations (e.g., PostNord, FedEx, DHL) must satisfy this interface.
 type CarrierAdapter interface {
 	// BookShipment books a shipment with the carrier and returns a tracking number and label URL.
 	BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error)
 
 	// TrackShipment retrieves the tracking status for a shipment.
 	TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error)
-
-	// GetServicePoints retrieves available service points (e.g., pickup locations) for a carrier.
-	GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error)
 }
 
 // InitAdapters initializes all carrier adapters based on environment variables.
@@ -26,7 +23,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	adapters := make(map[string]CarrierAdapter)
 	mockMode := os.Getenv("MOCK_MODE") == "true"
 
-	// PostNord
 	postNordAPIKey := os.Getenv("POSTNORD_API_KEY")
 	if postNordAPIKey != "" && !mockMode {
 		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey, log)
@@ -36,7 +32,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		log.Info("PostNord adapter initialized in mock mode")
 	}
 
-	// Bring
 	bringAPIKey := os.Getenv("BRING_API_KEY")
 	bringCustomerID := os.Getenv("BRING_CUSTOMER_ID")
 	if bringAPIKey != "" && bringCustomerID != "" && !mockMode {
@@ -47,7 +42,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		log.Info("Bring adapter initialized in mock mode")
 	}
 
-	// GLS
 	glsAPIKey := os.Getenv("GLS_API_KEY")
 	contractID := os.Getenv("GLS_CONTRACT_ID")
 	if glsAPIKey != "" && !mockMode {
@@ -58,7 +52,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		log.Info("GLS adapter initialized in mock mode")
 	}
 
-	// DAO
 	daoCustomerID := os.Getenv("DAO_CUSTOMER_ID")
 	daoAPIKey := os.Getenv("DAO_API_KEY")
 	if daoCustomerID != "" && daoAPIKey != "" && !mockMode {
@@ -69,7 +62,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		log.Info("DAO adapter initialized in mock mode")
 	}
 
-	// Posti
 	postiAPIKey := os.Getenv("POSTI_API_KEY")
 	if postiAPIKey != "" && !mockMode {
 		adapters["posti"] = NewPostiAdapter(postiAPIKey, log)
@@ -79,17 +71,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		log.Info("Posti adapter initialized in mock mode")
 	}
 
-	// Airmee
-	airmeeAPIKey := os.Getenv("AIRMEE_API_KEY")
-	if airmeeAPIKey != "" && !mockMode {
-		adapters["airmee"] = NewAirmeeAdapter(airmeeAPIKey, log)
-		log.Info("Airmee adapter initialized in production mode")
-	} else {
-		adapters["airmee"] = &MockAirmeeAdapter{}
-		log.Info("Airmee adapter initialized in mock mode")
-	}
-
-	// InPost
 	inpostAPIKey := os.Getenv("INPOST_API_KEY")
 	if inpostAPIKey != "" && !mockMode {
 		adapters["inpost"] = NewInPostAdapter(inpostAPIKey, log)
@@ -103,7 +84,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 }
 
 // BookingRequest represents a generic shipment booking request.
-// All shipments are treated as a list of colli (single or multi-package).
 type BookingRequest struct {
 	Carrier        string   `json:"carrier" validate:"required"`
 	Shipment       Shipment `json:"shipment" validate:"required"`
@@ -114,27 +94,29 @@ type BookingRequest struct {
 }
 
 // Shipment represents the shipment details.
-// All shipments are treated as a list of colli (single or multi-package).
 type Shipment struct {
 	Sender      Address `json:"sender" validate:"required"`
 	Receiver    Address `json:"receiver" validate:"required"`
-	TotalWeight float64 `json:"totalWeight" validate:required,gt=0"` // Sum of all colli weights
-	Colli       []Colli `json:"colli" validate:"required,min=1"`     // Always a list (1+ colli)
+	TotalWeight float64 `json:"totalWeight" validate:"required,gt=0"`
+	Colli       []Colli `json:"colli" validate:"required,min=1"`
 	Incoterms   string  `json:"incoterms,omitempty"`
 	HSCode      string  `json:"hsCode,omitempty"`
 }
 
 // Colli represents an individual package in a shipment.
 type Colli struct {
-	ID         string  `json:"id" validate:"required"`
-	Reference  string  `json:"reference,omitempty"`
-	Weight     float64 `json:"weight" validate:"gt=0"`
-	Dimensions struct {
-		Length float64 `json:"length"`
-		Width  float64 `json:"width"`
-		Height float64 `json:"height"`
-	} `json:"dimensions"`
-	Items []Item `json:"items" validate:"required,min=1"`
+	ID         string     `json:"id" validate:"required"`
+	Reference  string     `json:"reference,omitempty"`
+	Weight     float64    `json:"weight" validate:"gt=0"`
+	Dimensions Dimensions `json:"dimensions"`
+	Items      []Item     `json:"items" validate:"required,min=1"`
+}
+
+// Dimensions represents the physical dimensions of a package in centimetres.
+type Dimensions struct {
+	Length float64 `json:"length"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
 }
 
 // Address represents a physical address.
@@ -148,7 +130,7 @@ type Address struct {
 	Email      string `json:"email,omitempty"`
 }
 
-// Item represents an item in a shipment or colli.
+// Item represents an item in a colli.
 type Item struct {
 	Description string  `json:"description"`
 	Weight      float64 `json:"weight"`
@@ -169,7 +151,7 @@ type BookingResponse struct {
 	Status         string          `json:"status,omitempty"`
 	Colli          []ColliResponse `json:"colli,omitempty"`
 	Errors         []string        `json:"errors,omitempty"`
-	LockerId       string          `json:"lockerId,omnitempty"`
+	LockerId       string          `json:"lockerId,omitempty"`
 }
 
 // ColliResponse represents the response for an individual colli in a shipment.
@@ -201,37 +183,10 @@ type ColliTracking struct {
 	Events         []TrackingEvent `json:"events"`
 }
 
-// TrackingEvent represents a single tracking event (e.g., "Picked up", "In transit").
+// TrackingEvent represents a single tracking event.
 type TrackingEvent struct {
 	Timestamp string `json:"timestamp"`
 	Status    string `json:"status"`
 	Location  string `json:"location,omitempty"`
 	Details   string `json:"details,omitempty"`
-}
-
-// Location represents a physical location (e.g., sender, receiver, or service point).
-type Location struct {
-	Name       string `json:"name,omitempty"`
-	Street     string `json:"street,omitempty"`
-	City       string `json:"city,omitempty"`
-	PostalCode string `json:"postalCode,omitempty"`
-	Country    string `json:"country,omitempty"`
-	Phone      string `json:"phone,omitempty"`
-	Email      string `json:"email,omitempty"`
-}
-
-// ServicePoint represents a carrier service point (e.g., pickup location).
-type ServicePoint struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Address      Address  `json:"address"`
-	OpeningHours string   `json:"openingHours,omitempty"`
-	Services     []string `json:"services,omitempty"`
-}
-
-// Dimensions represents the physical dimensions of a package (length, width, height).
-type Dimensions struct {
-	Length float64 `json:"length"` // Length in centimeters
-	Width  float64 `json:"width"`  // Width in centimeters
-	Height float64 `json:"height"` // Height in centimeters
 }

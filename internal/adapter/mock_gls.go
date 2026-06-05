@@ -20,9 +20,8 @@ import (
 //	    },
 //	}
 type MockGLSAdapter struct {
-	BookShipmentFunc     func(request BookingRequest) (*BookingResponse, error)
-	TrackShipmentFunc    func(trackingNumber string) (*TrackingResponse, error)
-	GetServicePointsFunc func(location Location) ([]ServicePoint, error)
+	BookShipmentFunc  func(request BookingRequest) (*BookingResponse, error)
+	TrackShipmentFunc func(trackingNumber string) (*TrackingResponse, error)
 }
 
 // BookShipment returns a mock GLS booking response, applying the same
@@ -92,29 +91,6 @@ func (m *MockGLSAdapter) TrackShipment(ctx context.Context, trackingNumber strin
 	}, nil
 }
 
-// GetServicePoints returns mock GLS parcel shop locations.
-func (m *MockGLSAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	if m.GetServicePointsFunc != nil {
-		return m.GetServicePointsFunc(location)
-	}
-
-	zap.L().Info("MockGLSAdapter: returning mock service points")
-
-	return []ServicePoint{
-		{
-			ID:   "GLS001",
-			Name: "GLS ParcelShop Copenhagen",
-			Address: Address{
-				Name:       "GLS ParcelShop Copenhagen",
-				Street:     "Mock Street 1",
-				PostalCode: "1234",
-				City:       "Copenhagen",
-				Country:    "DK",
-			},
-			Services: []string{"Pickup", "Dropoff"},
-		},
-	}, nil
-}
 
 // NewMockGLSAdapter returns a new MockGLSAdapter with default behaviour.
 func NewMockGLSAdapter() *MockGLSAdapter {

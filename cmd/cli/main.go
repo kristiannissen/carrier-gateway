@@ -30,7 +30,6 @@ func main() {
 	rootCmd.AddCommand(
 		newBookCmd(carrierAdapters),
 		newTrackCmd(carrierAdapters),
-		newServicePointsCmd(carrierAdapters),
 		newHealthCmd(),
 	)
 

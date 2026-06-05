@@ -20,9 +20,8 @@ import (
 //	    },
 //	}
 type MockInPostAdapter struct {
-	BookShipmentFunc     func(request BookingRequest) (*BookingResponse, error)
-	TrackShipmentFunc    func(trackingNumber string) (*TrackingResponse, error)
-	GetServicePointsFunc func(location Location) ([]ServicePoint, error)
+	BookShipmentFunc  func(request BookingRequest) (*BookingResponse, error)
+	TrackShipmentFunc func(trackingNumber string) (*TrackingResponse, error)
 }
 
 // BookShipment returns a mock InPost booking response, applying the same
@@ -91,41 +90,6 @@ func (m *MockInPostAdapter) TrackShipment(ctx context.Context, trackingNumber st
 	}, nil
 }
 
-// GetServicePoints returns mock InPost locker locations.
-func (m *MockInPostAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	if m.GetServicePointsFunc != nil {
-		return m.GetServicePointsFunc(location)
-	}
-
-	zap.L().Info("MockInPostAdapter: returning mock service points")
-
-	return []ServicePoint{
-		{
-			ID:   "WAR001",
-			Name: "WAR001",
-			Address: Address{
-				Name:       "InPost Locker Warsaw",
-				Street:     "Marszałkowska 1",
-				PostalCode: "00-001",
-				City:       "Warsaw",
-				Country:    "PL",
-			},
-			Services: []string{"Locker"},
-		},
-		{
-			ID:   "KRK001",
-			Name: "KRK001",
-			Address: Address{
-				Name:       "InPost Locker Krakow",
-				Street:     "Floriańska 1",
-				PostalCode: "31-019",
-				City:       "Krakow",
-				Country:    "PL",
-			},
-			Services: []string{"Locker"},
-		},
-	}, nil
-}
 
 // NewMockInPostAdapter returns a new MockInPostAdapter with default behaviour.
 func NewMockInPostAdapter() *MockInPostAdapter {

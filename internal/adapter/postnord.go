@@ -179,34 +179,4 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	return &response, nil
 }
 
-// GetServicePoints retrieves available PostNord service points near the given location.
-func (a *PostNordAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		fmt.Sprintf("%s/rest/shipment/v1/servicepoints?postalCode=%s&city=%s&countryCode=%s&apikey=%s",
-			a.BaseURL, location.PostalCode, location.City, location.Country, a.APIKey),
-		nil,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PostNord service points request: %w", err)
-	}
 
-	resp, err := a.HTTPClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("PostNord service points API call failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("PostNord service points API returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var servicePoints []ServicePoint
-	if err := json.NewDecoder(resp.Body).Decode(&servicePoints); err != nil {
-		return nil, fmt.Errorf("failed to decode PostNord service points response: %w", err)
-	}
-
-	return servicePoints, nil
-}

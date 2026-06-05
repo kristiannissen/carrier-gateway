@@ -20,9 +20,8 @@ import (
 //	    },
 //	}
 type MockBringAdapter struct {
-	BookShipmentFunc     func(request BookingRequest) (*BookingResponse, error)
-	TrackShipmentFunc    func(trackingNumber string) (*TrackingResponse, error)
-	GetServicePointsFunc func(location Location) ([]ServicePoint, error)
+	BookShipmentFunc  func(request BookingRequest) (*BookingResponse, error)
+	TrackShipmentFunc func(trackingNumber string) (*TrackingResponse, error)
 }
 
 // BookShipment returns a mock Bring booking response, applying the same
@@ -94,29 +93,6 @@ func (m *MockBringAdapter) TrackShipment(ctx context.Context, trackingNumber str
 	}, nil
 }
 
-// GetServicePoints returns mock Bring pickup point locations.
-func (m *MockBringAdapter) GetServicePoints(ctx context.Context, location Location) ([]ServicePoint, error) {
-	if m.GetServicePointsFunc != nil {
-		return m.GetServicePointsFunc(location)
-	}
-
-	zap.L().Info("MockBringAdapter: returning mock service points")
-
-	return []ServicePoint{
-		{
-			ID:   "BR001",
-			Name: "Bring Service Point Oslo",
-			Address: Address{
-				Name:       "Bring Service Point Oslo",
-				Street:     "Mock Street 1",
-				PostalCode: "0123",
-				City:       "Oslo",
-				Country:    "NO",
-			},
-			Services: []string{"Pickup", "Dropoff"},
-		},
-	}, nil
-}
 
 // NewMockBringAdapter returns a new MockBringAdapter with default behaviour.
 func NewMockBringAdapter() *MockBringAdapter {
