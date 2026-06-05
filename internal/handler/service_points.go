@@ -12,11 +12,11 @@ import (
 )
 
 // GetServicePoints handles GET /service-points.
-// Query parameters: city, postalCode, country, carrier (default: postnord).
-// Response: []ServicePoint (JSON) or ErrorResponse.
 func (c *Config) GetServicePoints(w http.ResponseWriter, r *http.Request) {
+	log := c.loggerFor(r)
+
 	if r.Method != http.MethodGet {
-		c.writeError(w, http.StatusMethodNotAllowed, "method not allowed", "only GET is supported")
+		c.writeError(w, r, http.StatusMethodNotAllowed, "method not allowed", "only GET is supported")
 		return
 	}
 
@@ -30,13 +30,13 @@ func (c *Config) GetServicePoints(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if city == "" || country == "" {
-		c.writeError(w, http.StatusBadRequest, "city and country are required", "")
+		c.writeError(w, r, http.StatusBadRequest, "city and country are required", "")
 		return
 	}
 
 	carrierAdapter, err := c.getAdapter(carrier)
 	if err != nil {
-		c.writeError(w, http.StatusBadRequest, "unsupported carrier", err.Error())
+		c.writeError(w, r, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return
 	}
 
@@ -48,20 +48,20 @@ func (c *Config) GetServicePoints(w http.ResponseWriter, r *http.Request) {
 
 	servicePoints, err := carrierAdapter.GetServicePoints(r.Context(), location)
 	if err != nil {
-		c.Log.Error("failed to get service points",
+		log.Error("failed to get service points",
 			zap.Error(err),
 			zap.String("city", city),
 			zap.String("postalCode", postalCode),
 			zap.String("country", country),
 			zap.String("carrier", carrier),
 		)
-		c.writeError(w, http.StatusInternalServerError, "failed to get service points", err.Error())
+		c.writeError(w, r, http.StatusInternalServerError, "failed to get service points", err.Error())
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(servicePoints); err != nil {
-		c.Log.Error("failed to write response", zap.Error(err))
+		log.Error("failed to write response", zap.Error(err))
 	}
 }

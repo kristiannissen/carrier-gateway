@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/logistics-gateway/internal/middleware"
 )
 
 // Config holds shared configuration for HTTP handlers.
@@ -24,15 +25,26 @@ type ErrorResponse struct {
 	Details string `json:"details,omitempty"`
 }
 
+// loggerFor returns a child logger with the request ID attached as a field.
+// Handlers should call this once at the top of their function and use the
+// returned logger for all subsequent log calls within that request.
+func (c *Config) loggerFor(r *http.Request) *zap.Logger {
+	id := middleware.FromContext(r.Context())
+	if id == "" {
+		return c.Log
+	}
+	return c.Log.With(zap.String("requestID", id))
+}
+
 // writeError writes a standardized JSON error response and logs encoding failures.
-func (c *Config) writeError(w http.ResponseWriter, statusCode int, message, details string) {
+func (c *Config) writeError(w http.ResponseWriter, r *http.Request, statusCode int, message, details string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(ErrorResponse{
 		Error:   message,
 		Details: details,
 	}); err != nil {
-		c.Log.Error("failed to write error response", zap.Error(err))
+		c.loggerFor(r).Error("failed to write error response", zap.Error(err))
 	}
 }
 

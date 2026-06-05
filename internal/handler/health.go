@@ -10,7 +10,6 @@ import (
 )
 
 // HealthCheck handles GET /health.
-// Response: Simple JSON status.
 func (c *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -21,6 +20,6 @@ func (c *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
-		c.Log.Error("failed to write health response", zap.Error(err))
+		c.loggerFor(r).Error("failed to write health response", zap.Error(err))
 	}
 }
