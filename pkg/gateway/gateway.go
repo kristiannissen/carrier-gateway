@@ -21,6 +21,6 @@ func NewHandler() http.Handler {
 		panic("failed to initialise logger: " + err.Error())
 	}
 
-	adapters := adapter.InitAdapters(log)
-	return router.NewRouter(adapters, log)
+	registry := adapter.NewRegistry(log)
+	return router.NewRouter(registry, log)
 }

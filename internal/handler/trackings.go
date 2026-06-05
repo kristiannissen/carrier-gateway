@@ -31,7 +31,7 @@ func (c *Config) GetTracking(w http.ResponseWriter, r *http.Request) {
 		carrier = "postnord"
 	}
 
-	carrierAdapter, err := c.getAdapter(carrier)
+	carrierAdapter, err := c.selectAdapter(carrier)
 	if err != nil {
 		c.writeError(w, r, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return

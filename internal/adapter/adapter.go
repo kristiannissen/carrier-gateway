@@ -4,6 +4,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"go.uber.org/zap"
@@ -16,6 +17,40 @@ type CarrierAdapter interface {
 
 	// TrackShipment retrieves the tracking status for a shipment.
 	TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error)
+}
+
+// Registry holds the available CarrierAdapters and selects one by name.
+// It is the single owner of the adapter map; nothing outside this type reads
+// or writes the map directly.
+type Registry struct {
+	adapters map[string]CarrierAdapter
+}
+
+// NewRegistry initialises all carrier adapters and returns a Registry ready
+// for use. It is the primary entry point for wiring adapters into the
+// application; InitAdapters is retained for use in tests that need the raw
+// map.
+func NewRegistry(log *zap.Logger) *Registry {
+	return &Registry{adapters: InitAdapters(log)}
+}
+
+// Select returns the CarrierAdapter registered under carrier.
+// Returns an error if the carrier is not registered.
+func (r *Registry) Select(carrier string) (CarrierAdapter, error) {
+	a, ok := r.adapters[carrier]
+	if !ok {
+		return nil, fmt.Errorf("carrier %q is not supported", carrier)
+	}
+	return a, nil
+}
+
+// Carriers returns the names of all registered carriers in undefined order.
+func (r *Registry) Carriers() []string {
+	keys := make([]string, 0, len(r.adapters))
+	for k := range r.adapters {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // InitAdapters initializes all carrier adapters based on environment variables.

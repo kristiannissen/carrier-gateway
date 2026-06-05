@@ -12,9 +12,9 @@ import (
 )
 
 // NewRouter creates and configures the HTTP router for the API.
-func NewRouter(adapters map[string]adapter.CarrierAdapter, log *zap.Logger) *mux.Router {
+func NewRouter(registry *adapter.Registry, log *zap.Logger) *mux.Router {
 	h := &handler.Config{
-		Adapters: adapters,
+		Registry: registry,
 		Log:      log,
 	}
 

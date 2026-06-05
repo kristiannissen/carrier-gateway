@@ -46,7 +46,7 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	carrierAdapter, err := c.getAdapter(request.Carrier)
+	carrierAdapter, err := c.selectAdapter(request.Carrier)
 	if err != nil {
 		c.writeError(w, r, http.StatusBadRequest, "unsupported carrier", err.Error())
 		return

@@ -19,17 +19,17 @@ func main() {
 	}
 	defer log.Sync() //nolint:errcheck
 
-	carrierAdapters := adapter.InitAdapters(log)
+	registry := adapter.NewRegistry(log)
 
 	rootCmd := &cobra.Command{
 		Use:   "logistics-gateway",
 		Short: "Multi-Carrier Integration CLI",
-		Long:  "A CLI tool for booking shipments and tracking with multiple carriers (PostNord, FedEx, DHL).",
+		Long:  "A CLI tool for booking shipments and tracking with multiple carriers.",
 	}
 
 	rootCmd.AddCommand(
-		newBookCmd(carrierAdapters),
-		newTrackCmd(carrierAdapters),
+		newBookCmd(registry),
+		newTrackCmd(registry),
 		newHealthCmd(),
 	)
 

@@ -4,7 +4,6 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -15,7 +14,7 @@ import (
 
 // Config holds shared configuration for HTTP handlers.
 type Config struct {
-	Adapters map[string]adapter.CarrierAdapter
+	Registry *adapter.Registry
 	Log      *zap.Logger
 }
 
@@ -48,12 +47,7 @@ func (c *Config) writeError(w http.ResponseWriter, r *http.Request, statusCode i
 	}
 }
 
-// getAdapter retrieves the appropriate carrier adapter from the config.
-// Returns an error if the carrier is not supported or not configured.
-func (c *Config) getAdapter(carrier string) (adapter.CarrierAdapter, error) {
-	a, exists := c.Adapters[carrier]
-	if !exists {
-		return nil, fmt.Errorf("carrier %s is not supported or not configured", carrier)
-	}
-	return a, nil
+// selectAdapter delegates carrier selection to the Registry.
+func (c *Config) selectAdapter(carrier string) (adapter.CarrierAdapter, error) {
+	return c.Registry.Select(carrier)
 }

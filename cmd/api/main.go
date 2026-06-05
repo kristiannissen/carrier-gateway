@@ -22,8 +22,8 @@ func main() {
 
 	log.Info("starting logistics-gateway API server")
 
-	adapters := adapter.InitAdapters(log)
-	rtr := router.NewRouter(adapters, log)
+	registry := adapter.NewRegistry(log)
+	rtr := router.NewRouter(registry, log)
 
 	port := os.Getenv("PORT")
 	if port == "" {

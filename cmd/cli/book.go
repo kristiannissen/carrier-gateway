@@ -12,7 +12,7 @@ import (
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
-func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
+func newBookCmd(registry *adapter.Registry) *cobra.Command {
 	var (
 		carrier      string
 		inputFile    string
@@ -23,7 +23,7 @@ func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "book",
 		Short: "Book a shipment",
-		Long:  "Book a shipment with a specified carrier (e.g., postnord, fedex, dhl).",
+		Long:  "Book a shipment with a specified carrier (e.g., postnord, bring, gls).",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var request adapter.BookingRequest
 			if inputFile != "" {
@@ -41,7 +41,7 @@ func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 						return fmt.Errorf("failed to parse stdin: %w", err)
 					}
 				} else {
-					return fmt.Errorf("no input provided. Use --input or pipe JSON to stdin")
+					return fmt.Errorf("no input provided: use --input or pipe JSON to stdin")
 				}
 			}
 
@@ -54,9 +54,9 @@ func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 				return fmt.Errorf("validation failed: %w", err)
 			}
 
-			a, exists := adapters[carrier]
-			if !exists {
-				return fmt.Errorf("unsupported carrier: %s", carrier)
+			a, err := registry.Select(carrier)
+			if err != nil {
+				return fmt.Errorf("unsupported carrier: %w", err)
 			}
 
 			response, err := a.BookShipment(cmd.Context(), request)
@@ -89,7 +89,7 @@ func newBookCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&carrier, "carrier", "c", "", "Carrier (e.g., postnord, fedex, dhl)")
+	cmd.Flags().StringVarP(&carrier, "carrier", "c", "", "Carrier (e.g., postnord, bring, gls)")
 	cmd.Flags().StringVarP(&inputFile, "input", "i", "", "Input JSON file (default: stdin)")
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "text", "Output format (json or text)")
 	cmd.Flags().BoolVarP(&async, "async", "a", false, "Enable async booking (if supported by carrier)")

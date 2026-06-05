@@ -12,7 +12,7 @@ import (
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
-func newTrackCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
+func newTrackCmd(registry *adapter.Registry) *cobra.Command {
 	var (
 		trackingNumber string
 		carrier        string
@@ -31,9 +31,9 @@ func newTrackCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 				carrier = "postnord"
 			}
 
-			a, exists := adapters[carrier]
-			if !exists {
-				return fmt.Errorf("unsupported carrier: %s", carrier)
+			a, err := registry.Select(carrier)
+			if err != nil {
+				return fmt.Errorf("unsupported carrier: %w", err)
 			}
 
 			response, err := a.TrackShipment(cmd.Context(), trackingNumber)
@@ -79,7 +79,7 @@ func newTrackCmd(adapters map[string]adapter.CarrierAdapter) *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&trackingNumber, "tracking-number", "t", "", "Tracking number")
-	cmd.Flags().StringVarP(&carrier, "carrier", "c", "postnord", "Carrier (e.g., postnord, fedex, dhl)")
+	cmd.Flags().StringVarP(&carrier, "carrier", "c", "postnord", "Carrier (e.g., postnord, bring, gls)")
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "text", "Output format (json or text)")
 	cmd.MarkFlagRequired("tracking-number") //nolint:errcheck
 
