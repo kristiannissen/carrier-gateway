@@ -563,6 +563,66 @@ The handler, router, and validation layer require no changes.
 
 ---
 
+## Idempotency
+
+Sending the same booking request twice — due to a network timeout, a retry loop, or a client crash — should not create two shipments. The gateway supports the `Idempotency-Key` header to let your system identify and deduplicate retries.
+
+### How it works
+
+Include an `Idempotency-Key` header on any `POST /api/bookings` request:
+
+```bash
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-98765-attempt-1" \
+  -d '{ "carrier": "postnord", "shipment": { ... } }'
+```
+
+The key can also be sent in the request body as `idempotencyKey`. If both are present they must match — a mismatch returns `422`.
+
+The key must be 64 characters or fewer. A good key is something that uniquely identifies the booking attempt from your system — an order ID, a combination of order ID and attempt number, or a UUID you generate before sending.
+
+### What the gateway does
+
+The middleware reads the header, injects it into the request body, and stores it on the request context. Every log entry for that request carries the key as a structured field, so you can search your logs for all activity related to a specific key.
+
+For carriers that accept an idempotency key natively (currently PostNord), the key is forwarded in the wire payload. The carrier's API then guarantees that a second request with the same key returns the original booking rather than creating a new one.
+
+### Carrier support
+
+| Carrier | Native idempotency | Behaviour |
+|---|---|---|
+| PostNord | Yes | Key forwarded to carrier API; server-side deduplication |
+| Bring | No | Key logged; deduplication is your responsibility |
+| GLS | No | Key logged; deduplication is your responsibility |
+| DAO | No | Key logged; deduplication is your responsibility |
+| Posti | No | Key logged; deduplication is your responsibility |
+| InPost | No | Key logged; deduplication is your responsibility |
+
+### Your responsibility
+
+For carriers without native idempotency support, **the gateway does not store responses or detect duplicate keys**. You need to implement deduplication in your system before calling the gateway. The typical approaches:
+
+**In-memory** — suitable for single-instance deployments or serverless functions where each invocation is short-lived. Store a map of key → response in your process. Fast but lost on restart.
+
+**Redis** — suitable for distributed deployments. Set a key with a TTL matching your retry window (e.g. 24 hours). Before booking, check if the key exists; if it does, return the stored response.
+
+**Database** — suitable when you need an audit trail. Store key, response, carrier, and timestamp in a bookings table. Query before each booking attempt.
+
+Regardless of which approach you use, the pattern is the same:
+
+```
+1. Generate a stable key for this booking attempt (e.g. "order-{id}")
+2. Check your store — if the key exists, return the stored response
+3. Call POST /api/bookings with Idempotency-Key: {key}
+4. Store the response against the key
+5. Return the response to your caller
+```
+
+The key should remain stable across retries of the same logical booking. If you want to book the same order again after a cancellation, use a different key.
+
+---
+
 ## Cross-border shipments and customs
 
 Shipping within the EU is straightforward — goods move freely with no customs declarations required for most shipments. Shipping to Norway is different. Norway is not an EU member, which means every commercial shipment crossing that border is a customs event, regardless of carrier.

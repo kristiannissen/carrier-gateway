@@ -159,17 +159,42 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 func TestPostNordAdapter_BookShipment_IdempotencyKey(t *testing.T) {
 	t.Parallel()
 
-	adapter, captured := newPostNordTestServer(t, http.StatusCreated,
-		`{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`)
+	t.Run("key forwarded to wire payload", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newPostNordTestServer(t, http.StatusCreated,
+			`{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`)
 
-	req := postnordMinimalRequest()
-	req.IdempotencyKey = "unique-key-123"
+		req := postnordMinimalRequest()
+		req.IdempotencyKey = "unique-key-123"
 
-	_, err := adapter.BookShipment(t.Context(), req)
-	require.NoError(t, err)
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
 
-	shipment := requireShipment(t, *captured)
-	assert.Equal(t, "unique-key-123", shipment["idempotencyKey"])
+		shipment := requireShipment(t, *captured)
+		assert.Equal(t, "unique-key-123", shipment["idempotencyKey"])
+	})
+
+	t.Run("absent when no key provided", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newPostNordTestServer(t, http.StatusCreated,
+			`{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`)
+
+		_, err := adapter.BookShipment(t.Context(), postnordMinimalRequest())
+		require.NoError(t, err)
+
+		shipment := requireShipment(t, *captured)
+		assert.NotContains(t, shipment, "idempotencyKey")
+	})
+
+	t.Run("postnord supports native idempotency", func(t *testing.T) {
+		t.Parallel()
+		assert.True(t, SupportsNativeIdempotency("postnord"))
+	})
+
+	t.Run("bring does not support native idempotency", func(t *testing.T) {
+		t.Parallel()
+		assert.False(t, SupportsNativeIdempotency("bring"))
+	})
 }
 
 func TestPostNordAdapter_BookShipment_OptionalFields(t *testing.T) {

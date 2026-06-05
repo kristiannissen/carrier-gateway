@@ -20,6 +20,7 @@ func NewRouter(registry *adapter.Registry, log *zap.Logger) *mux.Router {
 
 	r := mux.NewRouter()
 	r.Use(middleware.RequestID)
+	r.Use(middleware.Idempotency(log))
 	r.Use(middleware.LogPayloads(log))
 
 	r.HandleFunc("/api/bookings", h.BookShipment).Methods("POST")

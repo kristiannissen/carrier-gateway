@@ -51,6 +51,7 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	if flagged {
 		log.Warn("shipment flagged for manual review",
 			zap.String("carrier", request.Carrier),
+			zap.String("idempotencyKey", request.IdempotencyKey),
 			zap.String("senderPostalCode", request.Shipment.Sender.PostalCode),
 			zap.String("receiverPostalCode", request.Shipment.Receiver.PostalCode),
 		)
@@ -67,6 +68,7 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		log.Error("failed to book shipment",
 			zap.Error(err),
 			zap.String("carrier", request.Carrier),
+			zap.String("idempotencyKey", request.IdempotencyKey),
 		)
 		c.writeError(w, r, http.StatusInternalServerError, "booking failed", err.Error())
 		return

@@ -53,6 +53,31 @@ func (r *Registry) Carriers() []string {
 	return keys
 }
 
+// carrierCapabilities describes optional features a carrier's API supports natively.
+type carrierCapabilities struct {
+	// NativeIdempotency is true when the carrier's booking API accepts an
+	// idempotency key directly and uses it for server-side deduplication.
+	// When false, deduplication must be handled by the integrating system.
+	NativeIdempotency bool
+}
+
+// capabilities maps carrier keys to their known API capabilities.
+var capabilities = map[string]carrierCapabilities{
+	"postnord": {NativeIdempotency: true},
+	"bring":    {NativeIdempotency: false},
+	"gls":      {NativeIdempotency: false},
+	"dao":      {NativeIdempotency: false},
+	"posti":    {NativeIdempotency: false},
+	"inpost":   {NativeIdempotency: false},
+}
+
+// SupportsNativeIdempotency reports whether the given carrier accepts an
+// idempotency key directly in its booking API. When false, the integrating
+// system is responsible for deduplication using the key.
+func SupportsNativeIdempotency(carrier string) bool {
+	return capabilities[carrier].NativeIdempotency
+}
+
 // InitAdapters initializes all carrier adapters based on environment variables.
 func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	adapters := make(map[string]CarrierAdapter)
