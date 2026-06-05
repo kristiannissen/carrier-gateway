@@ -232,6 +232,11 @@ type Dimensions struct {
 // building name, floor, apartment, attention line, or care-of. It maps to
 // what carriers variously call "address line 2", "co", or "addressLine2" —
 // the name here is intentionally carrier-agnostic.
+//
+// State holds the state, province, or region code where required by the
+// destination country (e.g. "CA" for California, "ON" for Ontario, "BE" for
+// Berlin). Optional for countries that do not use administrative divisions
+// in postal addressing (e.g. Denmark, Norway).
 type Address struct {
 	Name        string `json:"name"        validate:"required"`
 	Street      string `json:"street"      validate:"required"`
@@ -240,6 +245,7 @@ type Address struct {
 	City        string `json:"city"        validate:"required"`
 	PostalCode  string `json:"postalCode"  validate:"required"`
 	Country     string `json:"country"     validate:"required"`
+	State       string `json:"state,omitempty"`
 	Phone       string `json:"phone,omitempty"`
 	Email       string `json:"email,omitempty"`
 }

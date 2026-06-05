@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
@@ -19,14 +20,44 @@ var ReviewRequired = errors.New("address flagged for manual review")
 // postalCodeRules maps ISO 3166-1 alpha-2 country codes to the regex that
 // the country's postal authority mandates.
 var postalCodeRules = map[string]*regexp.Regexp{
+	// Nordic
 	"DK": regexp.MustCompile(`^\d{4}$`),
 	"NO": regexp.MustCompile(`^\d{4}$`),
 	"SE": regexp.MustCompile(`^\d{5}$`),
 	"FI": regexp.MustCompile(`^\d{5}$`),
+
+	// European
 	"PL": regexp.MustCompile(`^\d{2}-\d{3}$`),
 	"DE": regexp.MustCompile(`^\d{5}$`),
 	"FR": regexp.MustCompile(`^\d{5}$`),
 	"NL": regexp.MustCompile(`^\d{4}\s?[A-Z]{2}$`),
+	"BE": regexp.MustCompile(`^\d{4}$`),
+	"ES": regexp.MustCompile(`^\d{5}$`),
+	"IT": regexp.MustCompile(`^\d{5}$`),
+	"PT": regexp.MustCompile(`^\d{4}-\d{3}$`),
+	"AT": regexp.MustCompile(`^\d{4}$`),
+	"CH": regexp.MustCompile(`^\d{4}$`),
+
+	// British Isles
+	// Royal Mail format: 1-2 letters + 1-2 digits (+ optional letter) + space +
+	// 1 digit + 2 letters. Spaces are normalised before matching.
+	"GB": regexp.MustCompile(`^[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}$`),
+
+	// Americas
+	// US: 5-digit ZIP, 5+4 ZIP, or military APO/FPO/DPO codes.
+	"US": regexp.MustCompile(`^(\d{5}(-\d{4})?|(APO|FPO|DPO)\s+[A-Z]{2}\s+\d{5}(-\d{4})?)$`),
+	// Canada: letter-digit-letter space? digit-letter-digit (spaces optional).
+	"CA": regexp.MustCompile(`^[A-Z]\d[A-Z]\s?\d[A-Z]\d$`),
+	// Brazil: 8-digit with optional hyphen after 5th digit.
+	"BR": regexp.MustCompile(`^\d{5}-?\d{3}$`),
+
+	// Asia-Pacific
+	// Japan: 3-digit + optional hyphen + 4-digit.
+	"JP": regexp.MustCompile(`^\d{3}-?\d{4}$`),
+	// China: 6-digit numeric.
+	"CN": regexp.MustCompile(`^\d{6}$`),
+	// Australia: 4-digit.
+	"AU": regexp.MustCompile(`^\d{4}$`),
 }
 
 // houseNumberRequired is the set of carriers that mandate HouseNumber as a
@@ -46,6 +77,64 @@ var nordicCountries = map[string]bool{
 	"FI": true,
 }
 
+// stateRequired is the set of countries for which a non-empty State field is
+// mandatory. These are countries where the state/province is part of the
+// official postal address and required by carriers.
+var stateRequired = map[string]bool{
+	"US": true,
+	"CA": true,
+	"BR": true,
+	"AU": true,
+}
+
+// validStates maps country codes to the set of valid state/province/territory
+// codes used in postal addressing. Values are upper-case.
+var validStates = map[string]map[string]bool{
+	"US": {
+		// 50 states
+		"AL": true, "AK": true, "AZ": true, "AR": true, "CA": true,
+		"CO": true, "CT": true, "DE": true, "FL": true, "GA": true,
+		"HI": true, "ID": true, "IL": true, "IN": true, "IA": true,
+		"KS": true, "KY": true, "LA": true, "ME": true, "MD": true,
+		"MA": true, "MI": true, "MN": true, "MS": true, "MO": true,
+		"MT": true, "NE": true, "NV": true, "NH": true, "NJ": true,
+		"NM": true, "NY": true, "NC": true, "ND": true, "OH": true,
+		"OK": true, "OR": true, "PA": true, "RI": true, "SC": true,
+		"SD": true, "TN": true, "TX": true, "UT": true, "VT": true,
+		"VA": true, "WA": true, "WV": true, "WI": true, "WY": true,
+		// DC and territories
+		"DC": true, "PR": true, "GU": true, "VI": true, "AS": true, "MP": true,
+		// Military
+		"AA": true, "AE": true, "AP": true,
+	},
+	"CA": {
+		// Provinces
+		"AB": true, "BC": true, "MB": true, "NB": true, "NL": true,
+		"NS": true, "ON": true, "PE": true, "QC": true, "SK": true,
+		// Territories
+		"NT": true, "NU": true, "YT": true,
+	},
+	"AU": {
+		"ACT": true, "NSW": true, "NT": true, "QLD": true,
+		"SA": true, "TAS": true, "VIC": true, "WA": true,
+	},
+	"BR": {
+		"AC": true, "AL": true, "AP": true, "AM": true, "BA": true,
+		"CE": true, "DF": true, "ES": true, "GO": true, "MA": true,
+		"MT": true, "MS": true, "MG": true, "PA": true, "PB": true,
+		"PR": true, "PE": true, "PI": true, "RJ": true, "RN": true,
+		"RS": true, "RO": true, "RR": true, "SC": true, "SP": true,
+		"SE": true, "TO": true,
+	},
+	"DE": {
+		// Bundesland codes used in shipping contexts
+		"BB": true, "BE": true, "BW": true, "BY": true, "HB": true,
+		"HE": true, "HH": true, "MV": true, "NI": true, "NW": true,
+		"RP": true, "SH": true, "SL": true, "SN": true, "ST": true,
+		"TH": true,
+	},
+}
+
 // ValidateAddress validates addr for the given carrier and country.
 //
 // Rules enforced:
@@ -53,6 +142,7 @@ var nordicCountries = map[string]bool{
 //   - City is used as municipality proxy for Finland; empty City is an error.
 //   - HouseNumber is required when the carrier mandates it, unless country is FR.
 //   - Postal code must match the country's known format where a rule exists.
+//   - State is required and validated for US, CA, BR, AU, and optionally DE.
 //   - For countries with no known rule, a non-standard postal code returns
 //     ReviewRequired so the caller flags the shipment rather than rejects it.
 func ValidateAddress(addr adapter.Address, carrier, country string) error {
@@ -72,19 +162,50 @@ func ValidateAddress(addr adapter.Address, carrier, country string) error {
 		return fmt.Errorf("house number is required for %s shipments to %s", carrier, country)
 	}
 
+	// Postal code validation.
 	if rule, ok := postalCodeRules[country]; ok {
 		if addr.PostalCode == "" {
 			return fmt.Errorf("postal code is required for %s", country)
 		}
-		if !rule.MatchString(addr.PostalCode) {
+		// Normalise to upper-case before matching — callers may pass mixed case.
+		if !rule.MatchString(strings.ToUpper(addr.PostalCode)) {
 			return fmt.Errorf("invalid %s postal code: %s", countryName(country), addr.PostalCode)
+		}
+	} else if addr.PostalCode != "" {
+		// No rule for this country — flag non-standard codes for manual review.
+		if !regexp.MustCompile(`^[A-Z0-9\s\-]{3,10}$`).MatchString(strings.ToUpper(addr.PostalCode)) {
+			return fmt.Errorf("%w: unrecognised postal code format for country %s", ReviewRequired, country)
+		}
+	}
+
+	// State/province validation.
+	if err := ValidateState(addr.State, country); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// ValidateState validates the state/province/territory code for a given country.
+// Returns nil when the country has no state requirement or when State is absent
+// for a country that does not require it.
+func ValidateState(state, country string) error {
+	states, hasStates := validStates[country]
+
+	if stateRequired[country] {
+		if state == "" {
+			return fmt.Errorf("state is required for %s", countryName(country))
+		}
+		if hasStates && !states[strings.ToUpper(state)] {
+			return fmt.Errorf("invalid %s state code: %q", countryName(country), state)
 		}
 		return nil
 	}
 
-	// No rule for this country — flag non-standard codes for manual review.
-	if addr.PostalCode != "" && !regexp.MustCompile(`^[A-Z0-9\s\-]{3,10}$`).MatchString(addr.PostalCode) {
-		return fmt.Errorf("%w: unrecognised postal code format for country %s", ReviewRequired, country)
+	// State not required — validate format only if provided and the country has
+	// a known set (e.g. DE Bundesland codes are validated when present).
+	if state != "" && hasStates && !states[strings.ToUpper(state)] {
+		return fmt.Errorf("invalid %s state code: %q", countryName(country), state)
 	}
 
 	return nil
@@ -106,6 +227,19 @@ func countryName(code string) string {
 		"DE": "German",
 		"FR": "French",
 		"NL": "Dutch",
+		"GB": "British",
+		"US": "US",
+		"CA": "Canadian",
+		"BR": "Brazilian",
+		"JP": "Japanese",
+		"CN": "Chinese",
+		"AU": "Australian",
+		"CH": "Swiss",
+		"BE": "Belgian",
+		"ES": "Spanish",
+		"IT": "Italian",
+		"PT": "Portuguese",
+		"AT": "Austrian",
 	}
 	if name, ok := names[code]; ok {
 		return name

@@ -255,9 +255,325 @@ func postalCodeFor(country string) string {
 		"PL": "00-001",
 		"DE": "10115",
 		"FR": "75001",
+		"US": "90210",
+		"CA": "M5V3L9",
+		"GB": "SW1A1AA",
+		"JP": "123-4567",
+		"CN": "100000",
+		"BR": "01310-100",
+		"AU": "2000",
 	}
 	if code, ok := codes[country]; ok {
 		return code
 	}
 	return "12345"
+}
+
+// =========================================================================
+// Extended postal code tests — Americas, Asia-Pacific, British Isles
+// =========================================================================
+
+func TestValidateAddress_PostalCodes_Extended(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name        string
+		country     string
+		postalCode  string
+		state       string
+		wantErr     bool
+		errContains string
+	}{
+		// US — 5-digit ZIP
+		{name: "US 5-digit valid", country: "US", postalCode: "90210", state: "CA"},
+		{name: "US 5+4 ZIP valid", country: "US", postalCode: "90210-1234", state: "CA"},
+		{name: "US APO valid", country: "US", postalCode: "APO AE 09001", state: "AE"},
+		{name: "US FPO valid", country: "US", postalCode: "FPO AP 96601", state: "AP"},
+		{name: "US 4-digit invalid", country: "US", postalCode: "9021", state: "CA", wantErr: true, errContains: "invalid US postal code"},
+		{name: "US 6-digit invalid", country: "US", postalCode: "902101", state: "CA", wantErr: true, errContains: "invalid US postal code"},
+		{name: "US letters invalid", country: "US", postalCode: "9021X", state: "CA", wantErr: true, errContains: "invalid US postal code"},
+
+		// Canada
+		{name: "CA valid no space", country: "CA", postalCode: "M5V3L9", state: "ON"},
+		{name: "CA valid with space", country: "CA", postalCode: "M5V 3L9", state: "ON"},
+		{name: "CA all digits invalid", country: "CA", postalCode: "123456", state: "ON", wantErr: true, errContains: "invalid Canadian postal code"},
+		{name: "CA too short", country: "CA", postalCode: "M5V", state: "ON", wantErr: true, errContains: "invalid Canadian postal code"},
+
+		// GB
+		{name: "GB standard valid", country: "GB", postalCode: "SW1A 1AA"},
+		{name: "GB no space valid", country: "GB", postalCode: "SW1A1AA"},
+		{name: "GB short outward valid", country: "GB", postalCode: "W1A 1AA"},
+		{name: "GB all digits invalid", country: "GB", postalCode: "12345", wantErr: true, errContains: "invalid British postal code"},
+
+		// Japan
+		{name: "JP with hyphen valid", country: "JP", postalCode: "123-4567"},
+		{name: "JP without hyphen valid", country: "JP", postalCode: "1234567"},
+		{name: "JP too short", country: "JP", postalCode: "123-456", wantErr: true, errContains: "invalid Japanese postal code"},
+		{name: "JP too long", country: "JP", postalCode: "1234-5678", wantErr: true, errContains: "invalid Japanese postal code"},
+
+		// China
+		{name: "CN 6-digit valid", country: "CN", postalCode: "100000"},
+		{name: "CN 5-digit invalid", country: "CN", postalCode: "10000", wantErr: true, errContains: "invalid Chinese postal code"},
+		{name: "CN 7-digit invalid", country: "CN", postalCode: "1000000", wantErr: true, errContains: "invalid Chinese postal code"},
+
+		// Brazil
+		{name: "BR with hyphen valid", country: "BR", postalCode: "01310-100", state: "SP"},
+		{name: "BR without hyphen valid", country: "BR", postalCode: "01310100", state: "SP"},
+		{name: "BR too short", country: "BR", postalCode: "01310", state: "SP", wantErr: true, errContains: "invalid Brazilian postal code"},
+
+		// Australia
+		{name: "AU 4-digit valid", country: "AU", postalCode: "2000", state: "NSW"},
+		{name: "AU 3-digit invalid", country: "AU", postalCode: "200", state: "NSW", wantErr: true, errContains: "invalid Australian postal code"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			addr := adapter.Address{
+				Name:       "Test",
+				Street:     "Test Street",
+				City:       "Test City",
+				PostalCode: tc.postalCode,
+				Country:    tc.country,
+				State:      tc.state,
+			}
+			err := ValidateAddress(addr, "postnord", tc.country)
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errContains)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+// =========================================================================
+// State / province validation
+// =========================================================================
+
+func TestValidateState_US(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		state   string
+		wantErr bool
+	}{
+		// Valid states
+		{state: "CA"},
+		{state: "NY"},
+		{state: "TX"},
+		{state: "FL"},
+		// DC and territories
+		{state: "DC"},
+		{state: "PR"},
+		{state: "GU"},
+		// Military
+		{state: "AE"},
+		{state: "AP"},
+		{state: "AA"},
+		// Lower-case normalised
+		{state: "ca"},
+		// Invalid
+		{state: "", wantErr: true},
+		{state: "XX", wantErr: true},
+		{state: "ZZ", wantErr: true},
+		{state: "California", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run("US_"+tc.state, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateState(tc.state, "US")
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateState_Canada(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		state   string
+		wantErr bool
+	}{
+		{state: "ON"},
+		{state: "QC"},
+		{state: "BC"},
+		{state: "AB"},
+		{state: "YT"}, // territory
+		{state: "NU"}, // territory
+		{state: "on"}, // lower-case normalised
+		{state: "", wantErr: true},
+		{state: "XX", wantErr: true},
+		{state: "Ontario", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run("CA_"+tc.state, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateState(tc.state, "CA")
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateState_Germany_Optional(t *testing.T) {
+	t.Parallel()
+
+	// DE state is not required but validated when present.
+	t.Run("valid Bundesland code accepted", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, ValidateState("BE", "DE"))
+		assert.NoError(t, ValidateState("BY", "DE"))
+		assert.NoError(t, ValidateState("NW", "DE"))
+	})
+
+	t.Run("absent is accepted for DE", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, ValidateState("", "DE"))
+	})
+
+	t.Run("invalid Bundesland code rejected when provided", func(t *testing.T) {
+		t.Parallel()
+		err := ValidateState("XX", "DE")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid German state code")
+	})
+}
+
+func TestValidateState_Brazil(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		state   string
+		wantErr bool
+	}{
+		{state: "SP"},
+		{state: "RJ"},
+		{state: "MG"},
+		{state: "sp"}, // lower-case normalised
+		{state: "", wantErr: true},
+		{state: "XX", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run("BR_"+tc.state, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateState(tc.state, "BR")
+			if tc.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateState_NoRequirement(t *testing.T) {
+	t.Parallel()
+
+	// Countries with no state requirement and no known state set.
+	for _, country := range []string{"DK", "NO", "SE", "FI", "FR", "JP", "CN"} {
+		country := country
+		t.Run(country+"_state_absent", func(t *testing.T) {
+			t.Parallel()
+			assert.NoError(t, ValidateState("", country))
+		})
+		t.Run(country+"_state_present_no_rule", func(t *testing.T) {
+			t.Parallel()
+			// No known set for these countries — any value accepted.
+			assert.NoError(t, ValidateState("SomeRegion", country))
+		})
+	}
+}
+
+func TestValidateAddress_StateIntegration(t *testing.T) {
+	t.Parallel()
+
+	t.Run("US address with valid state passes", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name: "Test", Street: "123 Main St",
+			City: "Beverly Hills", PostalCode: "90210",
+			Country: "US", State: "CA",
+		}
+		assert.NoError(t, ValidateAddress(addr, "postnord", "US"))
+	})
+
+	t.Run("US address missing state fails", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name: "Test", Street: "123 Main St",
+			City: "Beverly Hills", PostalCode: "90210",
+			Country: "US",
+		}
+		err := ValidateAddress(addr, "postnord", "US")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "state is required for US")
+	})
+
+	t.Run("US address invalid state fails", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name: "Test", Street: "123 Main St",
+			City: "Beverly Hills", PostalCode: "90210",
+			Country: "US", State: "ZZ",
+		}
+		err := ValidateAddress(addr, "postnord", "US")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid US state code")
+	})
+
+	t.Run("CA address with province passes", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name: "Test", Street: "100 King St",
+			City: "Toronto", PostalCode: "M5V3L9",
+			Country: "CA", State: "ON",
+		}
+		assert.NoError(t, ValidateAddress(addr, "postnord", "CA"))
+	})
+
+	t.Run("DK address without state passes", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name: "Test", Street: "Strøget", HouseNumber: "1",
+			City: "Copenhagen", PostalCode: "1000",
+			Country: "DK",
+		}
+		assert.NoError(t, ValidateAddress(addr, "postnord", "DK"))
+	})
+
+	t.Run("DE address with valid Bundesland passes", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name: "Test", Street: "Hauptstraße", HouseNumber: "1",
+			City: "Berlin", PostalCode: "10115",
+			Country: "DE", State: "BE",
+		}
+		assert.NoError(t, ValidateAddress(addr, "gls", "DE"))
+	})
+
+	t.Run("DE address without state passes", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name: "Test", Street: "Hauptstraße", HouseNumber: "1",
+			City: "Berlin", PostalCode: "10115",
+			Country: "DE",
+		}
+		assert.NoError(t, ValidateAddress(addr, "gls", "DE"))
+	})
 }
