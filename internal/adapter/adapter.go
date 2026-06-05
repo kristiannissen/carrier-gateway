@@ -150,9 +150,19 @@ type Customs struct {
 	// Incoterms is the trade term (e.g. DDP, DAP). Required for non-EU destinations.
 	Incoterms string `json:"incoterms,omitempty"`
 
+	// TransportMode is the mode of transport for the shipment.
+	// Accepted values: "sea", "air", "road", "rail".
+	// Some Incoterms are only valid for sea transport (FOB, FAS, CFR, CIF).
+	TransportMode string `json:"transportMode,omitempty"`
+
 	// HSCode is the 6-10 digit Harmonized System commodity code.
 	// Required for non-EU destinations and EU shipments above de minimis.
 	HSCode string `json:"hsCode,omitempty"`
+
+	// CountryOfOrigin is the ISO 3166-1 alpha-2 country code where the goods
+	// were manufactured or substantially transformed. Distinct from the
+	// sender's address country and used for rules of origin checks.
+	CountryOfOrigin string `json:"countryOfOrigin,omitempty"`
 
 	// CustomsValue is the declared value of the shipment for customs purposes.
 	CustomsValue float64 `json:"customsValue,omitempty"`

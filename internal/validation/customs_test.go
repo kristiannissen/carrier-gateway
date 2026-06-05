@@ -521,8 +521,232 @@ func TestValidateCustoms_DK_to_DE(t *testing.T) {
 }
 
 // =========================================================================
-// HS code validation
+// Transport mode + Incoterms compatibility
 // =========================================================================
+
+func TestValidateCustoms_TransportMode(t *testing.T) {
+	t.Parallel()
+
+	t.Run("sea-only incoterms accepted with sea mode", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.Incoterms = "FOB"
+		c.TransportMode = "sea"
+		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
+	})
+
+	t.Run("FOB rejected for air transport", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.Incoterms = "FOB"
+		c.TransportMode = "air"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only valid for sea transport")
+		assert.Contains(t, err.Error(), "FOB")
+	})
+
+	t.Run("FOB rejected for road transport", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.Incoterms = "FOB"
+		c.TransportMode = "road"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only valid for sea transport")
+	})
+
+	t.Run("FOB rejected for rail transport", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.Incoterms = "FOB"
+		c.TransportMode = "rail"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only valid for sea transport")
+	})
+
+	t.Run("FAS rejected for air transport", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.Incoterms = "FAS"
+		c.TransportMode = "air"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only valid for sea transport")
+	})
+
+	t.Run("CFR rejected for road transport", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.Incoterms = "CFR"
+		c.TransportMode = "road"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only valid for sea transport")
+	})
+
+	t.Run("CIF rejected for air transport", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.Incoterms = "CIF"
+		c.TransportMode = "air"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only valid for sea transport")
+	})
+
+	t.Run("DDP accepted for any transport mode", func(t *testing.T) {
+		t.Parallel()
+		for _, mode := range []string{"sea", "air", "road", "rail"} {
+			mode := mode
+			t.Run(mode, func(t *testing.T) {
+				t.Parallel()
+				c := validNonEUCustoms()
+				c.TransportMode = mode
+				assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
+			})
+		}
+	})
+
+	t.Run("invalid transport mode rejected", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.TransportMode = "truck"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid transport mode")
+	})
+
+	t.Run("no transport mode set — no error", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.TransportMode = ""
+		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
+	})
+
+	t.Run("sea-only incoterms with no mode set — accepted", func(t *testing.T) {
+		t.Parallel()
+		// Transport mode is optional — if not provided we cannot enforce the rule.
+		c := validNonEUCustoms()
+		c.Incoterms = "FOB"
+		c.TransportMode = ""
+		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
+	})
+}
+
+// =========================================================================
+// De minimis — non-Nordic/EU destinations
+// =========================================================================
+
+func TestValidateCustoms_DeMinimis_Global(t *testing.T) {
+	t.Parallel()
+
+	validUSCustoms := func() adapter.Customs {
+		return adapter.Customs{
+			Incoterms:         "DDP",
+			HSCode:            "61091000",
+			CustomsValue:      900.0,
+			CustomsCurrency:   "USD",
+			ImporterOfRecord:  "US-EIN-12-3456789",
+			ExporterVATNumber: "12345678", // DK VAT
+			ShipmentType:      "B2B",
+		}
+	}
+
+	t.Run("US B2C below $800 de minimis — no customs required", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			CustomsValue:    799.0,
+			CustomsCurrency: "USD",
+			ShipmentType:    "B2C",
+		}
+		assert.NoError(t, ValidateCustoms(c, "DK", "US", "B2C"))
+	})
+
+	t.Run("US B2C at $800 de minimis boundary — no customs required", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			CustomsValue:    800.0,
+			CustomsCurrency: "USD",
+			ShipmentType:    "B2C",
+		}
+		assert.NoError(t, ValidateCustoms(c, "DK", "US", "B2C"))
+	})
+
+	t.Run("US B2C above $800 de minimis — full customs required", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			CustomsValue:    801.0,
+			CustomsCurrency: "USD",
+			ShipmentType:    "B2C",
+		}
+		err := ValidateCustoms(c, "DK", "US", "B2C")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "incoterms is required")
+	})
+
+	t.Run("US B2B — de minimis does not apply, full customs required", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, ValidateCustoms(validUSCustoms(), "DK", "US", "B2B"))
+	})
+
+	t.Run("US B2C non-USD currency flagged for review", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			CustomsValue:    500.0,
+			CustomsCurrency: "EUR",
+			ShipmentType:    "B2C",
+		}
+		err := ValidateCustoms(c, "DK", "US", "B2C")
+		require.Error(t, err)
+		assert.True(t, IsReviewRequired(err))
+	})
+
+	t.Run("GB B2C below £135 de minimis", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			CustomsValue:    130.0,
+			CustomsCurrency: "GBP",
+			ShipmentType:    "B2C",
+		}
+		assert.NoError(t, ValidateCustoms(c, "DK", "GB", "B2C"))
+	})
+
+	t.Run("GB B2C above £135 de minimis — full customs required", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			CustomsValue:    136.0,
+			CustomsCurrency: "GBP",
+			ShipmentType:    "B2C",
+		}
+		err := ValidateCustoms(c, "DK", "GB", "B2C")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "incoterms is required")
+	})
+}
+
+// =========================================================================
+// CountryOfOrigin — field accepted, no hard validation rule yet
+// =========================================================================
+
+func TestValidateCustoms_CountryOfOrigin(t *testing.T) {
+	t.Parallel()
+
+	t.Run("countryOfOrigin accepted without error", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.CountryOfOrigin = "CN"
+		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
+	})
+
+	t.Run("countryOfOrigin absent — no error", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.CountryOfOrigin = ""
+		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
+	})
+}
 
 func TestValidateHSCode(t *testing.T) {
 	t.Parallel()
