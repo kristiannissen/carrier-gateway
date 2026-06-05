@@ -1,0 +1,30 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck       # unhandled errors
+    - gosec          # security issues (catches API keys in URLs, etc.)
+    - staticcheck    # correctness and performance
+    - unused         # unused code
+    - govet          # suspicious constructs
+    - gofmt          # formatting
+    - misspell       # typos in comments and strings
+    - godot          # godoc comments end with a period
+
+linters-settings:
+  gosec:
+    excludes:
+      # G304: file inclusion via variable — acceptable in the CLI input file flag
+      - G304
+  errcheck:
+    # Ignore errors on defer Close() calls — these are handled with //nolint where needed
+    check-type-assertions: true
+    check-blank: true
+
+issues:
+  exclude-rules:
+    # Test files are allowed to use t.Fatal, panic, and skip errcheck
+    - path: "_test\\.go"
+      linters:
+        - errcheck
+        - gosec
