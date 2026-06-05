@@ -543,6 +543,14 @@ go test -cover ./...
 go test ./internal/adapter/...
 ```
 
+### How the adapter tests work
+
+Every real adapter test spins up an `httptest.Server` that captures the raw request body and verifies the exact wire payload the carrier expects. This means the tests catch mapping errors that would only surface at runtime against a live API — wrong field names, missing nesting levels, incorrect unit conversions, and so on.
+
+For example, the Bring test asserts that the payload uses `weightInKg`, `lengthInCm`, `widthInCm`, and `heightInCm` (Bring's unit-suffixed keys), that the sender is nested under `from` rather than `sender`, and that the receiver is under `to`. The PostNord test verifies that colli weights are converted from kg to grams before they leave the gateway. The InPost test checks that `streetName` and `houseNumber` arrive as separate fields.
+
+Each carrier's test file is effectively a contract — if a carrier changes their API, the test fails before any code reaches production.
+
 ### Adding a carrier
 
 1. Create `internal/adapter/{carrier}.go` implementing `CarrierAdapter`
