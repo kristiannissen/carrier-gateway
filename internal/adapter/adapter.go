@@ -118,24 +118,56 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	return adapters
 }
 
+// Customs holds cross-border declaration data required for non-EU
+// destinations and EU B2B shipments above the de minimis threshold.
+// It is optional for domestic and intra-EU B2C shipments below 150 EUR.
+type Customs struct {
+	// Incoterms is the trade term (e.g. DDP, DAP). Required for non-EU destinations.
+	Incoterms string `json:"incoterms,omitempty"`
+
+	// HSCode is the 6-10 digit Harmonized System commodity code.
+	// Required for non-EU destinations and EU shipments above de minimis.
+	HSCode string `json:"hsCode,omitempty"`
+
+	// CustomsValue is the declared value of the shipment for customs purposes.
+	CustomsValue float64 `json:"customsValue,omitempty"`
+
+	// CustomsCurrency is the ISO 4217 currency code for CustomsValue (e.g. DKK, EUR, NOK).
+	CustomsCurrency string `json:"customsCurrency,omitempty"`
+
+	// ImporterOfRecord is the VAT or EORI number of the importer.
+	// Required for non-EU destinations (e.g. Norway).
+	ImporterOfRecord string `json:"importerOfRecord,omitempty"`
+
+	// ImporterVATNumber is the VAT registration number of the receiver.
+	// Required for EU B2B shipments.
+	ImporterVATNumber string `json:"importerVatNumber,omitempty"`
+
+	// ExporterVATNumber is the VAT registration number of the sender.
+	// Required for non-EU destinations.
+	ExporterVATNumber string `json:"exporterVatNumber,omitempty"`
+
+	// ShipmentType is either "B2B" or "B2C". Affects VAT and de minimis rules.
+	ShipmentType string `json:"shipmentType,omitempty"`
+}
+
 // BookingRequest represents a generic shipment booking request.
 type BookingRequest struct {
-	Carrier        string   `json:"carrier" validate:"required"`
-	Shipment       Shipment `json:"shipment" validate:"required"`
+	Carrier        string   `json:"carrier"        validate:"required"`
+	Shipment       Shipment `json:"shipment"       validate:"required"`
 	CallbackURL    string   `json:"callbackUrl,omitempty"`
 	IdempotencyKey string   `json:"idempotencyKey,omitempty"`
-	Incoterms      string   `json:"incoterms,omitempty" validate:"omitempty,oneof=EXW FCA CPT CIP DAP DPU DDP FAS FOB CFR CIF"`
-	HSCode         string   `json:"hsCode,omitempty"`
 }
 
 // Shipment represents the shipment details.
 type Shipment struct {
-	Sender      Address `json:"sender" validate:"required"`
-	Receiver    Address `json:"receiver" validate:"required"`
-	TotalWeight float64 `json:"totalWeight" validate:"required,gt=0"`
-	Colli       []Colli `json:"colli" validate:"required,min=1"`
-	Incoterms   string  `json:"incoterms,omitempty"`
-	HSCode      string  `json:"hsCode,omitempty"`
+	Sender      Address  `json:"sender"      validate:"required"`
+	Receiver    Address  `json:"receiver"    validate:"required"`
+	TotalWeight float64  `json:"totalWeight" validate:"required,gt=0"`
+	Colli       []Colli  `json:"colli"       validate:"required,min=1"`
+	// Customs holds cross-border declaration data. Required for non-EU
+	// destinations and EU B2B shipments above the de minimis threshold.
+	Customs Customs `json:"customs,omitempty"`
 }
 
 // Colli represents an individual package in a shipment.
@@ -188,17 +220,20 @@ type Item struct {
 
 // BookingResponse represents the response from a carrier after booking a shipment.
 type BookingResponse struct {
-	ShipmentID     string          `json:"shipmentId,omitempty"`
-	TrackingNumber string          `json:"trackingNumber"`
-	LabelURL       string          `json:"labelUrl,omitempty"`
-	Carrier        string          `json:"carrier"`
-	Cost           float64         `json:"cost,omitempty"`
-	Currency       string          `json:"currency,omitempty"`
-	ServiceLevel   string          `json:"serviceLevel,omitempty"`
-	Status         string          `json:"status,omitempty"`
-	Colli          []ColliResponse `json:"colli,omitempty"`
-	Errors         []string        `json:"errors,omitempty"`
-	LockerId       string          `json:"lockerId,omitempty"`
+	ShipmentID      string          `json:"shipmentId,omitempty"`
+	TrackingNumber  string          `json:"trackingNumber"`
+	LabelURL        string          `json:"labelUrl,omitempty"`
+	Carrier         string          `json:"carrier"`
+	Cost            float64         `json:"cost,omitempty"`
+	Currency        string          `json:"currency,omitempty"`
+	ServiceLevel    string          `json:"serviceLevel,omitempty"`
+	Status          string          `json:"status,omitempty"`
+	Colli           []ColliResponse `json:"colli,omitempty"`
+	Errors          []string        `json:"errors,omitempty"`
+	LockerId        string          `json:"lockerId,omitempty"`
+	// FlaggedForReview is true when the address passed a ReviewRequired
+	// validation — the booking was accepted but should be checked manually.
+	FlaggedForReview bool `json:"flaggedForReview,omitempty"`
 }
 
 // ColliResponse represents the response for an individual colli in a shipment.

@@ -205,7 +205,7 @@ func TestGLSAdapter_BookShipment_IncotermsForwarded(t *testing.T) {
 	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
 
 	req := glsMinimalRequest()
-	req.Shipment.Incoterms = "DDP"
+	req.Shipment.Customs.Incoterms = "DDP"
 
 	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)

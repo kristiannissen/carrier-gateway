@@ -563,6 +563,199 @@ The handler, router, and validation layer require no changes.
 
 ---
 
-## License
+## Cross-border shipments and customs
+
+Shipping within the EU is straightforward — goods move freely with no customs declarations required for most shipments. Shipping to Norway is different. Norway is not an EU member, which means every commercial shipment crossing that border is a customs event, regardless of carrier.
+
+The `customs` block on a shipment captures everything a carrier and customs authority need to process a cross-border shipment. It is optional for domestic and intra-EU B2C shipments below the de minimis threshold. It is required — and validated before the request reaches the carrier — for everything else.
+
+### Fields
+
+```json
+"customs": {
+  "incoterms": "DDP",
+  "hsCode": "61091000",
+  "customsValue": 500.0,
+  "customsCurrency": "DKK",
+  "importerOfRecord": "NO123456789",
+  "importerVatNumber": "SE1234567890",
+  "exporterVatNumber": "12345678",
+  "shipmentType": "B2B"
+}
+```
+
+**`incoterms`** — The trade term that defines who pays for shipping, insurance, and import duties, and where responsibility transfers from seller to buyer. The most common values for e-commerce:
+
+| Term | Meaning |
+|---|---|
+| `DDP` | Delivered Duty Paid — the seller covers everything including import duties. The buyer receives the parcel with no extra charges. |
+| `DAP` | Delivered at Place — the seller covers transport but the buyer pays import duties on arrival. |
+| `EXW` | Ex Works — buyer collects from the seller's premises and handles all transport and duties themselves. |
+
+Other accepted values: `FCA`, `CPT`, `CIP`, `DPU`, `FAS`, `FOB`, `CFR`, `CIF`.
+
+For shipments to Norway, `DDP` is the most buyer-friendly option and avoids surprise charges at delivery. Required for all non-EU destinations.
+
+**`hsCode`** — Harmonized System code. A 6–10 digit number that classifies what is inside the parcel. Every product in international trade has one. Customs authorities use it to determine the applicable duty rate and whether any restrictions apply.
+
+Examples:
+- `61091000` — T-shirts of cotton
+- `64041100` — Sports footwear with outer soles of rubber
+- `95066290` — Footballs
+
+You can look up HS codes at [customs.dk](https://toldsatser.dk) (Denmark) or [taric.ec.europa.eu](https://ec.europa.eu/taxation_customs/dds2/taric) (EU). Required for non-EU destinations and EU shipments with a customs value above 150 EUR.
+
+**`customsValue`** and **`customsCurrency`** — The declared value of the shipment in the specified currency (ISO 4217 code, e.g. `DKK`, `NOK`, `EUR`). This is what customs uses to calculate duties and VAT. It should reflect the actual commercial value, not a discounted or zero value.
+
+**`importerOfRecord`** — The Norwegian VAT number or EORI number of the entity responsible for clearing the goods through Norwegian customs. For B2B shipments this is typically the buyer's Norwegian business registration number (9 digits, e.g. `NO123456789`). Required for all shipments to Norway.
+
+**`importerVatNumber`** — The VAT registration number of the buyer, required for B2B shipments within the EU. Without it the seller cannot zero-rate the VAT on the invoice. Format varies by country:
+
+| Country | Format | Example |
+|---|---|---|
+| Denmark | 8 digits | `12345678` |
+| Sweden | SE + 10 digits | `SE1234567890` |
+| Finland | 8 digits | `12345678` |
+| Germany | DE + 9 digits | `DE123456789` |
+| Norway | 9 digits | `123456789` |
+
+**`exporterVatNumber`** — The VAT registration number of the sender. Required for non-EU destinations so the receiving country's customs authority can identify the exporting business.
+
+**`shipmentType`** — Either `B2B` (business to business) or `B2C` (business to consumer). This affects which rules apply — B2B shipments within the EU require a valid `importerVatNumber`; B2C shipments below the de minimis threshold are exempt from customs declarations.
+
+---
+
+### Rules by destination
+
+#### Shipping to Norway (non-EU)
+
+Norway applies a de minimis threshold of **350 NOK** for B2C shipments. Below this value no customs declaration is required. Above it, all fields are mandatory.
+
+```bash
+# B2C shipment below NOK de minimis — no customs fields needed
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "postnord",
+    "shipment": {
+      "sender": { ... },
+      "receiver": { ... },
+      "totalWeight": 0.5,
+      "colli": [...],
+      "customs": {
+        "customsValue": 299.0,
+        "customsCurrency": "NOK",
+        "shipmentType": "B2C"
+      }
+    }
+  }'
+
+# B2B shipment — full declaration required
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "bring",
+    "shipment": {
+      "sender": {
+        "name": "Unisport Group",
+        "street": "Industrivej",
+        "houseNumber": "10",
+        "city": "Copenhagen",
+        "postalCode": "2300",
+        "country": "DK"
+      },
+      "receiver": {
+        "name": "Sport AS",
+        "street": "Karl Johans gate",
+        "houseNumber": "1",
+        "city": "Oslo",
+        "postalCode": "0154",
+        "country": "NO"
+      },
+      "totalWeight": 5.0,
+      "colli": [
+        {
+          "id": "box-001",
+          "weight": 5.0,
+          "dimensions": { "length": 40, "width": 30, "height": 20 },
+          "items": [{ "description": "Football boots", "weight": 0.5, "quantity": 5, "value": 129.95, "sku": "FB-BOOT-42" }]
+        }
+      ],
+      "customs": {
+        "incoterms": "DDP",
+        "hsCode": "64041100",
+        "customsValue": 649.75,
+        "customsCurrency": "DKK",
+        "importerOfRecord": "NO123456789",
+        "exporterVatNumber": "12345678",
+        "shipmentType": "B2B"
+      }
+    }
+  }'
+```
+
+Note: alcohol (HS chapters 22xx) and tobacco (HS chapters 24xx) require a special import permit for Norway. The gateway rejects these at validation time:
+
+```json
+{ "error": "validation failed", "details": "HS code 220410 (chapter 22) requires a special import permit for Norway" }
+```
+
+#### Shipping within the EU (e.g. DK → SE, DK → DE, DK → FI)
+
+The EU applies a de minimis threshold of **150 EUR** for B2C shipments. Below this value no customs declaration is required and the parcel moves freely. Above it, an HS code is required.
+
+For B2B shipments a valid `importerVatNumber` is always required — this is what allows the seller to zero-rate VAT on the invoice.
+
+```bash
+# B2C below de minimis — no customs block needed at all
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "postnord",
+    "shipment": {
+      "sender": { ... },
+      "receiver": { "country": "SE", ... },
+      "totalWeight": 0.3,
+      "colli": [...]
+    }
+  }'
+
+# B2B — importer VAT number required
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "gls",
+    "shipment": {
+      "sender": { "country": "DK", ... },
+      "receiver": { "country": "DE", ... },
+      "totalWeight": 3.0,
+      "colli": [...],
+      "customs": {
+        "customsValue": 299.0,
+        "customsCurrency": "EUR",
+        "hsCode": "95066290",
+        "importerVatNumber": "DE123456789",
+        "shipmentType": "B2B"
+      }
+    }
+  }'
+```
+
+#### Åland Islands (AX)
+
+The Åland Islands are Finnish territory but are outside the EU VAT area. Shipments to `AX` are always rejected with a hard error — contact your carrier directly for Åland routing.
+
+#### Currency mismatch and flaggedForReview
+
+De minimis thresholds are defined in specific currencies (NOK for Norway, EUR for the EU). If you provide a customs value in a different currency the gateway cannot determine whether the threshold applies without a live exchange rate. The shipment is accepted and booked, but `flaggedForReview: true` is set in the response so your system knows to verify the customs declaration manually.
+
+```json
+{
+  "trackingNumber": "PN482910123DK",
+  "carrier": "postnord",
+  "status": "booked",
+  "flaggedForReview": true
+}
+```
 
 Apache 2.0 — see [LICENSE](LICENSE).

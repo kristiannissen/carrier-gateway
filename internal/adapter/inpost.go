@@ -94,9 +94,8 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 	service := map[string]interface{}{
 		"id": "INPOST_STANDARD",
 	}
-	if request.Shipment.Incoterms != "" {
-		service["targetLocker"] = request.Shipment.Incoterms
-	}
+	// LockerID was previously read from the now-removed Shipment.Incoterms field.
+	// Locker targeting will be re-introduced via a dedicated LockerID field.
 
 	shipment := map[string]interface{}{
 		"sender":    inpostParty(request.Shipment.Sender),

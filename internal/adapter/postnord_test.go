@@ -195,8 +195,8 @@ func TestPostNordAdapter_BookShipment_OptionalFields(t *testing.T) {
 		adapter, captured := newPostNordTestServer(t, http.StatusCreated, mockResp)
 
 		req := postnordMinimalRequest()
-		req.Shipment.Incoterms = "DDP"
-		req.Shipment.HSCode = "6104.43"
+		req.Shipment.Customs.Incoterms = "DDP"
+		req.Shipment.Customs.HSCode = "6104.43"
 
 		_, err := adapter.BookShipment(t.Context(), req)
 		require.NoError(t, err)

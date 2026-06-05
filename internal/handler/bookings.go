@@ -12,6 +12,7 @@ import (
 
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 	"github.com/kristiannissen/logistics-gateway/internal/parser"
+	"github.com/kristiannissen/logistics-gateway/internal/validation"
 )
 
 // BookShipment handles POST /bookings.
@@ -41,9 +42,18 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := validateBookingRequest(request); err != nil {
+	flagged, err := validateBookingRequest(request)
+	if err != nil {
 		c.writeError(w, r, http.StatusBadRequest, "validation failed", err.Error())
 		return
+	}
+
+	if flagged {
+		log.Warn("shipment flagged for manual review",
+			zap.String("carrier", request.Carrier),
+			zap.String("senderPostalCode", request.Shipment.Sender.PostalCode),
+			zap.String("receiverPostalCode", request.Shipment.Receiver.PostalCode),
+		)
 	}
 
 	carrierAdapter, err := c.selectAdapter(request.Carrier)
@@ -62,6 +72,8 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response.FlaggedForReview = flagged
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -69,35 +81,40 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// validateBookingRequest validates a BookingRequest.
-func validateBookingRequest(request *adapter.BookingRequest) error {
+// validateBookingRequest runs all stateless validation rules against the
+// request. It returns (flagged, error) where flagged is true when the request
+// passes hard validation but contains an address that could not be fully
+// verified (rural/unrecognised format) and should be reviewed manually.
+func validateBookingRequest(request *adapter.BookingRequest) (flagged bool, err error) {
 	if request.Carrier == "" {
-		return fmt.Errorf("carrier is required")
+		return false, fmt.Errorf("carrier is required")
 	}
+
 	if request.Shipment.Sender.Name == "" || request.Shipment.Sender.Street == "" ||
 		request.Shipment.Sender.City == "" || request.Shipment.Sender.Country == "" {
-		return fmt.Errorf("sender address is incomplete")
+		return false, fmt.Errorf("sender address is incomplete")
 	}
 	if request.Shipment.Receiver.Name == "" || request.Shipment.Receiver.Street == "" ||
 		request.Shipment.Receiver.City == "" || request.Shipment.Receiver.Country == "" {
-		return fmt.Errorf("receiver address is incomplete")
+		return false, fmt.Errorf("receiver address is incomplete")
 	}
+
 	if len(request.Shipment.Colli) == 0 {
-		return fmt.Errorf("shipment must have at least one colli")
+		return false, fmt.Errorf("shipment must have at least one colli")
 	}
 	if request.Shipment.TotalWeight <= 0 {
-		return fmt.Errorf("total weight must be greater than 0")
+		return false, fmt.Errorf("total weight must be greater than 0")
 	}
 	for i, colli := range request.Shipment.Colli {
 		if colli.Weight <= 0 {
-			return fmt.Errorf("colli %d: weight must be greater than 0", i)
+			return false, fmt.Errorf("colli %d: weight must be greater than 0", i)
 		}
 		for j, item := range colli.Items {
 			if item.Weight <= 0 {
-				return fmt.Errorf("colli %d, item %d: weight must be greater than 0", i, j)
+				return false, fmt.Errorf("colli %d, item %d: weight must be greater than 0", i, j)
 			}
 			if item.Quantity <= 0 {
-				return fmt.Errorf("colli %d, item %d: quantity must be greater than 0", i, j)
+				return false, fmt.Errorf("colli %d, item %d: quantity must be greater than 0", i, j)
 			}
 		}
 	}
@@ -106,8 +123,54 @@ func validateBookingRequest(request *adapter.BookingRequest) error {
 		colliTotalWeight += colli.Weight
 	}
 	if colliTotalWeight != request.Shipment.TotalWeight {
-		return fmt.Errorf("total weight does not match sum of colli weights (expected %.2f, got %.2f)",
+		return false, fmt.Errorf("total weight does not match sum of colli weights (expected %.2f, got %.2f)",
 			colliTotalWeight, request.Shipment.TotalWeight)
 	}
-	return nil
+
+	// Idempotency key.
+	if err := validation.ValidateIdempotencyKey(request.IdempotencyKey); err != nil {
+		return false, err
+	}
+
+	// Address validation — sender and receiver.
+	for _, party := range []struct {
+		label string
+		addr  adapter.Address
+	}{
+		{"sender", request.Shipment.Sender},
+		{"receiver", request.Shipment.Receiver},
+	} {
+		if err := validation.ValidateAddress(party.addr, request.Carrier, party.addr.Country); err != nil {
+			if validation.IsReviewRequired(err) {
+				flagged = true
+				continue
+			}
+			return false, fmt.Errorf("%s: %w", party.label, err)
+		}
+	}
+
+	// Package validation — weight, dimensions, girth, colli count.
+	if err := validation.ValidateShipment(request.Carrier, request.Shipment); err != nil {
+		return false, err
+	}
+
+	// Customs validation — only when a Customs block is present.
+	c := request.Shipment.Customs
+	if c.Incoterms != "" || c.HSCode != "" || c.CustomsValue > 0 ||
+		c.ImporterOfRecord != "" || c.ImporterVATNumber != "" || c.ExporterVATNumber != "" {
+		if err := validation.ValidateCustoms(
+			c,
+			request.Shipment.Sender.Country,
+			request.Shipment.Receiver.Country,
+			c.ShipmentType,
+		); err != nil {
+			if validation.IsReviewRequired(err) {
+				flagged = true
+			} else {
+				return false, err
+			}
+		}
+	}
+
+	return flagged, nil
 }

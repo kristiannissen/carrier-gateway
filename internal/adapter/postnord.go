@@ -100,11 +100,11 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	if request.IdempotencyKey != "" {
 		shipment["idempotencyKey"] = request.IdempotencyKey
 	}
-	if request.Shipment.Incoterms != "" {
-		shipment["incoterms"] = request.Shipment.Incoterms
+	if request.Shipment.Customs.Incoterms != "" {
+		shipment["incoterms"] = request.Shipment.Customs.Incoterms
 	}
-	if request.Shipment.HSCode != "" {
-		shipment["hsCode"] = request.Shipment.HSCode
+	if request.Shipment.Customs.HSCode != "" {
+		shipment["hsCode"] = request.Shipment.Customs.HSCode
 	}
 
 	payloadBytes, err := json.Marshal(map[string]interface{}{"shipment": shipment})

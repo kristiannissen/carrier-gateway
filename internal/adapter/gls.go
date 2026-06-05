@@ -103,8 +103,8 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		"ShipmentUnit": units,
 	}
 
-	if request.Shipment.Incoterms != "" {
-		shipment["IncotermCode"] = request.Shipment.Incoterms
+	if request.Shipment.Customs.Incoterms != "" {
+		shipment["IncotermCode"] = request.Shipment.Customs.Incoterms
 	}
 
 	payload := map[string]interface{}{
