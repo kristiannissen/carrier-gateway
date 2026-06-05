@@ -120,14 +120,26 @@ type Dimensions struct {
 }
 
 // Address represents a physical address.
+//
+// Street holds the street name only — no house number. HouseNumber is kept
+// as a separate field because some carriers (InPost, GLS) require them
+// distinct on the wire. Adapters that do not distinguish concatenate
+// Street + " " + HouseNumber when building the payload.
+//
+// Supplement carries anything that does not fit on the street line:
+// building name, floor, apartment, attention line, or care-of. It maps to
+// what carriers variously call "address line 2", "co", or "addressLine2" —
+// the name here is intentionally carrier-agnostic.
 type Address struct {
-	Name       string `json:"name" validate:"required"`
-	Street     string `json:"street" validate:"required"`
-	City       string `json:"city" validate:"required"`
-	PostalCode string `json:"postalCode" validate:"required"`
-	Country    string `json:"country" validate:"required"`
-	Phone      string `json:"phone,omitempty"`
-	Email      string `json:"email,omitempty"`
+	Name        string `json:"name"        validate:"required"`
+	Street      string `json:"street"      validate:"required"`
+	HouseNumber string `json:"houseNumber,omitempty"`
+	Supplement  string `json:"supplement,omitempty"`
+	City        string `json:"city"        validate:"required"`
+	PostalCode  string `json:"postalCode"  validate:"required"`
+	Country     string `json:"country"     validate:"required"`
+	Phone       string `json:"phone,omitempty"`
+	Email       string `json:"email,omitempty"`
 }
 
 // Item represents an item in a colli.

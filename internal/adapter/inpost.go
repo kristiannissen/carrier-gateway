@@ -38,18 +38,14 @@ func NewInPostAdapter(apiKey string, log *zap.Logger) *InPostAdapter {
 }
 
 // inpostParty builds the sender/recipient object expected by the InPost API.
-// InPost requires address fields nested under "address" and "contact" keys,
-// and splits street into streetName and houseNumber. Since the unified
-// Address.Street combines both, it is forwarded as streetName with
-// houseNumber left empty. Callers needing precise house numbers should
-// populate Address.Street with the street name only and store the house
-// number via a future Address.HouseNumber field.
+// InPost requires street name and house number as separate fields.
+// Supplement is not forwarded — InPost has no second address line.
 func inpostParty(a Address) map[string]interface{} {
 	return map[string]interface{}{
 		"name": a.Name,
 		"address": map[string]interface{}{
 			"streetName":  a.Street,
-			"houseNumber": "",
+			"houseNumber": a.HouseNumber,
 			"city":        a.City,
 			"postalCode":  a.PostalCode,
 			"country":     a.Country,

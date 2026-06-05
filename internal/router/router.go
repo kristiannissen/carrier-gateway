@@ -20,6 +20,7 @@ func NewRouter(adapters map[string]adapter.CarrierAdapter, log *zap.Logger) *mux
 
 	r := mux.NewRouter()
 	r.Use(middleware.RequestID)
+	r.Use(middleware.LogPayloads(log))
 
 	r.HandleFunc("/api/bookings", h.BookShipment).Methods("POST")
 	r.HandleFunc("/api/trackings/{trackingNumber}", h.GetTracking).Methods("GET")
