@@ -516,7 +516,8 @@ func TestValidateCustoms_DK_to_DE(t *testing.T) {
 
 	t.Run("unknown destination — no rules enforced", func(t *testing.T) {
 		t.Parallel()
-		assert.NoError(t, ValidateCustoms(adapter.Customs{}, "DK", "JP", "B2C"))
+		// "XX" is not in nonEUDestinations or euCountries — no rules apply.
+		assert.NoError(t, ValidateCustoms(adapter.Customs{}, "DK", "XX", "B2C"))
 	})
 }
 

@@ -54,6 +54,30 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		}
 	}
 
+	receiver := map[string]interface{}{
+		"name":    request.Shipment.Receiver.Name,
+		"country": request.Shipment.Receiver.Country,
+		"phone":   request.Shipment.Receiver.Phone,
+		"email":   request.Shipment.Receiver.Email,
+	}
+	if request.Shipment.Receiver.ServicePointID != "" {
+		receiver["pickupPointId"] = request.Shipment.Receiver.ServicePointID
+	} else {
+		receiver["address"] = request.Shipment.Receiver.Street
+		receiver["postalCode"] = request.Shipment.Receiver.PostalCode
+		receiver["city"] = request.Shipment.Receiver.City
+	}
+
+	postiService := map[string]interface{}{
+		"productCode": "2412",
+		"addOnServices": []string{
+			"2104",
+		},
+	}
+	if request.Shipment.Receiver.ServicePointID != "" {
+		postiService["pickupPoint"] = true
+	}
+
 	payload := map[string]interface{}{
 		"shipment": map[string]interface{}{
 			"sender": map[string]interface{}{
@@ -65,22 +89,9 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 				"phone":      request.Shipment.Sender.Phone,
 				"email":      request.Shipment.Sender.Email,
 			},
-			"receiver": map[string]interface{}{
-				"name":       request.Shipment.Receiver.Name,
-				"address":    request.Shipment.Receiver.Street,
-				"postalCode": request.Shipment.Receiver.PostalCode,
-				"city":       request.Shipment.Receiver.City,
-				"country":    request.Shipment.Receiver.Country,
-				"phone":      request.Shipment.Receiver.Phone,
-				"email":      request.Shipment.Receiver.Email,
-			},
-			"parcels": parcels,
-			"service": map[string]interface{}{
-				"productCode": "2412", // Posti's standard parcel product code
-				"addOnServices": []string{
-					"2104", // SMS notification
-				},
-			},
+			"receiver": receiver,
+			"parcels":  parcels,
+			"service":  postiService,
 		},
 	}
 

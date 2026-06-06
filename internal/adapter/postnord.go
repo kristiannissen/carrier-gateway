@@ -39,7 +39,20 @@ func NewPostNordAdapter(apiKey string, log *zap.Logger) *PostNordAdapter {
 }
 
 // postNordParty builds the sender/recipient object expected by the PostNord API.
-func postNordParty(a Address) map[string]interface{} {
+// For receiver addresses with a ServicePointID, street/city/postalCode are
+// omitted and servicePointId is placed directly in the recipient block.
+func postNordParty(a Address, isReceiver bool) map[string]interface{} {
+	if isReceiver && a.ServicePointID != "" {
+		return map[string]interface{}{
+			"name":           a.Name,
+			"servicePointId": a.ServicePointID,
+			"country":        a.Country,
+			"contact": map[string]interface{}{
+				"phone": a.Phone,
+				"email": a.Email,
+			},
+		}
+	}
 	return map[string]interface{}{
 		"name": a.Name,
 		"address": map[string]interface{}{
@@ -88,8 +101,8 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	}
 
 	shipment := map[string]interface{}{
-		"sender":    postNordParty(request.Shipment.Sender),
-		"recipient": postNordParty(request.Shipment.Receiver),
+		"sender":    postNordParty(request.Shipment.Sender, false),
+		"recipient": postNordParty(request.Shipment.Receiver, true),
 		"service": map[string]interface{}{
 			"id":      "1700",
 			"product": "Parcels",
@@ -135,13 +148,22 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 		return nil, fmt.Errorf("PostNord API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var response BookingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	var postNordResp struct {
+		TrackingNumber string `json:"trackingNumber"`
+		LabelURL       string `json:"labelUrl"`
+		Carrier        string `json:"carrier"`
+		ServicePointID string `json:"servicePointId"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&postNordResp); err != nil {
 		return nil, fmt.Errorf("failed to decode PostNord response: %w", err)
 	}
 
-	response.Carrier = "postnord"
-	return &response, nil
+	return &BookingResponse{
+		TrackingNumber: postNordResp.TrackingNumber,
+		LabelURL:       postNordResp.LabelURL,
+		Carrier:        "postnord",
+		ServicePointID: postNordResp.ServicePointID,
+	}, nil
 }
 
 // TrackShipment retrieves the tracking status for a shipment from PostNord.

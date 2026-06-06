@@ -137,17 +137,24 @@ var validStates = map[string]map[string]bool{
 
 // ValidateAddress validates addr for the given carrier and country.
 //
-// Rules enforced:
-//   - Street is required for Nordic countries (DK, NO, SE, FI).
-//   - City is used as municipality proxy for Finland; empty City is an error.
-//   - HouseNumber is required when the carrier mandates it, unless country is FR.
-//   - Postal code must match the country's known format where a rule exists.
-//   - State is required and validated for US, CA, BR, AU, and optionally DE.
-//   - For countries with no known rule, a non-standard postal code returns
-//     ReviewRequired so the caller flags the shipment rather than rejects it.
+// When addr.ServicePointID is set the address is treated as a service point
+// delivery. Street, City, and PostalCode are optional in that case; Name,
+// Country, and Phone remain required because all carriers require them even
+// for service point deliveries.
 func ValidateAddress(addr adapter.Address, carrier, country string) error {
 	if country == "" {
 		country = addr.Country
+	}
+
+	// Service point delivery — reduced address requirements.
+	if addr.ServicePointID != "" {
+		if addr.Name == "" {
+			return fmt.Errorf("name is required for service point deliveries")
+		}
+		if addr.Country == "" {
+			return fmt.Errorf("country is required for service point deliveries")
+		}
+		return nil
 	}
 
 	if nordicCountries[country] && addr.Street == "" {

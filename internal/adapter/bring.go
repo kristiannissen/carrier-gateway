@@ -79,6 +79,25 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		parcels[i] = bringParcel(c)
 	}
 
+	to := map[string]interface{}{
+		"name":    request.Shipment.Receiver.Name,
+		"country": request.Shipment.Receiver.Country,
+	}
+	if request.Shipment.Receiver.ServicePointID != "" {
+		to["pickupPointId"] = request.Shipment.Receiver.ServicePointID
+	} else {
+		to["address"] = request.Shipment.Receiver.Street
+		to["postalCode"] = request.Shipment.Receiver.PostalCode
+		to["city"] = request.Shipment.Receiver.City
+	}
+
+	service := map[string]interface{}{
+		"product": "Servicepakke",
+	}
+	if request.Shipment.Receiver.ServicePointID != "" {
+		service["pickupPoint"] = true
+	}
+
 	payload := map[string]interface{}{
 		"customerId": a.CustomerID,
 		"shipment": map[string]interface{}{
@@ -89,14 +108,9 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 				"city":       request.Shipment.Sender.City,
 				"country":    request.Shipment.Sender.Country,
 			},
-			"to": map[string]interface{}{
-				"name":       request.Shipment.Receiver.Name,
-				"address":    request.Shipment.Receiver.Street,
-				"postalCode": request.Shipment.Receiver.PostalCode,
-				"city":       request.Shipment.Receiver.City,
-				"country":    request.Shipment.Receiver.Country,
-			},
+			"to":      to,
 			"parcels": parcels,
+			"service": service,
 		},
 	}
 
@@ -137,6 +151,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		Currency          string  `json:"currency"`
 		ServiceLevel      string  `json:"serviceLevel"`
 		Status            string  `json:"status"`
+		PickupPointID     string  `json:"pickupPointId"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&bringResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Bring response: %w", err)
@@ -150,6 +165,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		Currency:       bringResp.Currency,
 		ServiceLevel:   bringResp.ServiceLevel,
 		Status:         bringResp.Status,
+		ServicePointID: bringResp.PickupPointID,
 	}, nil
 }
 

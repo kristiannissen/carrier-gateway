@@ -97,9 +97,16 @@ func validateBookingRequest(request *adapter.BookingRequest) (flagged bool, err 
 		request.Shipment.Sender.City == "" || request.Shipment.Sender.Country == "" {
 		return false, fmt.Errorf("sender address is incomplete")
 	}
-	if request.Shipment.Receiver.Name == "" || request.Shipment.Receiver.Street == "" ||
-		request.Shipment.Receiver.City == "" || request.Shipment.Receiver.Country == "" {
-		return false, fmt.Errorf("receiver address is incomplete")
+	// Receiver: street/city/postalCode are optional when a service point ID is provided.
+	if request.Shipment.Receiver.ServicePointID != "" {
+		if request.Shipment.Receiver.Name == "" || request.Shipment.Receiver.Country == "" {
+			return false, fmt.Errorf("receiver name and country are required for service point deliveries")
+		}
+	} else {
+		if request.Shipment.Receiver.Name == "" || request.Shipment.Receiver.Street == "" ||
+			request.Shipment.Receiver.City == "" || request.Shipment.Receiver.Country == "" {
+			return false, fmt.Errorf("receiver address is incomplete")
+		}
 	}
 
 	if len(request.Shipment.Colli) == 0 {

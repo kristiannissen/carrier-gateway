@@ -91,15 +91,22 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		units[i] = glsShipmentUnit(c)
 	}
 
+	consignee := map[string]interface{}{}
+	if request.Shipment.Receiver.ServicePointID != "" {
+		consignee["ParcelShopID"] = request.Shipment.Receiver.ServicePointID
+		consignee["Name"] = request.Shipment.Receiver.Name
+		consignee["CountryCode"] = request.Shipment.Receiver.Country
+	} else {
+		consignee["Address"] = glsAddress(request.Shipment.Receiver)
+	}
+
 	shipment := map[string]interface{}{
 		"Product": "PARCEL",
 		"Shipper": map[string]interface{}{
 			"ContactID": a.ContactID,
 			"Address":   glsAddress(request.Shipment.Sender),
 		},
-		"Consignee": map[string]interface{}{
-			"Address": glsAddress(request.Shipment.Receiver),
-		},
+		"Consignee":    consignee,
 		"ShipmentUnit": units,
 	}
 

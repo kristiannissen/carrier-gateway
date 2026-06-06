@@ -244,6 +244,63 @@ func TestValidateAddress_ValidFullAddress(t *testing.T) {
 	}
 }
 
+// =========================================================================
+// Service point address validation
+// =========================================================================
+
+func TestValidateAddress_ServicePoint(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid service point — no street city postalCode required", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name:           "Anna Svensson",
+			Country:        "SE",
+			Phone:          "+46701234567",
+			ServicePointID: "sp_123",
+		}
+		assert.NoError(t, ValidateAddress(addr, "postnord", "SE"))
+	})
+
+	t.Run("service point missing name returns error", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Country:        "SE",
+			ServicePointID: "sp_123",
+		}
+		err := ValidateAddress(addr, "postnord", "SE")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "name is required")
+	})
+
+	t.Run("service point missing country returns error", func(t *testing.T) {
+		t.Parallel()
+		addr := adapter.Address{
+			Name:           "Anna Svensson",
+			ServicePointID: "sp_123",
+		}
+		err := ValidateAddress(addr, "postnord", "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "country is required")
+	})
+
+	t.Run("service point works for all carriers", func(t *testing.T) {
+		t.Parallel()
+		for _, carrier := range []string{"postnord", "bring", "posti", "gls", "dao", "inpost"} {
+			carrier := carrier
+			t.Run(carrier, func(t *testing.T) {
+				t.Parallel()
+				addr := adapter.Address{
+					Name:           "Recipient",
+					Country:        "DK",
+					ServicePointID: "sp_001",
+				}
+				assert.NoError(t, ValidateAddress(addr, carrier, "DK"))
+			})
+		}
+	})
+}
+
 // postalCodeFor returns a valid postal code for a given country for use in tests
 // that are not testing postal code validation itself.
 func postalCodeFor(country string) string {

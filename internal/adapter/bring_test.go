@@ -260,6 +260,37 @@ func TestBringAdapter_TrackShipment_RequestShape(t *testing.T) {
 	assert.Len(t, resp.Events, 3)
 }
 
+func TestBringAdapter_BookShipment_ServicePoint(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newBringTestServer(t, http.StatusOK,
+		`{"consignmentNumber":"BR999","labelUrl":"https://bring.com/label.pdf","pickupPointId":"pp_456","status":"booked"}`)
+
+	req := bringMinimalRequest()
+	req.Shipment.Receiver = Address{
+		Name:           "Recipient Name",
+		Country:        "NO",
+		Phone:          "+4787654321",
+		ServicePointID: "pp_456",
+	}
+
+	resp, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "pp_456", resp.ServicePointID)
+
+	shipment := bringRequireNested(t, *captured, "shipment")
+	to := bringRequireNested(t, shipment, "to")
+
+	assert.Equal(t, "pp_456", to["pickupPointId"])
+	assert.Equal(t, "Recipient Name", to["name"])
+	assert.Equal(t, "NO", to["country"])
+	_, hasAddr := to["address"]
+	assert.False(t, hasAddr, "address must be absent for pickup point deliveries")
+
+	service := bringRequireNested(t, shipment, "service")
+	assert.Equal(t, true, service["pickupPoint"])
+}
+
 // =========================================================================
 // Helpers
 // =========================================================================

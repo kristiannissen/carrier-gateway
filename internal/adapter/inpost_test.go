@@ -270,6 +270,28 @@ func TestInPostAdapter_TrackShipment_RequestShape(t *testing.T) {
 	assert.Len(t, resp.Events, 1)
 }
 
+func TestInPostAdapter_BookShipment_ServicePoint(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newInPostTestServer(t, http.StatusCreated, inpostMockBookingResponse())
+
+	req := inpostMinimalRequest()
+	req.Shipment.Receiver = Address{
+		Name:           "Jan Kowalski",
+		Country:        "PL",
+		Phone:          "+48987654321",
+		ServicePointID: "WAR001",
+	}
+
+	_, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+
+	_ = adapter
+	shipment := inpostRequireNested(t, *captured, "shipment")
+	service := inpostRequireNested(t, shipment, "service")
+	assert.Equal(t, "WAR001", service["targetLocker"])
+}
+
 // =========================================================================
 // Helpers
 // =========================================================================

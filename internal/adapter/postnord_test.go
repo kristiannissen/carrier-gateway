@@ -270,6 +270,44 @@ func TestPostNordAdapter_BookShipment_APIError(t *testing.T) {
 	assert.Contains(t, err.Error(), "400")
 }
 
+func TestPostNordAdapter_BookShipment_ServicePoint(t *testing.T) {
+	t.Parallel()
+
+	t.Run("servicePointId in recipient block only", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newPostNordTestServer(t, http.StatusCreated,
+			`{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","servicePointId":"sp_123","carrier":"postnord"}`)
+
+		req := postnordMinimalRequest()
+		req.Shipment.Receiver = Address{
+			Name:           "Anna Svensson",
+			Country:        "SE",
+			Phone:          "+46701234567",
+			ServicePointID: "sp_123",
+		}
+
+		resp, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+		assert.Equal(t, "sp_123", resp.ServicePointID)
+
+		shipment := requireShipment(t, *captured)
+		recipient := requireParty(t, shipment, "recipient")
+
+		// servicePointId must be in the recipient block
+		assert.Equal(t, "sp_123", recipient["servicePointId"])
+		assert.Equal(t, "Anna Svensson", recipient["name"])
+		assert.Equal(t, "SE", recipient["country"])
+
+		// street/city/postalCode must be absent
+		_, hasAddr := recipient["address"]
+		assert.False(t, hasAddr, "address block must be absent for service point deliveries")
+
+		// servicePointId must NOT appear at the root shipment level
+		_, hasRootSP := shipment["servicePointId"]
+		assert.False(t, hasRootSP, "servicePointId must only appear in the recipient block")
+	})
+}
+
 // =========================================================================
 // Helpers
 // =========================================================================

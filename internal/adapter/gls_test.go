@@ -272,6 +272,33 @@ func TestGLSAdapter_TrackShipment_RequestShape(t *testing.T) {
 	assert.NotEmpty(t, captured["DateTo"])
 }
 
+func TestGLSAdapter_BookShipment_ServicePoint(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
+
+	req := glsMinimalRequest()
+	req.Shipment.Receiver = Address{
+		Name:           "Recipient Name",
+		Country:        "DK",
+		Phone:          "+4587654321",
+		ServicePointID: "ps_101",
+	}
+
+	_, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+
+	_ = adapter
+	shipment := glsRequireNested(t, *captured, "Shipment")
+	consignee := glsRequireNested(t, shipment, "Consignee")
+
+	assert.Equal(t, "ps_101", consignee["ParcelShopID"])
+	assert.Equal(t, "Recipient Name", consignee["Name"])
+	assert.Equal(t, "DK", consignee["CountryCode"])
+	_, hasAddr := consignee["Address"]
+	assert.False(t, hasAddr, "Address block must be absent for parcel shop deliveries")
+}
+
 // =========================================================================
 // Helpers
 // =========================================================================

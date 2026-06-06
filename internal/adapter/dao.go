@@ -46,8 +46,6 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	params := url.Values{}
 	params.Set("kundeid", a.CustomerID)
 	params.Set("kode", a.APIKey)
-	params.Set("postnr", request.Shipment.Receiver.PostalCode)
-	params.Set("adresse", request.Shipment.Receiver.Street)
 	params.Set("navn", request.Shipment.Receiver.Name)
 	params.Set("mobil", request.Shipment.Receiver.Phone)
 	params.Set("email", request.Shipment.Receiver.Email)
@@ -58,6 +56,13 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	params.Set("b", strconv.Itoa(int(request.Shipment.Colli[0].Dimensions.Width)))
 	params.Set("faktura", request.Shipment.Colli[0].ID)
 	params.Set("format", "json")
+
+	if request.Shipment.Receiver.ServicePointID != "" {
+		params.Set("lockerId", request.Shipment.Receiver.ServicePointID)
+	} else {
+		params.Set("postnr", request.Shipment.Receiver.PostalCode)
+		params.Set("adresse", request.Shipment.Receiver.Street)
+	}
 
 	req, err := http.NewRequestWithContext(
 		ctx,

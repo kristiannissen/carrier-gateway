@@ -229,25 +229,33 @@ type Dimensions struct {
 // Street + " " + HouseNumber when building the payload.
 //
 // Supplement carries anything that does not fit on the street line:
-// building name, floor, apartment, attention line, or care-of. It maps to
-// what carriers variously call "address line 2", "co", or "addressLine2" —
-// the name here is intentionally carrier-agnostic.
+// building name, floor, apartment, attention line, or care-of.
 //
 // State holds the state, province, or region code where required by the
-// destination country (e.g. "CA" for California, "ON" for Ontario, "BE" for
-// Berlin). Optional for countries that do not use administrative divisions
-// in postal addressing (e.g. Denmark, Norway).
+// destination country (e.g. "CA" for California, "ON" for Ontario).
+//
+// ServicePointID identifies a carrier service point (parcel shop, pickup
+// point, locker) for receiver addresses. When set, Street, City, and
+// PostalCode are optional for the receiver — the carrier routes to the
+// service point directly. Each carrier maps this to its own wire field name:
+//
+//	- PostNord: servicePointId
+//	- Bring/Posti: pickupPointId
+//	- GLS: parcelShopId
+//	- DAO: lockerId
+//	- InPost: targetLocker (service block)
 type Address struct {
-	Name        string `json:"name"        validate:"required"`
-	Street      string `json:"street"      validate:"required"`
-	HouseNumber string `json:"houseNumber,omitempty"`
-	Supplement  string `json:"supplement,omitempty"`
-	City        string `json:"city"        validate:"required"`
-	PostalCode  string `json:"postalCode"  validate:"required"`
-	Country     string `json:"country"     validate:"required"`
-	State       string `json:"state,omitempty"`
-	Phone       string `json:"phone,omitempty"`
-	Email       string `json:"email,omitempty"`
+	Name           string `json:"name"           validate:"required"`
+	Street         string `json:"street"         validate:"required"`
+	HouseNumber    string `json:"houseNumber,omitempty"`
+	Supplement     string `json:"supplement,omitempty"`
+	City           string `json:"city"           validate:"required"`
+	PostalCode     string `json:"postalCode"     validate:"required"`
+	Country        string `json:"country"        validate:"required"`
+	State          string `json:"state,omitempty"`
+	ServicePointID string `json:"servicePointId,omitempty"`
+	Phone          string `json:"phone,omitempty"`
+	Email          string `json:"email,omitempty"`
 }
 
 // Item represents an item in a colli.
@@ -261,17 +269,18 @@ type Item struct {
 
 // BookingResponse represents the response from a carrier after booking a shipment.
 type BookingResponse struct {
-	ShipmentID      string          `json:"shipmentId,omitempty"`
-	TrackingNumber  string          `json:"trackingNumber"`
-	LabelURL        string          `json:"labelUrl,omitempty"`
-	Carrier         string          `json:"carrier"`
-	Cost            float64         `json:"cost,omitempty"`
-	Currency        string          `json:"currency,omitempty"`
-	ServiceLevel    string          `json:"serviceLevel,omitempty"`
-	Status          string          `json:"status,omitempty"`
-	Colli           []ColliResponse `json:"colli,omitempty"`
-	Errors          []string        `json:"errors,omitempty"`
-	LockerId        string          `json:"lockerId,omitempty"`
+	ShipmentID       string          `json:"shipmentId,omitempty"`
+	TrackingNumber   string          `json:"trackingNumber"`
+	LabelURL         string          `json:"labelUrl,omitempty"`
+	Carrier          string          `json:"carrier"`
+	Cost             float64         `json:"cost,omitempty"`
+	Currency         string          `json:"currency,omitempty"`
+	ServiceLevel     string          `json:"serviceLevel,omitempty"`
+	Status           string          `json:"status,omitempty"`
+	Colli            []ColliResponse `json:"colli,omitempty"`
+	Errors           []string        `json:"errors,omitempty"`
+	LockerId         string          `json:"lockerId,omitempty"`
+	ServicePointID   string          `json:"servicePointId,omitempty"`
 	// FlaggedForReview is true when the address passed a ReviewRequired
 	// validation — the booking was accepted but should be checked manually.
 	FlaggedForReview bool `json:"flaggedForReview,omitempty"`
