@@ -141,7 +141,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		return nil, fmt.Errorf("bring API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -196,7 +196,7 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		return nil, fmt.Errorf("bring tracking API returned status %d: %s", resp.StatusCode, string(body))
 	}
 

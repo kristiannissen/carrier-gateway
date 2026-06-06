@@ -35,7 +35,7 @@ type HealthResponse struct {
 func (c *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		_, _ = w.Write([]byte(`{"error":"method not allowed"}`))
+		_, _ = w.Write([]byte(`{"error":"method not allowed"}`)) //nolint:errcheck // best-effort error write
 		return
 	}
 

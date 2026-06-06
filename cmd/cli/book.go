@@ -35,7 +35,7 @@ func newBookCmd(registry *adapter.Registry) *cobra.Command {
 					return fmt.Errorf("failed to parse input file: %w", err)
 				}
 			} else {
-				stat, _ := os.Stdin.Stat()
+				stat, _ := os.Stdin.Stat() //nolint:errcheck // stat failure means no pipe, handled by the mode check below
 				if (stat.Mode() & os.ModeCharDevice) == 0 {
 					if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
 						return fmt.Errorf("failed to parse stdin: %w", err)

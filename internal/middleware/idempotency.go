@@ -25,7 +25,7 @@ const maxIdempotencyHeaderLen = 64
 // IdempotencyKeyFromContext retrieves the idempotency key stored on ctx by the
 // Idempotency middleware. Returns an empty string if none is present.
 func IdempotencyKeyFromContext(ctx context.Context) string {
-	key, _ := ctx.Value(idempotencyKeyCtxKey{}).(string)
+	key, _ := ctx.Value(idempotencyKeyCtxKey{}).(string) //nolint:errcheck // type assertion on context value, zero value is safe default
 	return key
 }
 
@@ -35,6 +35,14 @@ func IdempotencyKeyFromContext(ctx context.Context) string {
 // The handler layer enforces its own limit via http.Server.ReadTimeout;
 // this cap is a defence-in-depth measure for the middleware read path.
 const maxRequestBodyBytes = 1 << 20 // 1 MB
+
+// writeJSON writes a JSON error response, discarding any write error since
+// the connection may already be in a broken state.
+func writeJSON(w http.ResponseWriter, status int, body map[string]string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body) //nolint:errcheck // best-effort; nothing to do if the write fails
+}
 
 // Idempotency is middleware that reads the Idempotency-Key header and bridges
 // it into the request body so that downstream handlers and adapters only need
@@ -68,9 +76,7 @@ func Idempotency(log *zap.Logger) func(http.Handler) http.Handler {
 			}
 
 			if len(headerKey) > maxIdempotencyHeaderLen {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				_ = json.NewEncoder(w).Encode(map[string]string{
+				writeJSON(w, http.StatusBadRequest, map[string]string{
 					"error":   "invalid Idempotency-Key",
 					"details": "Idempotency-Key header must be 64 characters or fewer",
 				})
@@ -82,9 +88,7 @@ func Idempotency(log *zap.Logger) func(http.Handler) http.Handler {
 			limitedBody := http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 			raw, err := io.ReadAll(limitedBody)
 			if err != nil {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusRequestEntityTooLarge)
-				_ = json.NewEncoder(w).Encode(map[string]string{
+				writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{
 					"error":   "request body too large",
 					"details": "request body must not exceed 1 MB",
 				})
@@ -101,7 +105,7 @@ func Idempotency(log *zap.Logger) func(http.Handler) http.Handler {
 				return
 			}
 
-			bodyKey, _ := body["idempotencyKey"].(string)
+			bodyKey, _ := body["idempotencyKey"].(string) //nolint:errcheck // type assertion on map value, zero value is safe default
 
 			switch bodyKey {
 			case "":
@@ -122,9 +126,7 @@ func Idempotency(log *zap.Logger) func(http.Handler) http.Handler {
 
 			default:
 				// Both present but mismatched — reject.
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnprocessableEntity)
-				_ = json.NewEncoder(w).Encode(map[string]string{
+				writeJSON(w, http.StatusUnprocessableEntity, map[string]string{
 					"error":   "idempotency key conflict",
 					"details": "Idempotency-Key header and idempotencyKey body field must match when both are provided",
 				})
