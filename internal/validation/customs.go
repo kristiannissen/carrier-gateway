@@ -112,7 +112,7 @@ const euDeMinimisEUR = 150.0
 // destination with the given shipment type ("B2B" or "B2C").
 func ValidateCustoms(c adapter.Customs, origin, destination, shipmentType string) error {
 	if destination == "AX" {
-		return fmt.Errorf("Åland Islands (AX) require special VAT handling: contact your carrier")
+		return fmt.Errorf("åland Islands (AX) require special VAT handling: contact your carrier")
 	}
 
 	if err := validateTransportMode(c); err != nil {

@@ -118,7 +118,7 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -141,7 +141,7 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}
 
 	if postiResponse.Status != "OK" && postiResponse.Error.Code != "" {
-		return nil, fmt.Errorf("Posti API error: %s (%s)", postiResponse.Error.Message, postiResponse.Error.Code)
+		return nil, fmt.Errorf("posti API error: %s (%s)", postiResponse.Error.Message, postiResponse.Error.Code)
 	}
 
 	return &BookingResponse{
@@ -170,7 +170,7 @@ func (a *PostiAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -199,7 +199,7 @@ func (a *PostiAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 	}
 
 	if postiTrackingResponse.Status != "OK" && postiTrackingResponse.Error.Code != "" {
-		return nil, fmt.Errorf("Posti API error: %s (%s)", postiTrackingResponse.Error.Message, postiTrackingResponse.Error.Code)
+		return nil, fmt.Errorf("posti API error: %s (%s)", postiTrackingResponse.Error.Message, postiTrackingResponse.Error.Code)
 	}
 
 	var events []TrackingEvent

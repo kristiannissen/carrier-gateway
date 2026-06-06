@@ -146,7 +146,7 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	if err != nil {
 		return nil, fmt.Errorf("GLS API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
@@ -228,7 +228,7 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 	if err != nil {
 		return nil, fmt.Errorf("GLS tracking API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)

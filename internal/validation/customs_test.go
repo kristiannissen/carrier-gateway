@@ -349,7 +349,7 @@ func TestValidateCustoms_DK_to_FI(t *testing.T) {
 		t.Parallel()
 		err := ValidateCustoms(validEUB2BCustoms("FI"), "DK", "AX", "B2B")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "Åland Islands")
+		assert.Contains(t, err.Error(), "åland Islands")
 	})
 
 	t.Run("B2C de minimis applies same as SE", func(t *testing.T) {

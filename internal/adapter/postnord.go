@@ -141,7 +141,7 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	if err != nil {
 		return nil, fmt.Errorf("PostNord API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
@@ -187,7 +187,7 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	if err != nil {
 		return nil, fmt.Errorf("PostNord tracking API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

@@ -21,9 +21,7 @@ import (
 //	MEA+WT — weight per goods item
 //	DIM — dimensions per goods item
 //
-// Segment separator: '
-// Element separator: +
-// Component separator: : //nolint:godot
+// Segment separator: apostrophe, element separator: plus, component separator: colon.
 type EDIFACTParser struct{}
 
 // Parse deserialises a UN/EDIFACT IFTMIN message into a BookingRequest.

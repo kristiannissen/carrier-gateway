@@ -45,8 +45,8 @@ func (m *MockInPostAdapter) BookShipment(ctx context.Context, request BookingReq
 
 	zap.L().Info("MockInPostAdapter: returning mock booking response")
 
-	shipmentID := fmt.Sprintf("INPOST-%x", rand.Uint32())
-	trackingNumber := fmt.Sprintf("INPOST%09dPL", rand.Intn(1000000000))
+	shipmentID := fmt.Sprintf("INPOST-%x", rand.Uint32())             //nolint:gosec // mock data, not security-sensitive
+	trackingNumber := fmt.Sprintf("INPOST%09dPL", rand.Intn(1000000000)) //nolint:gosec // mock data, not security-sensitive
 
 	return &BookingResponse{
 		ShipmentID:     shipmentID,

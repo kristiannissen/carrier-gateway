@@ -53,16 +53,16 @@ func (m *MockPostNordAdapter) BookShipment(ctx context.Context, request BookingR
 		colliResponses[i] = ColliResponse{
 			ID:             fmt.Sprintf("%d", i+1),
 			Reference:      c.ID,
-			TrackingNumber: fmt.Sprintf("PN%09dDK-%d", rand.Intn(1000000000), i+1),
+			TrackingNumber: fmt.Sprintf("PN%09dDK-%d", rand.Intn(1000000000), i+1), //nolint:gosec // mock data, not security-sensitive
 			LabelURL:       fmt.Sprintf("https://mock.postnord.com/labels/%d_%dg.pdf", i+1, weightGrams),
 			Status:         "booked",
 		}
 	}
 
-	parent := fmt.Sprintf("PN%09dDK", rand.Intn(1000000000))
+	parent := fmt.Sprintf("PN%09dDK", rand.Intn(1000000000)) //nolint:gosec // mock data, not security-sensitive
 
 	return &BookingResponse{
-		ShipmentID:     fmt.Sprintf("shipment_%d", rand.Intn(1000000)),
+		ShipmentID:     fmt.Sprintf("shipment_%d", rand.Intn(1000000)), //nolint:gosec // mock data, not security-sensitive
 		TrackingNumber: parent,
 		LabelURL:       fmt.Sprintf("https://mock.postnord.com/labels/%s.pdf", parent),
 		Carrier:        "postnord",
@@ -98,7 +98,7 @@ func (m *MockPostNordAdapter) TrackShipment(ctx context.Context, trackingNumber 
 	}
 
 	return &TrackingResponse{
-		ShipmentID:        fmt.Sprintf("shipment_%d", rand.Intn(1000000)),
+		ShipmentID:        fmt.Sprintf("shipment_%d", rand.Intn(1000000)), //nolint:gosec // mock data, not security-sensitive
 		TrackingNumber:    trackingNumber,
 		Carrier:           "postnord",
 		Status:            "In Transit",
