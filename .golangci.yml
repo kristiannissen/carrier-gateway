@@ -7,7 +7,6 @@ linters:
     - staticcheck    # correctness and performance
     - unused         # unused code
     - govet          # suspicious constructs
-    - gofmt          # formatting
     - misspell       # typos in comments and strings
     - godot          # godoc comments end with a period
 

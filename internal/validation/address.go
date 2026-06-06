@@ -12,10 +12,10 @@ import (
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
-// ReviewRequired is returned when an address cannot be fully validated but
+// ErrReviewRequired is returned when an address cannot be fully validated but
 // should not be rejected outright. Callers surface this as a 200 with
 // flaggedForReview: true rather than a hard error.
-var ReviewRequired = errors.New("address flagged for manual review")
+var ErrReviewRequired = errors.New("address flagged for manual review")
 
 // postalCodeRules maps ISO 3166-1 alpha-2 country codes to the regex that
 // the country's postal authority mandates.
@@ -181,7 +181,7 @@ func ValidateAddress(addr adapter.Address, carrier, country string) error {
 	} else if addr.PostalCode != "" {
 		// No rule for this country — flag non-standard codes for manual review.
 		if !regexp.MustCompile(`^[A-Z0-9\s\-]{3,10}$`).MatchString(strings.ToUpper(addr.PostalCode)) {
-			return fmt.Errorf("%w: unrecognised postal code format for country %s", ReviewRequired, country)
+			return fmt.Errorf("%w: unrecognised postal code format for country %s", ErrReviewRequired, country)
 		}
 	}
 
@@ -218,9 +218,9 @@ func ValidateState(state, country string) error {
 	return nil
 }
 
-// IsReviewRequired reports whether err wraps ReviewRequired.
+// IsReviewRequired reports whether err wraps ErrReviewRequired.
 func IsReviewRequired(err error) bool {
-	return errors.Is(err, ReviewRequired)
+	return errors.Is(err, ErrReviewRequired)
 }
 
 // countryName returns a human-readable adjective for use in error messages.

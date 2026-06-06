@@ -103,8 +103,8 @@ func Idempotency(log *zap.Logger) func(http.Handler) http.Handler {
 
 			bodyKey, _ := body["idempotencyKey"].(string)
 
-			switch {
-			case bodyKey == "":
+			switch bodyKey {
+			case "":
 				// Header present, body absent — inject header value into body.
 				body["idempotencyKey"] = headerKey
 				patched, marshalErr := json.Marshal(body)
@@ -116,7 +116,7 @@ func Idempotency(log *zap.Logger) func(http.Handler) http.Handler {
 				r.Body = io.NopCloser(bytes.NewReader(patched))
 				r.ContentLength = int64(len(patched))
 
-			case bodyKey == headerKey:
+			case headerKey:
 				// Both present and matching — restore body unchanged.
 				r.Body = io.NopCloser(bytes.NewReader(raw))
 

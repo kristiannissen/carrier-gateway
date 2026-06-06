@@ -182,7 +182,7 @@ func TestValidateAddress_ReviewRequiredForRuralAddress(t *testing.T) {
 	}
 	err := ValidateAddress(addr, "postnord", "XX")
 	require.Error(t, err)
-	assert.True(t, IsReviewRequired(err), "expected ReviewRequired sentinel")
+	assert.True(t, IsReviewRequired(err), "expected ErrReviewRequired sentinel")
 }
 
 func TestValidateAddress_ValidFullAddress(t *testing.T) {

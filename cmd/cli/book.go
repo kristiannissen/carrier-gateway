@@ -27,7 +27,7 @@ func newBookCmd(registry *adapter.Registry) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var request adapter.BookingRequest
 			if inputFile != "" {
-				data, err := os.ReadFile(inputFile)
+				data, err := os.ReadFile(inputFile) //nolint:gosec // inputFile is provided by the user via CLI flag, not from untrusted input
 				if err != nil {
 					return fmt.Errorf("failed to read input file: %w", err)
 				}
@@ -93,7 +93,7 @@ func newBookCmd(registry *adapter.Registry) *cobra.Command {
 	cmd.Flags().StringVarP(&inputFile, "input", "i", "", "Input JSON file (default: stdin)")
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "text", "Output format (json or text)")
 	cmd.Flags().BoolVarP(&async, "async", "a", false, "Enable async booking (if supported by carrier)")
-	cmd.MarkFlagRequired("carrier") //nolint:errcheck
+	cmd.MarkFlagRequired("carrier") //nolint:errcheck,gosec // cobra flag errors only occur on misconfiguration, not at runtime
 
 	return cmd
 }

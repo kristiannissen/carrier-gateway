@@ -26,6 +26,13 @@ type Registry struct {
 	adapters map[string]CarrierAdapter
 }
 
+// NewRegistryFromMap creates a Registry from an already-initialised adapter
+// map. Intended for tests that need precise control over which adapters are
+// present without going through InitAdapters or touching env vars.
+func NewRegistryFromMap(adapters map[string]CarrierAdapter) *Registry {
+	return &Registry{adapters: adapters}
+}
+
 // NewRegistry initialises all carrier adapters and returns a Registry ready
 // for use. It is the primary entry point for wiring adapters into the
 // application; InitAdapters is retained for use in tests that need the raw

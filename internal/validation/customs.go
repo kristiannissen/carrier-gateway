@@ -166,7 +166,7 @@ func validateNonEUCustoms(c adapter.Customs, origin, destination, shipmentType s
 			case c.CustomsCurrency != threshold.currency && c.CustomsCurrency != "":
 				return fmt.Errorf(
 					"%w: cannot determine %s de minimis without %s value (got %s)",
-					ReviewRequired, destination, threshold.currency, c.CustomsCurrency,
+					ErrReviewRequired, destination, threshold.currency, c.CustomsCurrency,
 				)
 			}
 		}
@@ -229,7 +229,7 @@ func validateEUCustoms(c adapter.Customs, destination, shipmentType string) erro
 			return nil
 		}
 		if c.CustomsCurrency != "EUR" && c.CustomsCurrency != "" {
-			return fmt.Errorf("%w: cannot determine EU de minimis without EUR value", ReviewRequired)
+			return fmt.Errorf("%w: cannot determine EU de minimis without EUR value", ErrReviewRequired)
 		}
 	}
 

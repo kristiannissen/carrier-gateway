@@ -45,7 +45,7 @@ func (m *MockBringAdapter) BookShipment(ctx context.Context, request BookingRequ
 
 	zap.L().Info("MockBringAdapter: returning mock booking response")
 
-	consignment := fmt.Sprintf("BR%09dNO", rand.Intn(1000000000))
+	consignment := fmt.Sprintf("BR%09dNO", rand.Intn(1000000000)) //nolint:gosec // mock data, not security-sensitive
 
 	return &BookingResponse{
 		TrackingNumber: consignment,

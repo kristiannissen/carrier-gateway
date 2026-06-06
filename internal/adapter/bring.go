@@ -69,6 +69,7 @@ func bringParcel(c Colli) map[string]interface{} {
 //   - Sender maps to "from", receiver to "to".
 //   - All colli are mapped to "parcels" with Bring's unit-suffixed dimension keys.
 //   - The customer ID is sent both in the payload and as the X-MyBring-API-Uid header.
+//   - When the receiver has a ServicePointID, pickupPointId is set and address fields omitted.
 func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
@@ -135,13 +136,13 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Bring API call failed: %w", err)
+		return nil, fmt.Errorf("bring API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Bring API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("bring API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var bringResp struct {
@@ -190,13 +191,13 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Bring tracking API call failed: %w", err)
+		return nil, fmt.Errorf("bring tracking API call failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Bring tracking API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("bring tracking API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var bringResp struct {
@@ -230,5 +231,3 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 		Events:            events,
 	}, nil
 }
-
-

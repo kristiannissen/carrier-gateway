@@ -81,7 +81,7 @@ func newTrackCmd(registry *adapter.Registry) *cobra.Command {
 	cmd.Flags().StringVarP(&trackingNumber, "tracking-number", "t", "", "Tracking number")
 	cmd.Flags().StringVarP(&carrier, "carrier", "c", "postnord", "Carrier (e.g., postnord, bring, gls)")
 	cmd.Flags().StringVarP(&outputFormat, "output", "o", "text", "Output format (json or text)")
-	cmd.MarkFlagRequired("tracking-number") //nolint:errcheck
+	cmd.MarkFlagRequired("tracking-number") //nolint:errcheck,gosec // cobra flag errors only occur on misconfiguration, not at runtime
 
 	return cmd
 }

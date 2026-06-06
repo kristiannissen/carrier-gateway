@@ -23,7 +23,7 @@ import (
 //
 // Segment separator: '
 // Element separator: +
-// Component separator: :
+// Component separator: : //nolint:godot
 type EDIFACTParser struct{}
 
 // Parse deserialises a UN/EDIFACT IFTMIN message into a BookingRequest.

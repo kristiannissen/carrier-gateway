@@ -47,7 +47,7 @@ func (m *MockGLSAdapter) BookShipment(ctx context.Context, request BookingReques
 
 	colliResponses := make([]ColliResponse, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
-		trackID := fmt.Sprintf("GLS%09dDK-%d", rand.Intn(1000000000), i+1)
+		trackID := fmt.Sprintf("GLS%09dDK-%d", rand.Intn(1000000000), i+1) //nolint:gosec // mock data, not security-sensitive
 		colliResponses[i] = ColliResponse{
 			ID:             c.ID,
 			TrackingNumber: trackID,
@@ -55,7 +55,7 @@ func (m *MockGLSAdapter) BookShipment(ctx context.Context, request BookingReques
 		}
 	}
 
-	parent := fmt.Sprintf("GLS%09dDK", rand.Intn(1000000000))
+	parent := fmt.Sprintf("GLS%09dDK", rand.Intn(1000000000)) //nolint:gosec // mock data, not security-sensitive
 
 	return &BookingResponse{
 		TrackingNumber: parent,
