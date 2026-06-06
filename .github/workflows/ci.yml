@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: ["main"]
+  schedule:
+    # Run vulnerability scan weekly on Monday at 08:00 UTC even when no code
+    # has changed — catches newly disclosed CVEs in existing dependencies.
+    - cron: "0 8 * * 1"
 
 jobs:
   build:
@@ -23,6 +27,13 @@ jobs:
         run: |
           go mod tidy
           git diff --exit-code go.mod go.sum
+
+      - name: Check for stub files
+        run: |
+          if grep -rl '//go:build ignore' --include='*.go' .; then
+            echo "Found //go:build ignore stub files — delete them with git rm instead of stubbing."
+            exit 1
+          fi
 
       - name: Build
         run: go build ./...
@@ -49,3 +60,23 @@ jobs:
         with:
           version: latest
           args: --timeout=5m
+
+  vulncheck:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: "1.24"
+          go-package: ./...
