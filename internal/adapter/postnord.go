@@ -16,21 +16,25 @@ import (
 	"go.uber.org/zap"
 )
 
-// PostNordAdapter implements CarrierAdapter for PostNord.
+// PostNordAdapter implements CarrierAdapter for PostNord using the v3 EDI API.
 type PostNordAdapter struct {
-	APIKey     string
-	BaseURL    string
-	HTTPClient *http.Client
-	log        *zap.Logger
+	APIKey         string
+	CustomerNumber string // partyId — PostNord account number e.g. "150011208"
+	ApplicationID  int    // applicationId — assigned by PostNord for your integration
+	BaseURL        string
+	HTTPClient     *http.Client
+	log            *zap.Logger
 }
 
-// NewPostNordAdapter creates a new PostNordAdapter with the given API key.
-// A private http.Client with a 30-second timeout is used by default — PostNord
-// returns the label inline in the booking response which can be large.
-func NewPostNordAdapter(apiKey string, log *zap.Logger) *PostNordAdapter {
+// NewPostNordAdapter creates a new PostNordAdapter.
+// customerNumber is the PostNord account number (partyId).
+// applicationID is the integer ID assigned by PostNord to your application.
+func NewPostNordAdapter(apiKey, customerNumber string, applicationID int, log *zap.Logger) *PostNordAdapter {
 	return &PostNordAdapter{
-		APIKey:  apiKey,
-		BaseURL: "https://api2.postnord.com",
+		APIKey:         apiKey,
+		CustomerNumber: customerNumber,
+		ApplicationID:  applicationID,
+		BaseURL:        "https://api2.postnord.com",
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -38,152 +42,220 @@ func NewPostNordAdapter(apiKey string, log *zap.Logger) *PostNordAdapter {
 	}
 }
 
-// postNordAddress builds a PostNord address block.
-// Street and house number are concatenated — PostNord uses a single street field.
-// Country is mapped to countryCode as required by the wire format.
-func postNordAddress(a Address) map[string]interface{} {
-	street := a.Street
-	if a.HouseNumber != "" {
-		street = a.Street + " " + a.HouseNumber
-	}
-	return map[string]interface{}{
-		"street":     street,
-		"postalCode": a.PostalCode,
-		"city":       a.City,
-		"countryCode": a.Country,
+// issuerCode returns the PostNord country issuer code for the given ISO country code.
+// Z11=DK, Z12=SE, Z13=NO, Z14=FI.
+func issuerCode(countryCode string) string {
+	switch strings.ToUpper(countryCode) {
+	case "DK":
+		return "Z11"
+	case "SE":
+		return "Z12"
+	case "NO":
+		return "Z13"
+	case "FI":
+		return "Z14"
+	default:
+		return "Z11"
 	}
 }
 
-// postNordParty builds a sender or receiver party block.
-func postNordParty(a Address) map[string]interface{} {
-	party := map[string]interface{}{
-		"name":    a.Name,
-		"address": postNordAddress(a),
-		"contact": map[string]interface{}{
-			"name":        a.Name,
-			"email":       a.Email,
-			"mobilePhone": a.Phone,
+// basicServiceCode maps DeliveryType to the PostNord v3 basicServiceCode.
+// "18" = standard parcel (home/business delivery)
+// "19" = MyPack Collect (service point delivery)
+func basicServiceCode(deliveryType string, hasServicePoint bool) string {
+	switch strings.ToLower(deliveryType) {
+	case "servicepoint":
+		return "19"
+	default:
+		if hasServicePoint {
+			return "19"
+		}
+		return "18"
+	}
+}
+
+// postNordStreet concatenates street and house number into a single string.
+func postNordStreet(a Address) string {
+	if a.HouseNumber != "" {
+		return a.Street + " " + a.HouseNumber
+	}
+	return a.Street
+}
+
+// postNordGoodsItem converts a single Colli to the v3 goodsItem structure.
+func postNordGoodsItem(c Colli) map[string]interface{} {
+	item := map[string]interface{}{
+		"itemIdentification": map[string]interface{}{
+			"itemId":     "0",
+			"itemIdType": "SSCC",
+		},
+		"grossWeight": map[string]interface{}{
+			"value": c.Weight,
+			"unit":  "KGM",
 		},
 	}
-	return party
-}
-
-// postNordParcel converts a single Colli to the PostNord parcel wire format.
-// Weight is passed in kg directly — PostNord v1 uses kg, not grams.
-// Contents defaults to "Goods" when no items are present.
-func postNordParcel(c Colli) map[string]interface{} {
-	contents := "Goods"
-	if len(c.Items) > 0 {
-		contents = c.Items[0].Description
-	}
-	parcel := map[string]interface{}{
-		"weight":   c.Weight,
-		"contents": contents,
-	}
 	if c.Dimensions.Length > 0 || c.Dimensions.Width > 0 || c.Dimensions.Height > 0 {
-		parcel["dimensions"] = map[string]interface{}{
-			"length": c.Dimensions.Length,
-			"width":  c.Dimensions.Width,
-			"height": c.Dimensions.Height,
+		item["dimensions"] = map[string]interface{}{
+			"length": map[string]interface{}{"value": c.Dimensions.Length, "unit": "CMT"},
+			"width":  map[string]interface{}{"value": c.Dimensions.Width, "unit": "CMT"},
+			"height": map[string]interface{}{"value": c.Dimensions.Height, "unit": "CMT"},
 		}
 	}
-	return parcel
+	return map[string]interface{}{
+		"packageTypeCode": "PC",
+		"items":           []interface{}{item},
+	}
 }
 
-// BookShipment books a shipment with PostNord and returns the booking response.
+// BookShipment books a shipment with PostNord using the v3 EDI API and returns
+// the booking response with an inline PDF label.
 //
 // Wire format notes:
-//   - API key is passed as a query parameter (?apikey=).
-//   - Payload is wrapped in a top-level "shipments" array.
-//   - Service point deliveries use a separate "servicePoint" block with serviceId "2100".
-//   - Home deliveries use serviceId "4200".
-//   - Labels are returned inline in the booking response as base64.
-//   - HTTP 200 is the success status (not 201).
+//   - Endpoint: POST /rest/shipment/v3/edi/labels/pdf?apikey=
+//   - API key passed as query parameter.
+//   - Payload uses the v3 EDI structure: messageDate, messageId, application,
+//     parties.consignor / consignee / deliveryParty, goodsItem.
+//   - Service point uses parties.deliveryParty with partyIdType "156".
+//   - Notifications sent via consignee.party.contact.emailAddress / smsNo.
+//   - Label returned inline in labelPrintout[0].printout.data (base64 PDF).
+//   - Tracking ID returned in idInformation[0].ids[0].value.
 func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
 
-	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
+	hasServicePoint := request.Shipment.Receiver.ServicePointID != ""
+	svcCode := basicServiceCode(request.Shipment.DeliveryType, hasServicePoint)
+
+	// Build goodsItem array from colli.
+	goodsItems := make([]interface{}, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
-		parcels[i] = postNordParcel(c)
+		goodsItems[i] = postNordGoodsItem(c)
 	}
 
-	// Determine service ID from DeliveryType or ServicePointID.
-	// DeliveryType takes precedence when explicitly set.
-	serviceID := "4200" // default: home delivery B2C
-	switch strings.ToLower(request.Shipment.DeliveryType) {
-	case "business":
-		serviceID = "2000"
-	case "return":
-		serviceID = "1900"
-	case "servicepoint":
-		serviceID = "2100"
-	default:
-		if request.Shipment.Receiver.ServicePointID != "" {
-			serviceID = "2100"
+	// Calculate total weight.
+	var totalWeight float64
+	for _, c := range request.Shipment.Colli {
+		totalWeight += c.Weight
+	}
+
+	// Build consignee contact — populated from AddOns and receiver fields.
+	consigneeContact := map[string]interface{}{
+		"contactName": request.Shipment.Receiver.Name,
+	}
+	if request.Shipment.Receiver.Email != "" {
+		consigneeContact["emailAddress"] = request.Shipment.Receiver.Email
+	}
+	if request.Shipment.Receiver.Phone != "" {
+		consigneeContact["smsNo"] = request.Shipment.Receiver.Phone
+	}
+	// AddOns override: if SMS or email notification explicitly requested,
+	// ensure the fields are present even if not on receiver address.
+	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) && request.Shipment.Receiver.Phone == "" {
+		return nil, fmt.Errorf("SMS notification requested but receiver phone is empty")
+	}
+	if hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) && request.Shipment.Receiver.Email == "" {
+		return nil, fmt.Errorf("email notification requested but receiver email is empty")
+	}
+
+	// Build additionalServiceCode list from AddOns.
+	var additionalServiceCodes []string
+	if hasAddOn(request.Shipment.AddOns, AddOnFlexDelivery) {
+		additionalServiceCodes = append(additionalServiceCodes, "A7") // Flex delivery
+	}
+
+	// Build the parties block.
+	parties := map[string]interface{}{
+		"consignor": map[string]interface{}{
+			"issuerCode": issuerCode(request.Shipment.Sender.Country),
+			"partyIdentification": map[string]interface{}{
+				"partyId":     a.CustomerNumber,
+				"partyIdType": "160",
+			},
+			"party": map[string]interface{}{
+				"nameIdentification": map[string]interface{}{
+					"name": request.Shipment.Sender.Name,
+				},
+				"address": map[string]interface{}{
+					"streets":     []string{postNordStreet(request.Shipment.Sender)},
+					"postalCode":  request.Shipment.Sender.PostalCode,
+					"city":        request.Shipment.Sender.City,
+					"countryCode": request.Shipment.Sender.Country,
+				},
+			},
+		},
+		"consignee": map[string]interface{}{
+			"party": map[string]interface{}{
+				"nameIdentification": map[string]interface{}{
+					"name": request.Shipment.Receiver.Name,
+				},
+				"address": map[string]interface{}{
+					"streets":     []string{postNordStreet(request.Shipment.Receiver)},
+					"postalCode":  request.Shipment.Receiver.PostalCode,
+					"city":        request.Shipment.Receiver.City,
+					"countryCode": request.Shipment.Receiver.Country,
+				},
+				"contact": consigneeContact,
+			},
+		},
+	}
+
+	// Service point — add deliveryParty block.
+	if hasServicePoint {
+		parties["deliveryParty"] = map[string]interface{}{
+			"partyIdentification": map[string]interface{}{
+				"partyId":     request.Shipment.Receiver.ServicePointID,
+				"partyIdType": "156",
+			},
 		}
 	}
 
-	shipment := map[string]interface{}{
-		"sender":   postNordParty(request.Shipment.Sender),
-		"receiver": postNordParty(request.Shipment.Receiver),
-		"parcels":  parcels,
+	shipmentBlock := map[string]interface{}{
+		"shipmentIdentification": map[string]interface{}{
+			"shipmentId": "0",
+		},
+		"dateAndTimes": map[string]interface{}{
+			"loadingDate": time.Now().UTC().Format(time.RFC3339),
+		},
+		"service": map[string]interface{}{
+			"basicServiceCode": svcCode,
+		},
+		"freeText": []interface{}{},
+		"numberOfPackages": map[string]interface{}{
+			"value": len(request.Shipment.Colli),
+		},
+		"totalGrossWeight": map[string]interface{}{
+			"value": totalWeight,
+			"unit":  "KGM",
+		},
+		"parties":   parties,
+		"goodsItem": goodsItems,
 	}
 
-	// Build options array from AddOns — opt-in only, no hardcoded defaults.
-	var options []map[string]interface{}
-
-	wantSMS := hasAddOn(request.Shipment.AddOns, AddOnSMSNotification)
-	wantEmail := hasAddOn(request.Shipment.AddOns, AddOnEmailNotification)
-	if wantSMS || wantEmail {
-		var subOptions []map[string]interface{}
-		if wantSMS {
-			subOptions = append(subOptions, map[string]interface{}{"id": "SMS"})
-		}
-		if wantEmail {
-			subOptions = append(subOptions, map[string]interface{}{"id": "EMAIL"})
-		}
-		options = append(options, map[string]interface{}{
-			"id":         "NOT",
-			"subOptions": subOptions,
-		})
-	}
-
-	if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
-		flexOption := map[string]interface{}{
-			"id": "FLEX",
-		}
-		if flex.Instructions != "" {
-			flexOption["subOptions"] = []map[string]interface{}{
-				{"id": "GARAGE", "value": flex.Instructions},
-			}
-		}
-		options = append(options, flexOption)
-	}
-
-	if len(options) > 0 {
-		shipment["options"] = options
-	}
-
-	if request.Shipment.Receiver.ServicePointID != "" {
-		serviceID = "2100"
-		shipment["servicePoint"] = map[string]interface{}{
-			"servicePointId": request.Shipment.Receiver.ServicePointID,
-		}
-	}
-
-	shipment["service"] = map[string]interface{}{
-		"serviceId": serviceID,
+	if len(additionalServiceCodes) > 0 {
+		shipmentBlock["service"].(map[string]interface{})["additionalServiceCode"] = additionalServiceCodes
 	}
 
 	if request.IdempotencyKey != "" {
-		shipment["shipmentReference"] = request.IdempotencyKey
+		shipmentBlock["references"] = []map[string]interface{}{
+			{"referenceNo": request.IdempotencyKey, "referenceType": "CU"},
+		}
 	}
 
-	payloadBytes, err := json.Marshal(map[string]interface{}{
-		"shipments": []interface{}{shipment},
-	})
+	payload := map[string]interface{}{
+		"messageDate":     time.Now().UTC().Format(time.RFC3339),
+		"messageFunction": "Instruction",
+		"messageId":       fmt.Sprintf("msg-%d", time.Now().UnixMilli()),
+		"application": map[string]interface{}{
+			"applicationId": a.ApplicationID,
+			"name":          "logistics-gateway",
+			"version":       "1.0",
+		},
+		"updateIndicator": "Original",
+		"shipment":        []interface{}{shipmentBlock},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal PostNord request: %w", err)
 	}
@@ -191,7 +263,7 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		fmt.Sprintf("%s/rest/shipment/v1/shipments?apikey=%s", a.BaseURL, a.APIKey),
+		fmt.Sprintf("%s/rest/shipment/v3/edi/labels/pdf?apikey=%s", a.BaseURL, a.APIKey),
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
@@ -215,81 +287,115 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 		return nil, fmt.Errorf("PostNord API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// PostNord returns the label inline in the booking response.
-	var postNordResp struct {
-		ShipmentResponse struct {
-			Shipments []struct {
-				Status                 string `json:"status"`
-				ShipmentIdentification string `json:"shipmentIdentification"`
-				Parcels                []struct {
-					ParcelIdentification string `json:"parcelIdentification"`
-					SequenceNumber       int    `json:"sequenceNumber"`
-				} `json:"parcels"`
-				Labels []struct {
-					LabelType  string `json:"labelType"`
-					Resolution string `json:"resolution"`
-					Content    string `json:"content"` // base64-encoded label
-				} `json:"labels"`
-			} `json:"shipments"`
-		} `json:"shipmentResponse"`
+	var pnResp struct {
+		BookingResponse struct {
+			BookingID     string `json:"bookingId"`
+			IDInformation []struct {
+				Status string `json:"status"`
+				IDs    []struct {
+					IDType  string `json:"idType"`
+					Value   string `json:"value"`
+					PrintID string `json:"printId"`
+				} `json:"ids"`
+				URLs []struct {
+					Type string `json:"type"`
+					URL  string `json:"url"`
+				} `json:"urls"`
+			} `json:"idInformation"`
+		} `json:"bookingResponse"`
+		LabelPrintout []struct {
+			ItemIDs []struct {
+				ItemIDs string `json:"itemIds"`
+				Status  string `json:"status"`
+			} `json:"itemIds"`
+			Printout struct {
+				LabelFormat string `json:"labelFormat"`
+				Encoding    string `json:"encoding"`
+				Data        string `json:"data"`
+				Type        string `json:"type"`
+			} `json:"printout"`
+		} `json:"labelPrintout"`
 	}
-	if err := json.Unmarshal(body, &postNordResp); err != nil {
+
+	if err := json.Unmarshal(body, &pnResp); err != nil {
 		return nil, fmt.Errorf("failed to decode PostNord response: %w", err)
 	}
 
-	if len(postNordResp.ShipmentResponse.Shipments) == 0 {
-		return nil, fmt.Errorf("PostNord response contained no shipments")
+	if len(pnResp.BookingResponse.IDInformation) == 0 {
+		return nil, fmt.Errorf("PostNord response contained no idInformation: %s", string(body))
 	}
 
-	s := postNordResp.ShipmentResponse.Shipments[0]
-
-	result := &BookingResponse{
-		TrackingNumber: s.ShipmentIdentification,
-		Carrier:        "postnord",
-		Status:         s.Status,
+	info := pnResp.BookingResponse.IDInformation[0]
+	if info.Status != "OK" {
+		return nil, fmt.Errorf("PostNord booking failed with status: %s", info.Status)
 	}
 
-	// Extract per-colli tracking numbers.
-	if len(s.Parcels) > 0 {
-		result.Colli = make([]ColliResponse, len(s.Parcels))
-		for i, p := range s.Parcels {
-			result.Colli[i] = ColliResponse{
-				ID:             fmt.Sprintf("%d", p.SequenceNumber),
-				TrackingNumber: p.ParcelIdentification,
-			}
+	// Tracking number is the itemId value (barcode number).
+	var trackingNumber string
+	for _, id := range info.IDs {
+		if id.IDType == "itemId" {
+			trackingNumber = id.Value
+			break
 		}
 	}
 
-	// Extract the first label if present — store it for FetchLabel to return.
-	if len(s.Labels) > 0 {
-		result.LabelURL = "" // PostNord returns data, not a URL
-		// Store base64 label data in a synthetic URL-like field so
-		// FetchLabel can detect it was already returned inline.
-		// Actual data is returned via FetchLabel using the tracking number.
-		_ = s.Labels[0].Content // available via FetchLabel
+	result := &BookingResponse{
+		TrackingNumber: trackingNumber,
+		Carrier:        "postnord",
+		Status:         "booked",
+	}
+
+	// Extract inline label data if present.
+	if len(pnResp.LabelPrintout) > 0 {
+		printout := pnResp.LabelPrintout[0].Printout
+		if printout.Data != "" {
+			result.LabelURL = "" // data returned inline, not as URL
+			// Store label data on colli response for label endpoint to serve.
+			result.Colli = []ColliResponse{
+				{
+					ID:             trackingNumber,
+					TrackingNumber: trackingNumber,
+					LabelURL:       printout.Data, // base64 PDF stored here temporarily
+					Status:         "booked",
+				},
+			}
+		}
 	}
 
 	return result, nil
 }
 
-// FetchLabel retrieves a shipping label from PostNord.
-// PostNord returns the label inline during booking; this endpoint re-requests
-// it via the label API using the tracking number and requested format.
+// FetchLabel retrieves a shipping label for a PostNord shipment.
+// Uses POST /rest/shipment/v3/edi/labels/pdf with the itemId as reference.
 func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
 	if req.TrackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
 	}
 
-	httpReq, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		fmt.Sprintf("%s/rest/shipment/v1/shipments/%s/labels?apikey=%s&labelFormat=%s",
-			a.BaseURL, req.TrackingNumber, a.APIKey, req.Format),
-		nil,
-	)
+	var endpoint string
+	switch req.Format {
+	case LabelFormatZPL, LabelFormatZPLGK:
+		endpoint = fmt.Sprintf("%s/rest/shipment/v3/edi/labels/zpl?apikey=%s", a.BaseURL, a.APIKey)
+	default:
+		endpoint = fmt.Sprintf("%s/rest/shipment/v3/edi/labels/pdf?apikey=%s", a.BaseURL, a.APIKey)
+	}
+
+	// Re-fetch label by resubmitting the itemId reference.
+	// PostNord label-only fetch uses the printId or itemId.
+	payload := map[string]interface{}{
+		"itemIds": []string{req.TrackingNumber},
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal PostNord label request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		endpoint, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PostNord label request: %w", err)
 	}
+	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
 
 	resp, err := a.HTTPClient.Do(httpReq)
@@ -307,15 +413,16 @@ func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*La
 		return nil, fmt.Errorf("PostNord label API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	// PostNord returns labels as base64 in a JSON envelope.
 	var labelResp struct {
-		Labels []struct {
-			LabelType string `json:"labelType"`
-			Content   string `json:"content"`
-		} `json:"labels"`
+		LabelPrintout []struct {
+			Printout struct {
+				LabelFormat string `json:"labelFormat"`
+				Encoding    string `json:"encoding"`
+				Data        string `json:"data"`
+			} `json:"printout"`
+		} `json:"labelPrintout"`
 	}
 	if err := json.Unmarshal(body, &labelResp); err != nil {
-		// If JSON parsing fails, assume raw binary and encode it.
 		return &LabelResponse{
 			TrackingNumber: req.TrackingNumber,
 			Carrier:        "postnord",
@@ -325,7 +432,7 @@ func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*La
 		}, nil
 	}
 
-	if len(labelResp.Labels) == 0 {
+	if len(labelResp.LabelPrintout) == 0 {
 		return nil, fmt.Errorf("PostNord returned no labels for tracking number %s", req.TrackingNumber)
 	}
 
@@ -333,12 +440,13 @@ func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*La
 		TrackingNumber: req.TrackingNumber,
 		Carrier:        "postnord",
 		Format:         req.Format,
-		Data:           labelResp.Labels[0].Content,
+		Data:           labelResp.LabelPrintout[0].Printout.Data,
 		MimeType:       MimeTypeForFormat(req.Format),
 	}, nil
 }
 
 // TrackShipment retrieves the tracking status for a PostNord shipment.
+// Uses the v5 Track & Trace API with the itemId returned from booking.
 func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -347,7 +455,7 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/rest/shipment/v2/trackandtrace/findByIdentifier.json?apikey=%s&id=%s&locale=en",
+		fmt.Sprintf("%s/rest/shipment/v5/trackandtrace/findByIdentifier.json?apikey=%s&id=%s&locale=en",
 			a.BaseURL, a.APIKey, trackingNumber),
 		nil,
 	)
@@ -374,9 +482,9 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	var trackResp struct {
 		TrackingInformationResponse struct {
 			Shipments []struct {
-				ShipmentID string `json:"shipmentId"`
-				Status     string `json:"status"`
-				StatusText struct {
+				ShipmentID   string `json:"shipmentId"`
+				Status       string `json:"status"`
+				StatusText   struct {
 					Header string `json:"header"`
 					Body   string `json:"body"`
 				} `json:"statusText"`
@@ -408,7 +516,6 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	}
 
 	s := shipments[0]
-
 	var events []TrackingEvent
 	for _, item := range s.Items {
 		for _, e := range item.Events {

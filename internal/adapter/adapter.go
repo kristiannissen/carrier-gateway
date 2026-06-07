@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 
 	"go.uber.org/zap"
 )
@@ -151,6 +152,13 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	mockMode := os.Getenv("MOCK_MODE") == "true"
 
 	postNordAPIKey := os.Getenv("POSTNORD_API_KEY")
+	postNordCustomerNumber := os.Getenv("POSTNORD_CUSTOMER_NUMBER")
+	postNordAppID := 0
+	if v := os.Getenv("POSTNORD_APPLICATION_ID"); v != "" {
+		if id, parseErr := strconv.Atoi(v); parseErr == nil {
+			postNordAppID = id
+		}
+	}
 	switch {
 	case mockMode:
 		adapters["postnord"] = &MockPostNordAdapter{}
@@ -159,7 +167,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		adapters["postnord"] = &MockPostNordAdapter{}
 		log.Warn("PostNord adapter falling back to mock mode (POSTNORD_API_KEY not set)")
 	default:
-		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey, log)
+		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey, postNordCustomerNumber, postNordAppID, log)
 		log.Info("PostNord adapter initialized in production mode")
 	}
 

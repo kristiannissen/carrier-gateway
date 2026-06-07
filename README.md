@@ -42,6 +42,8 @@ The server starts on `http://localhost:8080`.
 | `LOG_ENV` | Set to `development` for console logging and debug payload dumps | No | — |
 | `MOCK_MODE` | Set to `true` to use mock adapters — no real carrier credentials needed | No | `false` |
 | `POSTNORD_API_KEY` | PostNord API key | No | — |
+| `POSTNORD_CUSTOMER_NUMBER` | PostNord account number (partyId) | No | — |
+| `POSTNORD_APPLICATION_ID` | PostNord application ID (integer assigned by portal) | No | — |
 | `BRING_API_KEY` | Bring API key | No | — |
 | `BRING_CUSTOMER_ID` | Bring customer ID | No | — |
 | `GLS_API_KEY` | GLS OAuth2 client ID | No | — |
@@ -61,6 +63,8 @@ PORT=8080
 LOG_ENV=development
 MOCK_MODE=false
 POSTNORD_API_KEY=your-postnord-key
+POSTNORD_CUSTOMER_NUMBER=150011208
+POSTNORD_APPLICATION_ID=your-application-id
 BRING_API_KEY=your-bring-key
 BRING_CUSTOMER_ID=your-bring-customer-id
 GLS_API_KEY=your-gls-client-id
