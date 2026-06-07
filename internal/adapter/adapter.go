@@ -151,60 +151,84 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	mockMode := os.Getenv("MOCK_MODE") == "true"
 
 	postNordAPIKey := os.Getenv("POSTNORD_API_KEY")
-	if postNordAPIKey != "" && !mockMode {
+	switch {
+	case mockMode:
+		adapters["postnord"] = &MockPostNordAdapter{}
+		log.Info("PostNord adapter initialized in mock mode (MOCK_MODE=true)")
+	case postNordAPIKey == "":
+		adapters["postnord"] = &MockPostNordAdapter{}
+		log.Warn("PostNord adapter falling back to mock mode (POSTNORD_API_KEY not set)")
+	default:
 		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey, log)
 		log.Info("PostNord adapter initialized in production mode")
-	} else {
-		adapters["postnord"] = &MockPostNordAdapter{}
-		log.Info("PostNord adapter initialized in mock mode")
 	}
 
 	bringAPIKey := os.Getenv("BRING_API_KEY")
 	bringCustomerID := os.Getenv("BRING_CUSTOMER_ID")
-	if bringAPIKey != "" && bringCustomerID != "" && !mockMode {
+	switch {
+	case mockMode:
+		adapters["bring"] = &MockBringAdapter{}
+		log.Info("Bring adapter initialized in mock mode (MOCK_MODE=true)")
+	case bringAPIKey == "" || bringCustomerID == "":
+		adapters["bring"] = &MockBringAdapter{}
+		log.Warn("Bring adapter falling back to mock mode (BRING_API_KEY or BRING_CUSTOMER_ID not set)")
+	default:
 		adapters["bring"] = NewBringAdapter(bringAPIKey, bringCustomerID, log)
 		log.Info("Bring adapter initialized in production mode")
-	} else {
-		adapters["bring"] = &MockBringAdapter{}
-		log.Info("Bring adapter initialized in mock mode")
 	}
 
 	glsAPIKey := os.Getenv("GLS_API_KEY")
 	contractID := os.Getenv("GLS_CONTRACT_ID")
-	if glsAPIKey != "" && !mockMode {
+	switch {
+	case mockMode:
+		adapters["gls"] = &MockGLSAdapter{}
+		log.Info("GLS adapter initialized in mock mode (MOCK_MODE=true)")
+	case glsAPIKey == "":
+		adapters["gls"] = &MockGLSAdapter{}
+		log.Warn("GLS adapter falling back to mock mode (GLS_API_KEY not set)")
+	default:
 		adapters["gls"] = NewGLSAdapter(glsAPIKey, contractID, log)
 		log.Info("GLS adapter initialized in production mode")
-	} else {
-		adapters["gls"] = &MockGLSAdapter{}
-		log.Info("GLS adapter initialized in mock mode")
 	}
 
 	daoCustomerID := os.Getenv("DAO_CUSTOMER_ID")
 	daoAPIKey := os.Getenv("DAO_API_KEY")
-	if daoCustomerID != "" && daoAPIKey != "" && !mockMode {
-		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey, log)
-		log.Info("DAO adapter initialized in production mode")
-	} else {
+	switch {
+	case mockMode:
 		adapters["dao"] = &MockDAOAdapter{}
-		log.Info("DAO adapter initialized in mock mode")
+		log.Info("DAO adapter initialized in mock mode (MOCK_MODE=true)")
+	case daoCustomerID == "" || daoAPIKey == "":
+		adapters["dao"] = &MockDAOAdapter{}
+		log.Warn("DAO adapter falling back to mock mode (DAO_CUSTOMER_ID or DAO_API_KEY not set)")
+	default:
+		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey, log)
+		log.Info("DAO adapter initialized in production mode (beta)")
 	}
 
 	postiAPIKey := os.Getenv("POSTI_API_KEY")
-	if postiAPIKey != "" && !mockMode {
+	switch {
+	case mockMode:
+		adapters["posti"] = &MockPostiAdapter{}
+		log.Info("Posti adapter initialized in mock mode (MOCK_MODE=true)")
+	case postiAPIKey == "":
+		adapters["posti"] = &MockPostiAdapter{}
+		log.Warn("Posti adapter falling back to mock mode (POSTI_API_KEY not set)")
+	default:
 		adapters["posti"] = NewPostiAdapter(postiAPIKey, log)
 		log.Info("Posti adapter initialized in production mode")
-	} else {
-		adapters["posti"] = &MockPostiAdapter{}
-		log.Info("Posti adapter initialized in mock mode")
 	}
 
 	inpostAPIKey := os.Getenv("INPOST_API_KEY")
-	if inpostAPIKey != "" && !mockMode {
+	switch {
+	case mockMode:
+		adapters["inpost"] = &MockInPostAdapter{}
+		log.Info("InPost adapter initialized in mock mode (MOCK_MODE=true)")
+	case inpostAPIKey == "":
+		adapters["inpost"] = &MockInPostAdapter{}
+		log.Warn("InPost adapter falling back to mock mode (INPOST_API_KEY not set)")
+	default:
 		adapters["inpost"] = NewInPostAdapter(inpostAPIKey, log)
 		log.Info("InPost adapter initialized in production mode")
-	} else {
-		adapters["inpost"] = &MockInPostAdapter{}
-		log.Info("InPost adapter initialized in mock mode")
 	}
 
 	return adapters

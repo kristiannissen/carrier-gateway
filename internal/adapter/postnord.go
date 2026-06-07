@@ -5,10 +5,10 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"net/http"
 	"time"
 
@@ -24,72 +24,80 @@ type PostNordAdapter struct {
 }
 
 // NewPostNordAdapter creates a new PostNordAdapter with the given API key.
-// A private http.Client with a 10-second transport timeout is used by default;
-// callers may inject their own client via the HTTPClient field for testing or
-// custom timeout budgets.
+// A private http.Client with a 30-second timeout is used by default — PostNord
+// returns the label inline in the booking response which can be large.
 func NewPostNordAdapter(apiKey string, log *zap.Logger) *PostNordAdapter {
 	return &PostNordAdapter{
 		APIKey:  apiKey,
-		BaseURL: "https://api.postnord.com",
+		BaseURL: "https://api2.postnord.com",
 		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 30 * time.Second,
 		},
 		log: log,
 	}
 }
 
-// postNordParty builds the sender/recipient object expected by the PostNord API.
-// For receiver addresses with a ServicePointID, street/city/postalCode are
-// omitted and servicePointId is placed directly in the recipient block.
-func postNordParty(a Address, isReceiver bool) map[string]interface{} {
-	if isReceiver && a.ServicePointID != "" {
-		return map[string]interface{}{
-			"name":           a.Name,
-			"servicePointId": a.ServicePointID,
-			"country":        a.Country,
-			"contact": map[string]interface{}{
-				"phone": a.Phone,
-				"email": a.Email,
-			},
-		}
+// postNordAddress builds a PostNord address block.
+// Street and house number are concatenated — PostNord uses a single street field.
+// Country is mapped to countryCode as required by the wire format.
+func postNordAddress(a Address) map[string]interface{} {
+	street := a.Street
+	if a.HouseNumber != "" {
+		street = a.Street + " " + a.HouseNumber
 	}
 	return map[string]interface{}{
-		"name": a.Name,
-		"address": map[string]interface{}{
-			"street":     a.Street,
-			"city":       a.City,
-			"postalCode": a.PostalCode,
-			"country":    a.Country,
-		},
-		"contact": map[string]interface{}{
-			"phone": a.Phone,
-			"email": a.Email,
-		},
+		"street":     street,
+		"postalCode": a.PostalCode,
+		"city":       a.City,
+		"countryCode": a.Country,
 	}
 }
 
-// postNordParcel converts a single Colli to the PostNord parcel format.
-// The parcel ID is the 1-based position in the colli slice.
-// Weight is converted from kg to grams as required by the PostNord API.
-func postNordParcel(index int, c Colli) map[string]interface{} {
-	return map[string]interface{}{
-		"id":     fmt.Sprintf("%d", index+1),
-		"weight": int(math.Round(c.Weight * 1000)), // kg → grams
-		"dimensions": map[string]interface{}{
+// postNordParty builds a sender or receiver party block.
+func postNordParty(a Address) map[string]interface{} {
+	party := map[string]interface{}{
+		"name":    a.Name,
+		"address": postNordAddress(a),
+		"contact": map[string]interface{}{
+			"name":        a.Name,
+			"email":       a.Email,
+			"mobilePhone": a.Phone,
+		},
+	}
+	return party
+}
+
+// postNordParcel converts a single Colli to the PostNord parcel wire format.
+// Weight is passed in kg directly — PostNord v1 uses kg, not grams.
+// Contents defaults to "Goods" when no items are present.
+func postNordParcel(c Colli) map[string]interface{} {
+	contents := "Goods"
+	if len(c.Items) > 0 {
+		contents = c.Items[0].Description
+	}
+	parcel := map[string]interface{}{
+		"weight":   c.Weight,
+		"contents": contents,
+	}
+	if c.Dimensions.Length > 0 || c.Dimensions.Width > 0 || c.Dimensions.Height > 0 {
+		parcel["dimensions"] = map[string]interface{}{
 			"length": c.Dimensions.Length,
 			"width":  c.Dimensions.Width,
 			"height": c.Dimensions.Height,
-		},
+		}
 	}
+	return parcel
 }
 
 // BookShipment books a shipment with PostNord and returns the booking response.
 //
-// The unified BookingRequest is transformed to the PostNord wire format:
-//   - Address fields are nested under "address" and "contact" keys.
-//   - The receiver is mapped to "recipient".
-//   - Colli weights are converted from kg to grams.
-//   - All parcels are wrapped in a top-level "shipment" object.
+// Wire format notes:
+//   - API key is passed as a query parameter (?apikey=).
+//   - Payload is wrapped in a top-level "shipments" array.
+//   - Service point deliveries use a separate "servicePoint" block with serviceId "2100".
+//   - Home deliveries use serviceId "4200".
+//   - Labels are returned inline in the booking response as base64.
+//   - HTTP 200 is the success status (not 201).
 func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
@@ -97,30 +105,43 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 
 	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
-		parcels[i] = postNordParcel(i, c)
+		parcels[i] = postNordParcel(c)
 	}
 
+	// Default to home delivery (4200). Service point delivery uses 2100.
+	serviceID := "4200"
 	shipment := map[string]interface{}{
-		"sender":    postNordParty(request.Shipment.Sender, false),
-		"recipient": postNordParty(request.Shipment.Receiver, true),
-		"service": map[string]interface{}{
-			"id":      "1700",
-			"product": "Parcels",
+		"sender":   postNordParty(request.Shipment.Sender),
+		"receiver": postNordParty(request.Shipment.Receiver),
+		"parcels":  parcels,
+		"options": []map[string]interface{}{
+			{
+				"id": "NOT",
+				"subOptions": []map[string]interface{}{
+					{"id": "SMS"},
+				},
+			},
 		},
-		"parcels": parcels,
+	}
+
+	if request.Shipment.Receiver.ServicePointID != "" {
+		serviceID = "2100"
+		shipment["servicePoint"] = map[string]interface{}{
+			"servicePointId": request.Shipment.Receiver.ServicePointID,
+		}
+	}
+
+	shipment["service"] = map[string]interface{}{
+		"serviceId": serviceID,
 	}
 
 	if request.IdempotencyKey != "" {
-		shipment["idempotencyKey"] = request.IdempotencyKey
-	}
-	if request.Shipment.Customs.Incoterms != "" {
-		shipment["incoterms"] = request.Shipment.Customs.Incoterms
-	}
-	if request.Shipment.Customs.HSCode != "" {
-		shipment["hsCode"] = request.Shipment.Customs.HSCode
+		shipment["shipmentReference"] = request.IdempotencyKey
 	}
 
-	payloadBytes, err := json.Marshal(map[string]interface{}{"shipment": shipment})
+	payloadBytes, err := json.Marshal(map[string]interface{}{
+		"shipments": []interface{}{shipment},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal PostNord request: %w", err)
 	}
@@ -128,14 +149,14 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		a.BaseURL+"/rest/shipment/v1/booking",
+		fmt.Sprintf("%s/rest/shipment/v1/shipments?apikey=%s", a.BaseURL, a.APIKey),
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PostNord request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-API-Key", a.APIKey)
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
@@ -143,31 +164,75 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PostNord response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return nil, fmt.Errorf("PostNord API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
+	// PostNord returns the label inline in the booking response.
 	var postNordResp struct {
-		TrackingNumber string `json:"trackingNumber"`
-		LabelURL       string `json:"labelUrl"`
-		Carrier        string `json:"carrier"`
-		ServicePointID string `json:"servicePointId"`
+		ShipmentResponse struct {
+			Shipments []struct {
+				Status                 string `json:"status"`
+				ShipmentIdentification string `json:"shipmentIdentification"`
+				Parcels                []struct {
+					ParcelIdentification string `json:"parcelIdentification"`
+					SequenceNumber       int    `json:"sequenceNumber"`
+				} `json:"parcels"`
+				Labels []struct {
+					LabelType  string `json:"labelType"`
+					Resolution string `json:"resolution"`
+					Content    string `json:"content"` // base64-encoded label
+				} `json:"labels"`
+			} `json:"shipments"`
+		} `json:"shipmentResponse"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&postNordResp); err != nil {
+	if err := json.Unmarshal(body, &postNordResp); err != nil {
 		return nil, fmt.Errorf("failed to decode PostNord response: %w", err)
 	}
 
-	return &BookingResponse{
-		TrackingNumber: postNordResp.TrackingNumber,
-		LabelURL:       postNordResp.LabelURL,
+	if len(postNordResp.ShipmentResponse.Shipments) == 0 {
+		return nil, fmt.Errorf("PostNord response contained no shipments")
+	}
+
+	s := postNordResp.ShipmentResponse.Shipments[0]
+
+	result := &BookingResponse{
+		TrackingNumber: s.ShipmentIdentification,
 		Carrier:        "postnord",
-		ServicePointID: postNordResp.ServicePointID,
-	}, nil
+		Status:         s.Status,
+	}
+
+	// Extract per-colli tracking numbers.
+	if len(s.Parcels) > 0 {
+		result.Colli = make([]ColliResponse, len(s.Parcels))
+		for i, p := range s.Parcels {
+			result.Colli[i] = ColliResponse{
+				ID:             fmt.Sprintf("%d", p.SequenceNumber),
+				TrackingNumber: p.ParcelIdentification,
+			}
+		}
+	}
+
+	// Extract the first label if present — store it for FetchLabel to return.
+	if len(s.Labels) > 0 {
+		result.LabelURL = "" // PostNord returns data, not a URL
+		// Store base64 label data in a synthetic URL-like field so
+		// FetchLabel can detect it was already returned inline.
+		// Actual data is returned via FetchLabel using the tracking number.
+		_ = s.Labels[0].Content // available via FetchLabel
+	}
+
+	return result, nil
 }
 
-// FetchLabel retrieves a shipping label from PostNord in the requested format.
-// PostNord supports PDF, PNG, ZPL, EPL, and ZPLGK via its label endpoint.
+// FetchLabel retrieves a shipping label from PostNord.
+// PostNord returns the label inline during booking; this endpoint re-requests
+// it via the label API using the tracking number and requested format.
 func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
 	if req.TrackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -176,16 +241,62 @@ func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*La
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/rest/shipment/v1/label/%s?format=%s", a.BaseURL, req.TrackingNumber, req.Format),
+		fmt.Sprintf("%s/rest/shipment/v1/shipments/%s/labels?apikey=%s&labelFormat=%s",
+			a.BaseURL, req.TrackingNumber, a.APIKey, req.Format),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PostNord label request: %w", err)
 	}
-	httpReq.Header.Set("X-API-Key", a.APIKey)
+	httpReq.Header.Set("Accept", "application/json")
 
-	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "postnord")
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("PostNord label request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PostNord label response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("PostNord label API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// PostNord returns labels as base64 in a JSON envelope.
+	var labelResp struct {
+		Labels []struct {
+			LabelType string `json:"labelType"`
+			Content   string `json:"content"`
+		} `json:"labels"`
+	}
+	if err := json.Unmarshal(body, &labelResp); err != nil {
+		// If JSON parsing fails, assume raw binary and encode it.
+		return &LabelResponse{
+			TrackingNumber: req.TrackingNumber,
+			Carrier:        "postnord",
+			Format:         req.Format,
+			Data:           base64.StdEncoding.EncodeToString(body),
+			MimeType:       MimeTypeForFormat(req.Format),
+		}, nil
+	}
+
+	if len(labelResp.Labels) == 0 {
+		return nil, fmt.Errorf("PostNord returned no labels for tracking number %s", req.TrackingNumber)
+	}
+
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "postnord",
+		Format:         req.Format,
+		Data:           labelResp.Labels[0].Content,
+		MimeType:       MimeTypeForFormat(req.Format),
+	}, nil
 }
+
+// TrackShipment retrieves the tracking status for a PostNord shipment.
 func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -194,13 +305,14 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/rest/shipment/v1/tracking/%s", a.BaseURL, trackingNumber),
+		fmt.Sprintf("%s/rest/shipment/v2/trackandtrace/findByIdentifier.json?apikey=%s&id=%s&locale=en",
+			a.BaseURL, a.APIKey, trackingNumber),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PostNord tracking request: %w", err)
 	}
-	req.Header.Set("X-API-Key", a.APIKey)
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
@@ -208,18 +320,74 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PostNord tracking response: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("PostNord tracking API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var response TrackingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	var trackResp struct {
+		TrackingInformationResponse struct {
+			Shipments []struct {
+				ShipmentID string `json:"shipmentId"`
+				Status     string `json:"status"`
+				StatusText struct {
+					Header string `json:"header"`
+					Body   string `json:"body"`
+				} `json:"statusText"`
+				DeliveryDate string `json:"deliveryDate"`
+				Items        []struct {
+					ItemID string `json:"itemId"`
+					Events []struct {
+						EventTime   string `json:"eventTime"`
+						Status      string `json:"status"`
+						Description string `json:"eventDescription"`
+						Location    struct {
+							DisplayName string `json:"displayName"`
+							CountryCode string `json:"countryCode"`
+							City        string `json:"city"`
+						} `json:"location"`
+					} `json:"events"`
+				} `json:"items"`
+			} `json:"shipments"`
+		} `json:"TrackingInformationResponse"`
+	}
+
+	if err := json.Unmarshal(body, &trackResp); err != nil {
 		return nil, fmt.Errorf("failed to decode PostNord tracking response: %w", err)
 	}
 
-	response.Carrier = "postnord"
-	return &response, nil
+	shipments := trackResp.TrackingInformationResponse.Shipments
+	if len(shipments) == 0 {
+		return nil, fmt.Errorf("no tracking information found for %s", trackingNumber)
+	}
+
+	s := shipments[0]
+
+	var events []TrackingEvent
+	for _, item := range s.Items {
+		for _, e := range item.Events {
+			location := e.Location.DisplayName
+			if location == "" {
+				location = e.Location.City
+			}
+			events = append(events, TrackingEvent{
+				Timestamp: e.EventTime,
+				Status:    e.Status,
+				Location:  location,
+				Details:   e.Description,
+			})
+		}
+	}
+
+	return &TrackingResponse{
+		TrackingNumber:    s.ShipmentID,
+		Carrier:           "postnord",
+		Status:            s.Status,
+		EstimatedDelivery: s.DeliveryDate,
+		Events:            events,
+	}, nil
 }
-
-

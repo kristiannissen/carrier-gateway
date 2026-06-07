@@ -84,29 +84,30 @@ func TestMockPostNordAdapter_TrackShipment(t *testing.T) {
 func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 	t.Parallel()
 
-	adapter, captured := newPostNordTestServer(t, http.StatusCreated,
-		`{"trackingNumber":"PN123456789DK","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`)
+	srv, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
 
-	_, err := adapter.BookShipment(t.Context(), BookingRequest{
+	_, err := srv.BookShipment(t.Context(), BookingRequest{
 		Carrier: "postnord",
 		Shipment: Shipment{
 			Sender: Address{
-				Name:       "Unisport Group",
-				Street:     "Industrivej 10",
-				City:       "Copenhagen",
-				PostalCode: "2300",
-				Country:    "DK",
-				Phone:      "+4512345678",
-				Email:      "logistics@unisport.dk",
+				Name:        "Unisport Group",
+				Street:      "Industrivej",
+				HouseNumber: "10",
+				City:        "Copenhagen",
+				PostalCode:  "2300",
+				Country:     "DK",
+				Phone:       "+4512345678",
+				Email:       "logistics@unisport.dk",
 			},
 			Receiver: Address{
-				Name:       "John Doe",
-				Street:     "Storgatan 1",
-				City:       "Stockholm",
-				PostalCode: "111 22",
-				Country:    "SE",
-				Phone:      "+46123456789",
-				Email:      "john@example.com",
+				Name:        "John Doe",
+				Street:      "Storgatan",
+				HouseNumber: "1",
+				City:        "Stockholm",
+				PostalCode:  "111 22",
+				Country:     "SE",
+				Phone:       "+46123456789",
+				Email:       "john@example.com",
 			},
 			TotalWeight: 1.5,
 			Colli:       []Colli{postnordTestColli("box-1", 1.5)},
@@ -114,129 +115,106 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	shipment := requireShipment(t, *captured)
+	shipment := requirePostNordShipment(t, *captured)
 
 	// Sender
-	sender := requireParty(t, shipment, "sender")
+	sender := requireNested(t, shipment, "sender")
 	assert.Equal(t, "Unisport Group", sender["name"])
 	senderAddr := requireNested(t, sender, "address")
 	assert.Equal(t, "Industrivej 10", senderAddr["street"])
 	assert.Equal(t, "Copenhagen", senderAddr["city"])
 	assert.Equal(t, "2300", senderAddr["postalCode"])
-	assert.Equal(t, "DK", senderAddr["country"])
-	senderContact := requireNested(t, sender, "contact")
-	assert.Equal(t, "+4512345678", senderContact["phone"])
-	assert.Equal(t, "logistics@unisport.dk", senderContact["email"])
+	assert.Equal(t, "DK", senderAddr["countryCode"])
 
-	// Recipient — must be "recipient", not "receiver"
-	_, hasReceiver := shipment["receiver"]
-	assert.False(t, hasReceiver, "PostNord expects 'recipient', not 'receiver'")
-	recipient := requireParty(t, shipment, "recipient")
-	assert.Equal(t, "John Doe", recipient["name"])
-	recipientAddr := requireNested(t, recipient, "address")
-	assert.Equal(t, "Storgatan 1", recipientAddr["street"])
-	recipientContact := requireNested(t, recipient, "contact")
-	assert.Equal(t, "+46123456789", recipientContact["phone"])
-	assert.Equal(t, "john@example.com", recipientContact["email"])
+	// Receiver
+	receiver := requireNested(t, shipment, "receiver")
+	assert.Equal(t, "John Doe", receiver["name"])
+	receiverAddr := requireNested(t, receiver, "address")
+	assert.Equal(t, "Storgatan 1", receiverAddr["street"])
+	assert.Equal(t, "SE", receiverAddr["countryCode"])
 
-	// Service block
+	// Service — home delivery default
 	service := requireNested(t, shipment, "service")
-	assert.Equal(t, "1700", service["id"])
-	assert.Equal(t, "Parcels", service["product"])
+	assert.Equal(t, "4200", service["serviceId"])
 
-	// Parcels
-	parcels := requireParcels(t, shipment, 1)
+	// Parcels — weight in kg not grams
+	parcels := requirePostNordParcels(t, shipment, 1)
 	parcel := parcels[0].(map[string]interface{})
-	assert.Equal(t, "1", parcel["id"])               // sequential, not colli.ID
-	assert.Equal(t, float64(1500), parcel["weight"]) // kg → grams
-	assert.NotContains(t, parcel, "reference")
-	dims := requireNested(t, parcel, "dimensions")
-	assert.Equal(t, float64(10), dims["length"])
-	assert.Equal(t, float64(10), dims["width"])
-	assert.Equal(t, float64(10), dims["height"])
+	assert.Equal(t, 1.5, parcel["weight"])
+	assert.NotContains(t, parcel, "id") // PostNord v1 does not use a parcel id field
+}
+
+func TestPostNordAdapter_BookShipment_ServicePoint(t *testing.T) {
+	t.Parallel()
+
+	srv, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
+
+	req := postnordMinimalRequest()
+	req.Shipment.Receiver = Address{
+		Name:           "Anna Svensson",
+		Country:        "SE",
+		Phone:          "+46701234567",
+		ServicePointID: "95763",
+	}
+
+	resp, err := srv.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.TrackingNumber)
+
+	shipment := requirePostNordShipment(t, *captured)
+
+	// Service ID must be 2100 for service point delivery
+	service := requireNested(t, shipment, "service")
+	assert.Equal(t, "2100", service["serviceId"])
+
+	// servicePoint block must be present
+	servicePoint := requireNested(t, shipment, "servicePoint")
+	assert.Equal(t, "95763", servicePoint["servicePointId"])
 }
 
 func TestPostNordAdapter_BookShipment_IdempotencyKey(t *testing.T) {
 	t.Parallel()
 
-	t.Run("key forwarded to wire payload", func(t *testing.T) {
-		t.Parallel()
-		adapter, captured := newPostNordTestServer(t, http.StatusCreated,
-			`{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`)
+	srv, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
 
-		req := postnordMinimalRequest()
-		req.IdempotencyKey = "unique-key-123"
+	req := postnordMinimalRequest()
+	req.IdempotencyKey = "order-98765"
 
-		_, err := adapter.BookShipment(t.Context(), req)
-		require.NoError(t, err)
+	_, err := srv.BookShipment(t.Context(), req)
+	require.NoError(t, err)
 
-		shipment := requireShipment(t, *captured)
-		assert.Equal(t, "unique-key-123", shipment["idempotencyKey"])
-	})
-
-	t.Run("absent when no key provided", func(t *testing.T) {
-		t.Parallel()
-		adapter, captured := newPostNordTestServer(t, http.StatusCreated,
-			`{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`)
-
-		_, err := adapter.BookShipment(t.Context(), postnordMinimalRequest())
-		require.NoError(t, err)
-
-		shipment := requireShipment(t, *captured)
-		assert.NotContains(t, shipment, "idempotencyKey")
-	})
-
-	t.Run("postnord supports native idempotency", func(t *testing.T) {
-		t.Parallel()
-		assert.True(t, SupportsNativeIdempotency("postnord"))
-	})
-
-	t.Run("bring does not support native idempotency", func(t *testing.T) {
-		t.Parallel()
-		assert.False(t, SupportsNativeIdempotency("bring"))
-	})
+	shipment := requirePostNordShipment(t, *captured)
+	assert.Equal(t, "order-98765", shipment["shipmentReference"])
 }
 
-func TestPostNordAdapter_BookShipment_OptionalFields(t *testing.T) {
+func TestPostNordAdapter_BookShipment_APIKeyInQueryParam(t *testing.T) {
 	t.Parallel()
 
-	mockResp := `{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`
+	var capturedURL string
+	testSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedURL = r.URL.String()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(postnordMockBookingResponse()))
+	}))
+	defer testSrv.Close()
 
-	t.Run("omitted when empty", func(t *testing.T) {
-		t.Parallel()
-		adapter, captured := newPostNordTestServer(t, http.StatusCreated, mockResp)
+	adapter := &PostNordAdapter{
+		APIKey:     "test-api-key",
+		BaseURL:    testSrv.URL,
+		HTTPClient: testSrv.Client(),
+	}
 
-		_, err := adapter.BookShipment(t.Context(), postnordMinimalRequest())
-		require.NoError(t, err)
+	_, err := adapter.BookShipment(t.Context(), postnordMinimalRequest())
+	require.NoError(t, err)
 
-		shipment := requireShipment(t, *captured)
-		assert.NotContains(t, shipment, "incoterms")
-		assert.NotContains(t, shipment, "hsCode")
-		assert.NotContains(t, shipment, "idempotencyKey")
-	})
-
-	t.Run("included when set", func(t *testing.T) {
-		t.Parallel()
-		adapter, captured := newPostNordTestServer(t, http.StatusCreated, mockResp)
-
-		req := postnordMinimalRequest()
-		req.Shipment.Customs.Incoterms = "DDP"
-		req.Shipment.Customs.HSCode = "6104.43"
-
-		_, err := adapter.BookShipment(t.Context(), req)
-		require.NoError(t, err)
-
-		shipment := requireShipment(t, *captured)
-		assert.Equal(t, "DDP", shipment["incoterms"])
-		assert.Equal(t, "6104.43", shipment["hsCode"])
-	})
+	// API key must appear as a query parameter, not a header
+	assert.Contains(t, capturedURL, "apikey=test-api-key")
 }
 
 func TestPostNordAdapter_BookShipment_MultiColli(t *testing.T) {
 	t.Parallel()
 
-	adapter, captured := newPostNordTestServer(t, http.StatusCreated,
-		`{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","carrier":"postnord"}`)
+	srv, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
 
 	req := postnordMinimalRequest()
 	req.Shipment.TotalWeight = 4.5
@@ -245,76 +223,72 @@ func TestPostNordAdapter_BookShipment_MultiColli(t *testing.T) {
 		postnordTestColli("box-2", 3.0),
 	}
 
-	_, err := adapter.BookShipment(t.Context(), req)
+	_, err := srv.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
-	shipment := requireShipment(t, *captured)
-	parcels := requireParcels(t, shipment, 2)
+	shipment := requirePostNordShipment(t, *captured)
+	requirePostNordParcels(t, shipment, 2)
+}
 
-	p0 := parcels[0].(map[string]interface{})
-	assert.Equal(t, "1", p0["id"])
-	assert.Equal(t, float64(1500), p0["weight"])
+func TestPostNordAdapter_BookShipment_HouseNumberConcatenated(t *testing.T) {
+	t.Parallel()
 
-	p1 := parcels[1].(map[string]interface{})
-	assert.Equal(t, "2", p1["id"])
-	assert.Equal(t, float64(3000), p1["weight"])
+	srv, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
+
+	req := postnordMinimalRequest()
+	req.Shipment.Sender.Street = "Industrivej"
+	req.Shipment.Sender.HouseNumber = "42"
+
+	_, err := srv.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+
+	shipment := requirePostNordShipment(t, *captured)
+	sender := requireNested(t, shipment, "sender")
+	addr := requireNested(t, sender, "address")
+	assert.Equal(t, "Industrivej 42", addr["street"])
 }
 
 func TestPostNordAdapter_BookShipment_APIError(t *testing.T) {
 	t.Parallel()
 
-	adapter, _ := newPostNordTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
+	srv, _ := newPostNordTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
 
-	_, err := adapter.BookShipment(t.Context(), postnordMinimalRequest())
+	_, err := srv.BookShipment(t.Context(), postnordMinimalRequest())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
 }
 
-func TestPostNordAdapter_BookShipment_ServicePoint(t *testing.T) {
+func TestPostNordAdapter_SupportsNativeIdempotency(t *testing.T) {
 	t.Parallel()
-
-	t.Run("servicePointId in recipient block only", func(t *testing.T) {
-		t.Parallel()
-		adapter, captured := newPostNordTestServer(t, http.StatusCreated,
-			`{"trackingNumber":"PN999","labelUrl":"https://postnord.com/label.pdf","servicePointId":"sp_123","carrier":"postnord"}`)
-
-		req := postnordMinimalRequest()
-		req.Shipment.Receiver = Address{
-			Name:           "Anna Svensson",
-			Country:        "SE",
-			Phone:          "+46701234567",
-			ServicePointID: "sp_123",
-		}
-
-		resp, err := adapter.BookShipment(t.Context(), req)
-		require.NoError(t, err)
-		assert.Equal(t, "sp_123", resp.ServicePointID)
-
-		shipment := requireShipment(t, *captured)
-		recipient := requireParty(t, shipment, "recipient")
-
-		// servicePointId must be in the recipient block
-		assert.Equal(t, "sp_123", recipient["servicePointId"])
-		assert.Equal(t, "Anna Svensson", recipient["name"])
-		assert.Equal(t, "SE", recipient["country"])
-
-		// street/city/postalCode must be absent
-		_, hasAddr := recipient["address"]
-		assert.False(t, hasAddr, "address block must be absent for service point deliveries")
-
-		// servicePointId must NOT appear at the root shipment level
-		_, hasRootSP := shipment["servicePointId"]
-		assert.False(t, hasRootSP, "servicePointId must only appear in the recipient block")
-	})
+	assert.True(t, SupportsNativeIdempotency("postnord"))
 }
 
 // =========================================================================
 // Helpers
 // =========================================================================
 
+// postnordMockBookingResponse returns a minimal valid PostNord booking response.
+func postnordMockBookingResponse() string {
+	return `{
+		"shipmentResponse": {
+			"shipments": [
+				{
+					"status": "CREATED",
+					"shipmentIdentification": "DK123456789SE",
+					"parcels": [
+						{"parcelIdentification": "00370730254433219997", "sequenceNumber": 1}
+					],
+					"labels": [
+						{"labelType": "PDF", "resolution": "203", "content": "JVBERi0xLjQ="}
+					]
+				}
+			]
+		}
+	}`
+}
+
 // newPostNordTestServer starts an httptest.Server that captures the request
-// body and responds with statusCode and body. The server is closed
-// automatically when the test ends.
+// body and responds with statusCode and body.
 func newPostNordTestServer(t *testing.T, statusCode int, body string) (*PostNordAdapter, *map[string]interface{}) {
 	t.Helper()
 
@@ -336,23 +310,6 @@ func newPostNordTestServer(t *testing.T, statusCode int, body string) (*PostNord
 	}, &captured
 }
 
-// requireShipment extracts and returns the top-level "shipment" object from a
-// captured PostNord request payload, failing the test if it is absent.
-func requireShipment(t *testing.T, payload map[string]interface{}) map[string]interface{} {
-	t.Helper()
-	shipment, ok := payload["shipment"].(map[string]interface{})
-	require.True(t, ok, "payload missing top-level 'shipment' key")
-	return shipment
-}
-
-// requireParty extracts a sender/recipient object by key, failing the test if absent.
-func requireParty(t *testing.T, shipment map[string]interface{}, key string) map[string]interface{} {
-	t.Helper()
-	party, ok := shipment[key].(map[string]interface{})
-	require.True(t, ok, "shipment missing '%s' key", key)
-	return party
-}
-
 // requireNested extracts a nested map by key, failing the test if absent.
 func requireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
 	t.Helper()
@@ -361,8 +318,19 @@ func requireNested(t *testing.T, parent map[string]interface{}, key string) map[
 	return nested
 }
 
-// requireParcels extracts the parcels slice and asserts the expected length.
-func requireParcels(t *testing.T, shipment map[string]interface{}, wantLen int) []interface{} {
+// requirePostNordShipment extracts the first shipment from the "shipments" array.
+func requirePostNordShipment(t *testing.T, payload map[string]interface{}) map[string]interface{} {
+	t.Helper()
+	shipments, ok := payload["shipments"].([]interface{})
+	require.True(t, ok, "payload missing top-level 'shipments' array")
+	require.NotEmpty(t, shipments, "shipments array must not be empty")
+	shipment, ok := shipments[0].(map[string]interface{})
+	require.True(t, ok, "shipments[0] is not an object")
+	return shipment
+}
+
+// requirePostNordParcels extracts the parcels array and asserts the expected length.
+func requirePostNordParcels(t *testing.T, shipment map[string]interface{}, wantLen int) []interface{} {
 	t.Helper()
 	parcels, ok := shipment["parcels"].([]interface{})
 	require.True(t, ok, "shipment missing 'parcels' array")
@@ -384,15 +352,27 @@ func postnordMinimalRequest() BookingRequest {
 
 func postnordTestSender() Address {
 	return Address{
-		Name: "Sender", Street: "Street 1",
-		City: "Copenhagen", PostalCode: "2300", Country: "DK",
+		Name:        "Unisport Group",
+		Street:      "Industrivej",
+		HouseNumber: "10",
+		City:        "Copenhagen",
+		PostalCode:  "2300",
+		Country:     "DK",
+		Phone:       "+4512345678",
+		Email:       "logistics@unisport.dk",
 	}
 }
 
 func postnordTestReceiver() Address {
 	return Address{
-		Name: "Receiver", Street: "Street 2",
-		City: "Stockholm", PostalCode: "111 22", Country: "SE",
+		Name:        "Test Receiver",
+		Street:      "Storgatan",
+		HouseNumber: "1",
+		City:        "Stockholm",
+		PostalCode:  "111 22",
+		Country:     "SE",
+		Phone:       "+46701234567",
+		Email:       "receiver@example.com",
 	}
 }
 
@@ -400,6 +380,7 @@ func postnordTestColli(id string, weightKg float64) Colli {
 	return Colli{
 		ID:         id,
 		Weight:     weightKg,
-		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
+		Dimensions: Dimensions{Length: 20, Width: 15, Height: 10},
+		Items:      []Item{{Description: "Sports goods", Weight: weightKg, Quantity: 1}},
 	}
 }

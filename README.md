@@ -6,14 +6,16 @@ A stateless Go microservice for booking and tracking shipments across multiple N
 
 ## Supported carriers
 
-| Key | Carrier | Countries |
-|---|---|---|
-| `postnord` | PostNord | DK, SE, NO, FI |
-| `bring` | Bring | NO, SE, DK, FI |
-| `gls` | GLS | DK, SE, DE, NL, and more |
-| `dao` | DAO | DK |
-| `posti` | Posti | FI |
-| `inpost` | InPost | PL |
+| Key | Carrier | Countries | Status |
+|---|---|---|---|
+| `postnord` | PostNord | DK, SE, NO, FI | Production |
+| `bring` | Bring | NO, SE, DK, FI | Production |
+| `gls` | GLS | DK, SE, DE, NL, and more | Production |
+| `dao` | DAO | DK | **Beta** |
+| `posti` | Posti | FI | Production |
+| `inpost` | InPost | PL | Production |
+
+DAO is in beta — bookings work but label printing is not yet available. Labels must be downloaded from the DAO portal directly.
 
 ---
 
@@ -93,6 +95,7 @@ docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development logistics-gatew
 |---|---|---|
 | `POST` | `/api/bookings` | Book a shipment |
 | `GET` | `/api/trackings/{trackingNumber}` | Track a shipment |
+| `GET` | `/api/labels/{trackingNumber}` | Fetch a shipping label |
 | `GET` | `/api/health` | Health check |
 
 Every request receives an `X-Request-ID` header in the response. Pass it in your request to forward your own correlation ID — useful for tying gateway logs to your own system's logs.
@@ -108,14 +111,18 @@ Books a shipment with the specified carrier. The request body is identical regar
 | Field | Type | Description | Required |
 |---|---|---|---|
 | `name` | string | Contact name | Yes |
-| `street` | string | Street name only — no house number | Yes |
+| `street` | string | Street name only — no house number | Yes* |
 | `houseNumber` | string | House number — required for GLS, DAO, InPost (except France) | No |
 | `supplement` | string | Building, floor, apartment, attention line | No |
-| `city` | string | City | Yes |
-| `postalCode` | string | Postal code | Yes |
+| `city` | string | City | Yes* |
+| `postalCode` | string | Postal code | Yes* |
 | `country` | string | ISO 3166-1 alpha-2 country code | Yes |
+| `state` | string | State/province/territory code — required for US, CA, BR, AU; optional but validated for DE | No |
+| `servicePointId` | string | Carrier service point ID — when set, street/city/postalCode are optional for the receiver | No |
 | `phone` | string | Phone number | No |
 | `email` | string | Email address | No |
+
+\* Not required when `servicePointId` is set on the receiver address.
 
 #### Colli fields
 
@@ -314,6 +321,123 @@ curl -X POST http://localhost:8080/api/bookings \
 
 ---
 
+### GET /api/labels/{trackingNumber}
+
+Fetches the shipping label for a booked shipment and returns it as base64-encoded data ready for printing.
+
+| Query parameter | Description | Default |
+|---|---|---|
+| `carrier` | Carrier key | `postnord` |
+| `format` | Label format: `PDF`, `PNG`, `ZPL`, `EPL`, `ZPLGK` | `PDF` |
+
+#### Label format support by carrier
+
+| Carrier | PDF | PNG | ZPL | EPL | ZPLGK |
+|---|---|---|---|---|---|
+| PostNord | Yes | Yes | Yes | Yes | Yes |
+| Bring | Yes | No | No | No | No |
+| GLS | Yes | No | Yes | No | Yes |
+| DAO | No | No | No | No | No |
+| Posti | Yes | No | No | No | No |
+| InPost | Yes | No | No | No | No |
+
+DAO label printing is not yet available — labels must be downloaded from the DAO portal.
+
+```bash
+# Fetch a PDF label (default)
+curl "http://localhost:8080/api/labels/PN482910123DK?carrier=postnord"
+
+# Fetch a ZPL label for a thermal printer
+curl "http://localhost:8080/api/labels/PN482910123DK?carrier=postnord&format=ZPL"
+
+# Fetch a GLS label in ZPLGK format
+curl "http://localhost:8080/api/labels/GLS123456789DK?carrier=gls&format=ZPLGK"
+```
+
+#### Response
+
+```json
+{
+  "trackingNumber": "PN482910123DK",
+  "carrier": "postnord",
+  "format": "PDF",
+  "data": "JVBERi0xLj...",
+  "mimeType": "application/pdf"
+}
+```
+
+`data` is a base64-encoded string. Decode it to get the raw label bytes:
+
+```bash
+# Decode and save as a file
+curl -s "http://localhost:8080/api/labels/PN482910123DK?carrier=postnord" \
+  | jq -r '.data' \
+  | base64 -d > label.pdf
+
+# Decode a ZPL label and send directly to a thermal printer
+curl -s "http://localhost:8080/api/labels/PN482910123DK?carrier=postnord&format=ZPL" \
+  | jq -r '.data' \
+  | base64 -d > /dev/usb/lp0
+```
+
+---
+
+### Service point delivery
+
+To ship to a carrier service point (parcel shop, pickup point, or locker), set `servicePointId` on the receiver address. Street, city, and postal code are optional when a service point ID is provided.
+
+Each carrier uses a different field name internally — the gateway maps `servicePointId` to the correct wire field automatically:
+
+| Carrier | Wire field |
+|---|---|
+| PostNord | `servicePointId` |
+| Bring | `pickupPointId` |
+| Posti | `pickupPointId` |
+| GLS | `parcelShopId` |
+| DAO | `lockerId` |
+| InPost | `targetLocker` |
+
+```bash
+# PostNord service point delivery
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "postnord",
+    "shipment": {
+      "sender": {
+        "name": "Unisport Group",
+        "street": "Industrivej",
+        "houseNumber": "10",
+        "city": "Copenhagen",
+        "postalCode": "2300",
+        "country": "DK",
+        "phone": "+4512345678",
+        "email": "logistics@unisport.dk"
+      },
+      "receiver": {
+        "name": "Anna Svensson",
+        "country": "SE",
+        "phone": "+46701234567",
+        "email": "anna@example.com",
+        "servicePointId": "sp_123"
+      },
+      "totalWeight": 1.0,
+      "colli": [
+        {
+          "id": "box-001",
+          "weight": 1.0,
+          "dimensions": { "length": 20, "width": 15, "height": 10 },
+          "items": [
+            { "description": "Football boots", "weight": 1.0, "quantity": 1 }
+          ]
+        }
+      ]
+    }
+  }'
+```
+
+---
+
 ### GET /api/trackings/{trackingNumber}
 
 ```bash
@@ -503,6 +627,7 @@ logistics-gateway/
 │   ├── handler/
 │   │   ├── handler.go            # Shared config, loggerFor, writeError
 │   │   ├── bookings.go           # POST /api/bookings
+│   │   ├── labels.go             # GET /api/labels/{trackingNumber}
 │   │   ├── trackings.go          # GET /api/trackings/{trackingNumber}
 │   │   └── health.go             # GET /api/health
 │   ├── middleware/
