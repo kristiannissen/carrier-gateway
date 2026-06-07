@@ -325,6 +325,12 @@ type Shipment struct {
 	// selects a sensible default based on whether ServicePointID is set.
 	// Accepted values: "home", "business", "servicepoint", "return".
 	DeliveryType string `json:"deliveryType,omitempty"`
+	// ReturnFunctionality controls the return label type for carriers that
+	// support it. Only used when DeliveryType is "return".
+	// Accepted values: "standard" (customer prints label at service point),
+	// "labelless" (customer writes code on package).
+	// Defaults to "standard" when empty.
+	ReturnFunctionality string `json:"returnFunctionality,omitempty"`
 	// AddOns lists optional services to attach to the shipment.
 	// Each adapter maps these to its own wire format.
 	AddOns []AddOn `json:"addOns,omitempty"`

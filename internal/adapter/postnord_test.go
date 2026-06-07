@@ -285,6 +285,104 @@ func TestPostNordAdapter_BookShipment_IdempotencyKey(t *testing.T) {
 	_ = adapter
 }
 
+func TestPostNordAdapter_BookShipment_Return(t *testing.T) {
+	t.Parallel()
+
+	t.Run("return routes to returns endpoint", func(t *testing.T) {
+		t.Parallel()
+		var capturedURL string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedURL = r.URL.String()
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(postnordMockBookingResponse()))
+		}))
+		t.Cleanup(srv.Close)
+
+		adapter := &PostNordAdapter{
+			APIKey: "test-key", CustomerNumber: "150011208",
+			ApplicationID: 1438, BaseURL: srv.URL, HTTPClient: srv.Client(),
+		}
+
+		req := postnordMinimalRequest()
+		req.Shipment.DeliveryType = "return"
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+		assert.Contains(t, capturedURL, "/rest/shipment/v3/returns/edi/labels/pdf")
+		assert.Contains(t, capturedURL, "functionality=STANDARD")
+	})
+
+	t.Run("labelless functionality", func(t *testing.T) {
+		t.Parallel()
+		var capturedURL string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedURL = r.URL.String()
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(postnordMockBookingResponse()))
+		}))
+		t.Cleanup(srv.Close)
+
+		adapter := &PostNordAdapter{
+			APIKey: "test-key", CustomerNumber: "150011208",
+			ApplicationID: 1438, BaseURL: srv.URL, HTTPClient: srv.Client(),
+		}
+
+		req := postnordMinimalRequest()
+		req.Shipment.DeliveryType = "return"
+		req.Shipment.ReturnFunctionality = "labelless"
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+		assert.Contains(t, capturedURL, "functionality=LABELLESS")
+	})
+
+	t.Run("SMS add-on adds smsQRcode query param", func(t *testing.T) {
+		t.Parallel()
+		var capturedURL string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedURL = r.URL.String()
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(postnordMockBookingResponse()))
+		}))
+		t.Cleanup(srv.Close)
+
+		adapter := &PostNordAdapter{
+			APIKey: "test-key", CustomerNumber: "150011208",
+			ApplicationID: 1438, BaseURL: srv.URL, HTTPClient: srv.Client(),
+		}
+
+		req := postnordMinimalRequest()
+		req.Shipment.DeliveryType = "return"
+		req.Shipment.Receiver.Phone = "+4587654321"
+		req.Shipment.AddOns = []AddOn{{Type: AddOnSMSNotification}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+		assert.Contains(t, capturedURL, "smsQRcode=true")
+	})
+
+	t.Run("regular booking does not use returns endpoint", func(t *testing.T) {
+		t.Parallel()
+		var capturedURL string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedURL = r.URL.String()
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(postnordMockBookingResponse()))
+		}))
+		t.Cleanup(srv.Close)
+
+		adapter := &PostNordAdapter{
+			APIKey: "test-key", CustomerNumber: "150011208",
+			ApplicationID: 1438, BaseURL: srv.URL, HTTPClient: srv.Client(),
+		}
+
+		_, err := adapter.BookShipment(t.Context(), postnordMinimalRequest())
+		require.NoError(t, err)
+		assert.NotContains(t, capturedURL, "/returns/")
+		assert.Contains(t, capturedURL, "/rest/shipment/v3/edi/labels/pdf")
+	})
+}
+
 func TestPostNordAdapter_BookShipment_APIError(t *testing.T) {
 	t.Parallel()
 
@@ -305,6 +403,14 @@ func TestPostNordAdapter_SupportsNativeIdempotency(t *testing.T) {
 // =========================================================================
 // Helpers
 // =========================================================================
+
+// requireNested extracts a nested map by key, failing the test if absent.
+func requireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
+	t.Helper()
+	nested, ok := parent[key].(map[string]interface{})
+	require.True(t, ok, "object missing nested '%s' key", key)
+	return nested
+}
 
 func postnordMockBookingResponse() string {
 	return `{

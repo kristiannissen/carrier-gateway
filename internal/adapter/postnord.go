@@ -60,8 +60,8 @@ func issuerCode(countryCode string) string {
 }
 
 // basicServiceCode maps DeliveryType to the PostNord v3 basicServiceCode.
-// "18" = standard parcel (home/business delivery)
-// "19" = MyPack Collect (service point delivery)
+// "18" = standard parcel (home/business delivery).
+// "19" = MyPack Collect (service point delivery).
 func basicServiceCode(deliveryType string, hasServicePoint bool) string {
 	switch strings.ToLower(deliveryType) {
 	case "servicepoint":
@@ -255,6 +255,34 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 		"shipment":        []interface{}{shipmentBlock},
 	}
 
+	isReturn := strings.EqualFold(request.Shipment.DeliveryType, "return")
+
+	// Select endpoint based on delivery type.
+	// Return bookings use the /returns/ path; regular bookings use /edi/.
+	var bookingEndpoint string
+	if isReturn {
+		bookingEndpoint = fmt.Sprintf("%s/rest/shipment/v3/returns/edi/labels/pdf?apikey=%s",
+			a.BaseURL, a.APIKey)
+
+		// functionality: STANDARD or LABELLESS.
+		functionality := "STANDARD"
+		if strings.EqualFold(request.Shipment.ReturnFunctionality, "labelless") {
+			functionality = "LABELLESS"
+		}
+		bookingEndpoint += "&functionality=" + functionality
+
+		// QR code delivery via existing add-ons.
+		if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) {
+			bookingEndpoint += "&smsQRcode=true"
+		}
+		if hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
+			bookingEndpoint += "&emailQRcode=true"
+		}
+	} else {
+		bookingEndpoint = fmt.Sprintf("%s/rest/shipment/v3/edi/labels/pdf?apikey=%s",
+			a.BaseURL, a.APIKey)
+	}
+
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal PostNord request: %w", err)
@@ -263,7 +291,7 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		fmt.Sprintf("%s/rest/shipment/v3/edi/labels/pdf?apikey=%s", a.BaseURL, a.APIKey),
+		bookingEndpoint,
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
