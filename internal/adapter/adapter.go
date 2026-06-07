@@ -178,16 +178,17 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	}
 
 	glsAPIKey := os.Getenv("GLS_API_KEY")
+	glsClientSecret := os.Getenv("GLS_CLIENT_SECRET")
 	contractID := os.Getenv("GLS_CONTRACT_ID")
 	switch {
 	case mockMode:
 		adapters["gls"] = &MockGLSAdapter{}
 		log.Info("GLS adapter initialized in mock mode (MOCK_MODE=true)")
-	case glsAPIKey == "":
+	case glsAPIKey == "" || glsClientSecret == "":
 		adapters["gls"] = &MockGLSAdapter{}
-		log.Warn("GLS adapter falling back to mock mode (GLS_API_KEY not set)")
+		log.Warn("GLS adapter falling back to mock mode (GLS_API_KEY or GLS_CLIENT_SECRET not set)")
 	default:
-		adapters["gls"] = NewGLSAdapter(glsAPIKey, contractID, log)
+		adapters["gls"] = NewGLSAdapter(glsAPIKey, glsClientSecret, contractID, log)
 		log.Info("GLS adapter initialized in production mode")
 	}
 
@@ -291,6 +292,10 @@ type Shipment struct {
 	Receiver    Address  `json:"receiver"    validate:"required"`
 	TotalWeight float64  `json:"totalWeight" validate:"required,gt=0"`
 	Colli       []Colli  `json:"colli"       validate:"required,min=1"`
+	// DeliveryType controls the shipping product. When empty the adapter
+	// selects a sensible default based on whether ServicePointID is set.
+	// Accepted values: "home", "business", "servicepoint", "return".
+	DeliveryType string `json:"deliveryType,omitempty"`
 	// Customs holds cross-border declaration data. Required for non-EU
 	// destinations and EU B2B shipments above the de minimis threshold.
 	Customs Customs `json:"customs,omitempty"`

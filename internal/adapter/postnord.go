@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -108,8 +109,22 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 		parcels[i] = postNordParcel(c)
 	}
 
-	// Default to home delivery (4200). Service point delivery uses 2100.
-	serviceID := "4200"
+	// Determine service ID from DeliveryType or ServicePointID.
+	// DeliveryType takes precedence when explicitly set.
+	serviceID := "4200" // default: home delivery B2C
+	switch strings.ToLower(request.Shipment.DeliveryType) {
+	case "business":
+		serviceID = "2000"
+	case "return":
+		serviceID = "1900"
+	case "servicepoint":
+		serviceID = "2100"
+	default:
+		if request.Shipment.Receiver.ServicePointID != "" {
+			serviceID = "2100"
+		}
+	}
+
 	shipment := map[string]interface{}{
 		"sender":   postNordParty(request.Shipment.Sender),
 		"receiver": postNordParty(request.Shipment.Receiver),

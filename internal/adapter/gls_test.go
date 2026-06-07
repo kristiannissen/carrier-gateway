@@ -90,22 +90,24 @@ func TestGLSAdapter_BookShipment_PayloadShape(t *testing.T) {
 		Carrier: "gls",
 		Shipment: Shipment{
 			Sender: Address{
-				Name:       "Unisport Group",
-				Street:     "Industrivej 10",
-				City:       "Copenhagen",
-				PostalCode: "2300",
-				Country:    "DK",
-				Phone:      "+4512345678",
-				Email:      "logistics@unisport.dk",
+				Name:        "Unisport Group",
+				Street:      "Industrivej",
+				HouseNumber: "10",
+				City:        "Copenhagen",
+				PostalCode:  "2300",
+				Country:     "DK",
+				Phone:       "+4512345678",
+				Email:       "logistics@unisport.dk",
 			},
 			Receiver: Address{
-				Name:       "John Doe",
-				Street:     "Storgatan 1",
-				City:       "Stockholm",
-				PostalCode: "111 22",
-				Country:    "SE",
-				Phone:      "+46123456789",
-				Email:      "john@example.com",
+				Name:        "John Doe",
+				Street:      "Storgatan",
+				HouseNumber: "1",
+				City:        "Stockholm",
+				PostalCode:  "111 22",
+				Country:     "SE",
+				Phone:       "+46123456789",
+				Email:       "john@example.com",
 			},
 			TotalWeight: 2.5,
 			Colli:       []Colli{glsTestColli("box-1", 2.5)},
@@ -114,45 +116,95 @@ func TestGLSAdapter_BookShipment_PayloadShape(t *testing.T) {
 	require.NoError(t, err)
 
 	payload := *captured
-
-	// Top-level must have Shipment and PrintingOptions
 	shipment := glsRequireNested(t, payload, "Shipment")
-	glsRequireNested(t, payload, "PrintingOptions")
 
 	// Product
 	assert.Equal(t, "PARCEL", shipment["Product"])
+	assert.NotEmpty(t, shipment["ShippingDate"])
 
-	// Shipper — must have ContactID and nested Address
+	// Shipper
 	shipper := glsRequireNested(t, shipment, "Shipper")
 	assert.Equal(t, adapter.ContactID, shipper["ContactID"])
 	shipperAddr := glsRequireNested(t, shipper, "Address")
 	assert.Equal(t, "Unisport Group", shipperAddr["Name1"])
-	assert.Equal(t, "Industrivej 10", shipperAddr["Street"])
-	assert.Equal(t, "2300", shipperAddr["Zipcode"]) // PostalCode → Zipcode
+	assert.Equal(t, "Industrivej", shipperAddr["Street"])
+	assert.Equal(t, "10", shipperAddr["StreetNumber"])
+	assert.Equal(t, "2300", shipperAddr["Zipcode"])
 	assert.Equal(t, "Copenhagen", shipperAddr["City"])
-	assert.Equal(t, "DK", shipperAddr["CountryCode"]) // Country → CountryCode
+	assert.Equal(t, "DK", shipperAddr["CountryCode"])
 	assert.Equal(t, "+4512345678", shipperAddr["MobilePhoneNumber"])
 	assert.Equal(t, "logistics@unisport.dk", shipperAddr["Email"])
 
-	// Consignee — must not be called "receiver" or "recipient"
+	// Consignee — must use PascalCase
 	_, hasReceiver := shipment["receiver"]
 	assert.False(t, hasReceiver, "GLS expects 'Consignee', not 'receiver'")
-	_, hasRecipient := shipment["recipient"]
-	assert.False(t, hasRecipient, "GLS expects 'Consignee', not 'recipient'")
 	consignee := glsRequireNested(t, shipment, "Consignee")
+	assert.Equal(t, "PRIVATE", consignee["Category"])
 	consigneeAddr := glsRequireNested(t, consignee, "Address")
 	assert.Equal(t, "John Doe", consigneeAddr["Name1"])
+	assert.Equal(t, "Storgatan", consigneeAddr["Street"])
+	assert.Equal(t, "1", consigneeAddr["StreetNumber"])
 	assert.Equal(t, "SE", consigneeAddr["CountryCode"])
 
 	// ShipmentUnit
 	units := glsRequireArray(t, shipment, "ShipmentUnit", 1)
 	unit := units[0].(map[string]interface{})
-	assert.Equal(t, float64(2.5), unit["Weight"]) // kg, no conversion
+	assert.Equal(t, float64(2.5), unit["Weight"])
 	refs := unit["ShipmentUnitReference"].([]interface{})
-	assert.Equal(t, "box-1", refs[0]) // colli.ID forwarded as reference
+	assert.Equal(t, "box-1", refs[0])
+
+	// PrintingOptions
+	opts := glsRequireNested(t, payload, "PrintingOptions")
+	labels := glsRequireNested(t, opts, "ReturnLabels")
+	assert.Equal(t, "PDF", labels["LabelFormat"])
 }
 
-func TestGLSAdapter_BookShipment_VolumeIncluded(t *testing.T) {
+func TestGLSAdapter_BookShipment_BusinessDelivery(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
+
+	req := glsMinimalRequest()
+	req.Shipment.DeliveryType = "business"
+
+	_, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+
+	_ = adapter
+	shipment := glsRequireNested(t, *captured, "Shipment")
+	consignee := glsRequireNested(t, shipment, "Consignee")
+	assert.Equal(t, "BUSINESS", consignee["Category"])
+}
+
+func TestGLSAdapter_BookShipment_ServicePoint(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
+
+	req := glsMinimalRequest()
+	req.Shipment.Receiver = Address{
+		Name:           "Recipient Name",
+		Country:        "DK",
+		Phone:          "+4587654321",
+		ServicePointID: "DK-95763",
+	}
+
+	_, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+
+	_ = adapter
+	shipment := glsRequireNested(t, *captured, "Shipment")
+
+	// Service block must be present with ShopDelivery
+	services := shipment["Service"].([]interface{})
+	require.Len(t, services, 1)
+	svc := services[0].(map[string]interface{})
+	shopDelivery := svc["ShopDelivery"].(map[string]interface{})
+	assert.Equal(t, "DK-95763", shopDelivery["ParcelShopID"])
+	assert.Equal(t, "ShopDelivery", shopDelivery["ServiceName"])
+}
+
+func TestGLSAdapter_BookShipment_HomeDelivery_NoServiceBlock(t *testing.T) {
 	t.Parallel()
 
 	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
@@ -160,17 +212,10 @@ func TestGLSAdapter_BookShipment_VolumeIncluded(t *testing.T) {
 	_, err := adapter.BookShipment(t.Context(), glsMinimalRequest())
 	require.NoError(t, err)
 
+	_ = adapter
 	shipment := glsRequireNested(t, *captured, "Shipment")
-	units := glsRequireArray(t, shipment, "ShipmentUnit", 1)
-	unit := units[0].(map[string]interface{})
-
-	volume := glsRequireNested(t, unit, "Volume")
-	assert.Equal(t, "10", volume["Length"])
-	assert.Equal(t, "10", volume["Width"])
-	assert.Equal(t, "10", volume["Height"])
-	assert.Equal(t, "NON_CALIBRATED", volume["VolumetricType"])
-
-	_ = adapter // suppress unused warning
+	_, hasService := shipment["Service"]
+	assert.False(t, hasService, "home delivery must not include a Service block")
 }
 
 func TestGLSAdapter_BookShipment_MultiColli(t *testing.T) {
@@ -191,12 +236,38 @@ func TestGLSAdapter_BookShipment_MultiColli(t *testing.T) {
 	_ = adapter
 	shipment := glsRequireNested(t, *captured, "Shipment")
 	units := glsRequireArray(t, shipment, "ShipmentUnit", 2)
+	assert.Equal(t, float64(2.5), units[0].(map[string]interface{})["Weight"])
+	assert.Equal(t, float64(5.0), units[1].(map[string]interface{})["Weight"])
+}
 
-	u0 := units[0].(map[string]interface{})
-	assert.Equal(t, float64(2.5), u0["Weight"])
+func TestGLSAdapter_BookShipment_ContentTypeHeader(t *testing.T) {
+	t.Parallel()
 
-	u1 := units[1].(map[string]interface{})
-	assert.Equal(t, float64(5.0), u1["Weight"])
+	var capturedContentType string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600,"token_type":"Bearer"}`))
+			return
+		}
+		capturedContentType = r.Header.Get("Content-Type")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(glsMockBookingResponse()))
+	}))
+	t.Cleanup(srv.Close)
+
+	adapter := &GLSAdapter{
+		ClientID:     "test-client",
+		ClientSecret: "test-secret",
+		ContactID:    "test-contact",
+		BaseURL:      srv.URL,
+		AuthURL:      srv.URL + "/oauth2/v2/token",
+		HTTPClient:   srv.Client(),
+	}
+
+	_, err := adapter.BookShipment(t.Context(), glsMinimalRequest())
+	require.NoError(t, err)
+	assert.Equal(t, "application/glsVersion1+json", capturedContentType)
 }
 
 func TestGLSAdapter_BookShipment_IncotermsForwarded(t *testing.T) {
@@ -215,21 +286,6 @@ func TestGLSAdapter_BookShipment_IncotermsForwarded(t *testing.T) {
 	assert.Equal(t, "DDP", shipment["IncotermCode"])
 }
 
-func TestGLSAdapter_BookShipment_PrintingOptionsPresent(t *testing.T) {
-	t.Parallel()
-
-	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
-
-	_, err := adapter.BookShipment(t.Context(), glsMinimalRequest())
-	require.NoError(t, err)
-
-	_ = adapter
-	opts := glsRequireNested(t, *captured, "PrintingOptions")
-	labels := glsRequireNested(t, opts, "ReturnLabels")
-	assert.Equal(t, "NONE", labels["TemplateSet"])
-	assert.Equal(t, "PDF", labels["LabelFormat"])
-}
-
 func TestGLSAdapter_BookShipment_APIError(t *testing.T) {
 	t.Parallel()
 
@@ -243,74 +299,59 @@ func TestGLSAdapter_BookShipment_APIError(t *testing.T) {
 func TestGLSAdapter_TrackShipment_RequestShape(t *testing.T) {
 	t.Parallel()
 
-	var captured map[string]interface{}
+	var capturedBody map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600,"token_type":"Bearer"}`))
+			return
+		}
 		body, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
-		require.NoError(t, json.Unmarshal(body, &captured))
+		require.NoError(t, json.Unmarshal(body, &capturedBody))
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"UnitItems":[{"TrackID":"GLS123","Status":"In Transit","InitialDate":"2026-01-01T10:00:00Z"}]}`))
+		_, _ = w.Write([]byte(glsMockTrackingResponse()))
 	}))
 	t.Cleanup(srv.Close)
 
 	adapter := &GLSAdapter{
-		ContactID:  "test-contact",
-		APIKey:     "test-key",
-		BaseURL:    srv.URL,
-		HTTPClient: srv.Client(),
+		ClientID:     "test-client",
+		ClientSecret: "test-secret",
+		ContactID:    "test-contact",
+		BaseURL:      srv.URL,
+		AuthURL:      srv.URL + "/oauth2/v2/token",
+		HTTPClient:   srv.Client(),
 	}
 
 	resp, err := adapter.TrackShipment(t.Context(), "GLS123")
 	require.NoError(t, err)
 	assert.Equal(t, "GLS123", resp.TrackingNumber)
-	assert.Equal(t, "In Transit", resp.Status)
-	assert.Len(t, resp.Events, 1)
+	assert.NotEmpty(t, resp.Events)
 
-	// Verify tracking uses POST with TrackID in body
-	assert.Equal(t, "GLS123", captured["TrackID"])
-	assert.NotEmpty(t, captured["DateFrom"])
-	assert.NotEmpty(t, captured["DateTo"])
-}
-
-func TestGLSAdapter_BookShipment_ServicePoint(t *testing.T) {
-	t.Parallel()
-
-	adapter, captured := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
-
-	req := glsMinimalRequest()
-	req.Shipment.Receiver = Address{
-		Name:           "Recipient Name",
-		Country:        "DK",
-		Phone:          "+4587654321",
-		ServicePointID: "ps_101",
-	}
-
-	_, err := adapter.BookShipment(t.Context(), req)
-	require.NoError(t, err)
-
-	_ = adapter
-	shipment := glsRequireNested(t, *captured, "Shipment")
-	consignee := glsRequireNested(t, shipment, "Consignee")
-
-	assert.Equal(t, "ps_101", consignee["ParcelShopID"])
-	assert.Equal(t, "Recipient Name", consignee["Name"])
-	assert.Equal(t, "DK", consignee["CountryCode"])
-	_, hasAddr := consignee["Address"]
-	assert.False(t, hasAddr, "Address block must be absent for parcel shop deliveries")
+	// Tracking uses POST with TrackID in body
+	assert.Equal(t, "GLS123", capturedBody["TrackID"])
+	assert.NotEmpty(t, capturedBody["DateFrom"])
+	assert.NotEmpty(t, capturedBody["DateTo"])
 }
 
 // =========================================================================
 // Helpers
 // =========================================================================
 
-// newGLSTestServer starts an httptest.Server that captures the request body
-// and responds with statusCode and body.
+// newGLSTestServer starts an httptest.Server that handles both the OAuth token
+// endpoint and the shipment endpoint. Captures the shipment request body.
 func newGLSTestServer(t *testing.T, statusCode int, body string) (*GLSAdapter, *map[string]interface{}) {
 	t.Helper()
 
 	var captured map[string]interface{}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handle OAuth token requests separately.
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600,"token_type":"Bearer"}`))
+			return
+		}
 		raw, err := io.ReadAll(r.Body)
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(raw, &captured))
@@ -320,16 +361,50 @@ func newGLSTestServer(t *testing.T, statusCode int, body string) (*GLSAdapter, *
 	t.Cleanup(srv.Close)
 
 	return &GLSAdapter{
-		ContactID:  "test-contact-id",
-		APIKey:     "test-key",
-		BaseURL:    srv.URL,
-		HTTPClient: srv.Client(),
+		ClientID:     "test-client",
+		ClientSecret: "test-secret",
+		ContactID:    "test-contact-id",
+		BaseURL:      srv.URL,
+		AuthURL:      srv.URL + "/oauth2/v2/token",
+		HTTPClient:   srv.Client(),
 	}, &captured
 }
 
-// glsMockBookingResponse returns a minimal valid GLS CreateParcelsResponse.
+// glsMockBookingResponse returns a minimal valid GLS booking response.
 func glsMockBookingResponse() string {
-	return `{"CreatedShipment":{"CustomerID":"test","PickupLocation":"CPH","ParcelData":[{"TrackID":"GLS123456789DK","ParcelNumber":"PN001"}],"PrintData":[{"Data":["https://mock.gls-group.eu/labels/GLS123456789DK.pdf"],"LabelFormat":"PDF"}]}}`
+	return `{
+		"CreatedShipment": {
+			"CustomerID": "test",
+			"PickupLocation": "DK8000",
+			"ParcelData": [
+				{"TrackID": "GLS123456789DK", "ParcelNumber": "370730254433"}
+			],
+			"PrintData": [
+				{"LabelFormat": "PDF", "Data": ["JVBERi0xLjQ="]}
+			]
+		}
+	}`
+}
+
+// glsMockTrackingResponse returns a minimal valid GLS tracking response.
+func glsMockTrackingResponse() string {
+	return `{
+		"UnitDetail": {
+			"TrackID": "GLS123",
+			"Weight": 2.4,
+			"Product": "PARCEL",
+			"History": [
+				{
+					"Date": "2026-06-07T16:45:00Z",
+					"LocationCode": "DK0022",
+					"Location": "Kolding Hub",
+					"Country": "DK",
+					"StatusCode": "001",
+					"description": "Parcel arrived at sorting terminal."
+				}
+			]
+		}
+	}`
 }
 
 func glsRequireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
@@ -361,15 +436,27 @@ func glsMinimalRequest() BookingRequest {
 
 func glsTestSender() Address {
 	return Address{
-		Name: "Sender", Street: "Street 1",
-		City: "Copenhagen", PostalCode: "2300", Country: "DK",
+		Name:        "Unisport Group",
+		Street:      "Industrivej",
+		HouseNumber: "10",
+		City:        "Copenhagen",
+		PostalCode:  "2300",
+		Country:     "DK",
+		Phone:       "+4512345678",
+		Email:       "logistics@unisport.dk",
 	}
 }
 
 func glsTestReceiver() Address {
 	return Address{
-		Name: "Receiver", Street: "Street 2",
-		City: "Stockholm", PostalCode: "111 22", Country: "SE",
+		Name:        "Test Receiver",
+		Street:      "Storgatan",
+		HouseNumber: "1",
+		City:        "Stockholm",
+		PostalCode:  "111 22",
+		Country:     "SE",
+		Phone:       "+46701234567",
+		Email:       "receiver@example.com",
 	}
 }
 
@@ -378,5 +465,6 @@ func glsTestColli(id string, weightKg float64) Colli {
 		ID:         id,
 		Weight:     weightKg,
 		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
+		Items:      []Item{{Description: "Sports goods", Weight: weightKg, Quantity: 1}},
 	}
 }

@@ -44,8 +44,9 @@ The server starts on `http://localhost:8080`.
 | `POSTNORD_API_KEY` | PostNord API key | No | — |
 | `BRING_API_KEY` | Bring API key | No | — |
 | `BRING_CUSTOMER_ID` | Bring customer ID | No | — |
-| `GLS_API_KEY` | GLS API key | No | — |
-| `GLS_CONTRACT_ID` | GLS contract ID | No | — |
+| `GLS_API_KEY` | GLS OAuth2 client ID | No | — |
+| `GLS_CLIENT_SECRET` | GLS OAuth2 client secret | No | — |
+| `GLS_CONTRACT_ID` | GLS shipper contact ID | No | — |
 | `DAO_API_KEY` | DAO API key | No | — |
 | `DAO_CUSTOMER_ID` | DAO customer ID | No | — |
 | `POSTI_API_KEY` | Posti API key | No | — |
@@ -62,8 +63,9 @@ MOCK_MODE=false
 POSTNORD_API_KEY=your-postnord-key
 BRING_API_KEY=your-bring-key
 BRING_CUSTOMER_ID=your-bring-customer-id
-GLS_API_KEY=your-gls-key
-GLS_CONTRACT_ID=your-gls-contract-id
+GLS_API_KEY=your-gls-client-id
+GLS_CLIENT_SECRET=your-gls-client-secret
+GLS_CONTRACT_ID=your-gls-contact-id
 DAO_API_KEY=your-dao-key
 DAO_CUSTOMER_ID=your-dao-customer-id
 POSTI_API_KEY=your-posti-key
