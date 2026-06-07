@@ -306,6 +306,19 @@ const (
 	// AddOnFlexDelivery allows delivery without the receiver being present.
 	// Use Instructions to specify where to leave the parcel.
 	AddOnFlexDelivery AddOnType = "flex_delivery"
+	// AddOnSignatureRequired requires a recipient signature on delivery.
+	// Bring maps this to VAS 1131 (direct signature).
+	// PostNord maps this to additionalServiceCode "A2".
+	// GLS maps this to the DirectSignature service.
+	AddOnSignatureRequired AddOnType = "signature_required"
+	// AddOnCashOnDelivery collects payment from the receiver on delivery.
+	// Set CODAmount, CODCurrency, and CODAccountNumber on the AddOn.
+	// Currently supported on Bring only (VAS 1000).
+	AddOnCashOnDelivery AddOnType = "cash_on_delivery"
+	// AddOnInsurance declares an insured value for the shipment.
+	// Set InsuranceValue and InsuranceCurrency on the AddOn.
+	// Currently supported on PostNord only (additionalServiceCode "A8").
+	AddOnInsurance AddOnType = "insurance"
 )
 
 // AddOn represents an optional service attached to a shipment.
@@ -314,6 +327,19 @@ type AddOn struct {
 	Type AddOnType `json:"type"`
 	// Instructions is used for flex delivery — e.g. "Leave behind the green shed".
 	Instructions string `json:"instructions,omitempty"`
+	// CODAmount is the amount to collect on delivery. Required for cash_on_delivery.
+	CODAmount float64 `json:"codAmount,omitempty"`
+	// CODCurrency is the ISO 4217 currency code for COD (e.g. "DKK", "NOK"). Required for cash_on_delivery.
+	CODCurrency string `json:"codCurrency,omitempty"`
+	// CODAccountNumber is the bank account number to transfer the collected amount to.
+	// Required for Bring COD (VAS 1000).
+	CODAccountNumber string `json:"codAccountNumber,omitempty"`
+	// InsuranceValue is the declared value of the shipment for insurance purposes.
+	// Required for insurance add-on.
+	InsuranceValue float64 `json:"insuranceValue,omitempty"`
+	// InsuranceCurrency is the ISO 4217 currency code for the insured value (e.g. "DKK").
+	// Required for insurance add-on.
+	InsuranceCurrency string `json:"insuranceCurrency,omitempty"`
 }
 
 // Shipment represents the shipment details.

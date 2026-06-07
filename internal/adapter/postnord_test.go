@@ -239,6 +239,85 @@ func TestPostNordAdapter_BookShipment_Notifications(t *testing.T) {
 	_ = adapter
 }
 
+func TestPostNordAdapter_BookShipment_SignatureAndInsurance(t *testing.T) {
+	t.Parallel()
+
+	t.Run("signature_required maps to A2", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
+
+		req := postnordMinimalRequest()
+		req.Shipment.AddOns = []AddOn{{Type: AddOnSignatureRequired}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		shipments := (*captured)["shipment"].([]interface{})
+		shipment := shipments[0].(map[string]interface{})
+		service := requireNested(t, shipment, "service")
+		codes := service["additionalServiceCode"].([]interface{})
+		assert.Contains(t, codes, "A2")
+		_ = adapter
+	})
+
+	t.Run("insurance maps to A8", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
+
+		req := postnordMinimalRequest()
+		req.Shipment.AddOns = []AddOn{{
+			Type:             AddOnInsurance,
+			InsuranceValue:   5000.0,
+			InsuranceCurrency: "DKK",
+		}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		shipments := (*captured)["shipment"].([]interface{})
+		shipment := shipments[0].(map[string]interface{})
+		service := requireNested(t, shipment, "service")
+		codes := service["additionalServiceCode"].([]interface{})
+		assert.Contains(t, codes, "A8")
+		_ = adapter
+	})
+
+	t.Run("insurance requires InsuranceValue > 0", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
+
+		req := postnordMinimalRequest()
+		req.Shipment.AddOns = []AddOn{{Type: AddOnInsurance}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "InsuranceValue")
+		_ = adapter
+	})
+
+	t.Run("A2 and A8 combined", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
+
+		req := postnordMinimalRequest()
+		req.Shipment.AddOns = []AddOn{
+			{Type: AddOnSignatureRequired},
+			{Type: AddOnInsurance, InsuranceValue: 1000.0, InsuranceCurrency: "DKK"},
+		}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		shipments := (*captured)["shipment"].([]interface{})
+		shipment := shipments[0].(map[string]interface{})
+		service := requireNested(t, shipment, "service")
+		codes := service["additionalServiceCode"].([]interface{})
+		assert.Contains(t, codes, "A2")
+		assert.Contains(t, codes, "A8")
+		_ = adapter
+	})
+}
+
 func TestPostNordAdapter_BookShipment_APIKeyInQueryParam(t *testing.T) {
 	t.Parallel()
 

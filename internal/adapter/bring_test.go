@@ -224,6 +224,117 @@ func TestBringAdapter_BookShipment_AddOns(t *testing.T) {
 	})
 }
 
+func TestBringAdapter_BookShipment_SignatureAndCOD(t *testing.T) {
+	t.Parallel()
+
+	t.Run("signature_required maps to 1131", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.AddOns = []AddOn{{Type: AddOnSignatureRequired}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		consignment := consignments[0].(map[string]interface{})
+		product := bringRequireNested(t, consignment, "product")
+		services := product["additionalServices"].([]interface{})
+		ids := make([]string, len(services))
+		for i, s := range services {
+			ids[i] = s.(map[string]interface{})["id"].(string)
+		}
+		assert.Contains(t, ids, "1131")
+		_ = adapter
+	})
+
+	t.Run("COD maps to 1000 with companion object", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.AddOns = []AddOn{{
+			Type:             AddOnCashOnDelivery,
+			CODAmount:        499.95,
+			CODCurrency:      "NOK",
+			CODAccountNumber: "12345678901",
+		}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		consignment := consignments[0].(map[string]interface{})
+		product := bringRequireNested(t, consignment, "product")
+		services := product["additionalServices"].([]interface{})
+		var codSvc map[string]interface{}
+		for _, s := range services {
+			svc := s.(map[string]interface{})
+			if svc["id"] == "1000" {
+				codSvc = svc
+			}
+		}
+		require.NotNil(t, codSvc, "expected 1000 service")
+		cod := codSvc["cashOnDelivery"].(map[string]interface{})
+		assert.Equal(t, 499.95, cod["amount"])
+		assert.Equal(t, "NOK", cod["currency"])
+		assert.Equal(t, "12345678901", cod["accountNumber"])
+		_ = adapter
+	})
+
+	t.Run("COD validation — missing amount", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.AddOns = []AddOn{{
+			Type:             AddOnCashOnDelivery,
+			CODCurrency:      "NOK",
+			CODAccountNumber: "12345678901",
+		}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "CODAmount")
+		_ = adapter
+	})
+
+	t.Run("COD validation — missing currency", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.AddOns = []AddOn{{
+			Type:             AddOnCashOnDelivery,
+			CODAmount:        100.0,
+			CODAccountNumber: "12345678901",
+		}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "CODCurrency")
+		_ = adapter
+	})
+
+	t.Run("COD validation — missing account number", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.AddOns = []AddOn{{
+			Type:        AddOnCashOnDelivery,
+			CODAmount:   100.0,
+			CODCurrency: "NOK",
+		}}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "CODAccountNumber")
+		_ = adapter
+	})
+}
+
 func TestBringAdapter_BookShipment_Return(t *testing.T) {
 	t.Parallel()
 

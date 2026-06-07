@@ -148,7 +148,8 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}
 
 	// Build additionalServices from AddOns.
-	// Bring service codes: 1091=eAdvising (SMS+email), 0041=flex delivery.
+	// Bring service codes: 1091=eAdvising (SMS+email), 0041=flex delivery,
+	// 1131=direct signature, 1000=cash on delivery.
 	var additionalServices []map[string]interface{}
 	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) ||
 		hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
@@ -163,6 +164,30 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 			flexSvc["instructions"] = flex.Instructions
 		}
 		additionalServices = append(additionalServices, flexSvc)
+	}
+	if hasAddOn(request.Shipment.AddOns, AddOnSignatureRequired) {
+		additionalServices = append(additionalServices, map[string]interface{}{
+			"id": "1131", // Direct signature
+		})
+	}
+	if cod, ok := getAddOn(request.Shipment.AddOns, AddOnCashOnDelivery); ok {
+		if cod.CODAmount <= 0 {
+			return nil, fmt.Errorf("cash_on_delivery add-on requires CODAmount > 0")
+		}
+		if cod.CODCurrency == "" {
+			return nil, fmt.Errorf("cash_on_delivery add-on requires CODCurrency")
+		}
+		if cod.CODAccountNumber == "" {
+			return nil, fmt.Errorf("cash_on_delivery add-on requires CODAccountNumber")
+		}
+		additionalServices = append(additionalServices, map[string]interface{}{
+			"id": "1000",
+			"cashOnDelivery": map[string]interface{}{
+				"amount":        cod.CODAmount,
+				"currency":      cod.CODCurrency,
+				"accountNumber": cod.CODAccountNumber,
+			},
+		})
 	}
 	if len(additionalServices) > 0 {
 		product["additionalServices"] = additionalServices

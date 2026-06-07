@@ -130,6 +130,15 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	if hasAddOn(request.Shipment.AddOns, AddOnFlexDelivery) {
 		return nil, fmt.Errorf("DAO does not support flex delivery")
 	}
+	if hasAddOn(request.Shipment.AddOns, AddOnSignatureRequired) {
+		return nil, fmt.Errorf("DAO does not support signature required")
+	}
+	if hasAddOn(request.Shipment.AddOns, AddOnCashOnDelivery) {
+		return nil, fmt.Errorf("DAO does not support cash on delivery")
+	}
+	if hasAddOn(request.Shipment.AddOns, AddOnInsurance) {
+		return nil, fmt.Errorf("DAO does not support insurance")
+	}
 
 	isReturn := strings.EqualFold(request.Shipment.DeliveryType, "return")
 	isShop := request.Shipment.Receiver.ServicePointID != "" &&

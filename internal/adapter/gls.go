@@ -261,6 +261,20 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		})
 	}
 
+	if hasAddOn(request.Shipment.AddOns, AddOnSignatureRequired) {
+		services = append(services, map[string]interface{}{
+			"Service":         map[string]interface{}{"ServiceName": "DirectSignature"},
+			"DirectSignature": map[string]interface{}{"ServiceName": "DirectSignature"},
+		})
+	}
+
+	if hasAddOn(request.Shipment.AddOns, AddOnCashOnDelivery) {
+		return nil, fmt.Errorf("GLS does not support cash on delivery")
+	}
+	if hasAddOn(request.Shipment.AddOns, AddOnInsurance) {
+		return nil, fmt.Errorf("GLS does not support insurance via this gateway")
+	}
+
 	if len(services) > 0 {
 		shipment["Service"] = services
 	}

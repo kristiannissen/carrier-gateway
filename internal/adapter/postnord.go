@@ -163,6 +163,15 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	if hasAddOn(request.Shipment.AddOns, AddOnFlexDelivery) {
 		additionalServiceCodes = append(additionalServiceCodes, "A7") // Flex delivery
 	}
+	if hasAddOn(request.Shipment.AddOns, AddOnSignatureRequired) {
+		additionalServiceCodes = append(additionalServiceCodes, "A2") // Direct signature
+	}
+	if ins, ok := getAddOn(request.Shipment.AddOns, AddOnInsurance); ok {
+		if ins.InsuranceValue <= 0 {
+			return nil, fmt.Errorf("insurance add-on requires InsuranceValue > 0")
+		}
+		additionalServiceCodes = append(additionalServiceCodes, "A8") // Transport insurance
+	}
 
 	// Build the parties block.
 	parties := map[string]interface{}{

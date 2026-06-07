@@ -44,6 +44,7 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}
 
 	// AddOns are not yet supported for Posti — log a warning if any are requested.
+	// signature_required, cash_on_delivery, and insurance are not available.
 	if len(request.Shipment.AddOns) > 0 && a.log != nil {
 		a.log.Debug("Posti adapter received add-ons but does not yet support them; add-ons will be ignored",
 			zap.Int("count", len(request.Shipment.AddOns)),
