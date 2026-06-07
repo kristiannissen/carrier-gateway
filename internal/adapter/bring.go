@@ -18,20 +18,23 @@ import (
 // BringAdapter implements CarrierAdapter for Bring.
 // Authentication uses X-MyBring-API-Uid (CustomerID) and X-MyBring-API-Key (APIKey).
 type BringAdapter struct {
-	APIKey     string
-	CustomerID string
-	BaseURL    string
-	HTTPClient *http.Client
-	log        *zap.Logger
+	APIKey         string
+	CustomerID     string // Mybring login email — used for API authentication
+	CustomerNumber string // Bring customer account number — used in product.customerNumber
+	BaseURL        string
+	HTTPClient     *http.Client
+	log            *zap.Logger
 }
 
-// NewBringAdapter creates a new BringAdapter with the given API key and customer ID.
-// CustomerID is the Mybring login email; APIKey is the Mybring API key from the portal.
-func NewBringAdapter(apiKey, customerID string, log *zap.Logger) *BringAdapter {
+// NewBringAdapter creates a new BringAdapter.
+// customerID is the Mybring login email.
+// customerNumber is the Bring customer account number (for billing/invoicing).
+func NewBringAdapter(apiKey, customerID, customerNumber string, log *zap.Logger) *BringAdapter {
 	return &BringAdapter{
-		APIKey:     apiKey,
-		CustomerID: customerID,
-		BaseURL:    "https://api.bring.com",
+		APIKey:         apiKey,
+		CustomerID:     customerID,
+		CustomerNumber: customerNumber,
+		BaseURL:        "https://api.bring.com",
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -60,7 +63,7 @@ func bringProductID(deliveryType string, hasServicePoint bool) string {
 }
 
 // bringParty builds a Bring sender or recipient address block.
-// Bring uses "addressLine" (single combined field) and "countryCode".
+// Contact details are nested under a "contact" object as required by the Bring API.
 func bringParty(a Address) map[string]interface{} {
 	street := a.Street
 	if a.HouseNumber != "" {
@@ -73,11 +76,18 @@ func bringParty(a Address) map[string]interface{} {
 		"city":        a.City,
 		"countryCode": a.Country,
 	}
+	contact := map[string]interface{}{}
+	if a.Name != "" {
+		contact["name"] = a.Name
+	}
 	if a.Phone != "" {
-		party["phoneNumber"] = a.Phone
+		contact["phoneNumber"] = a.Phone
 	}
 	if a.Email != "" {
-		party["email"] = a.Email
+		contact["email"] = a.Email
+	}
+	if len(contact) > 0 {
+		party["contact"] = contact
 	}
 	return party
 }
@@ -133,26 +143,22 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}
 
 	product := map[string]interface{}{
-		"id": productID,
+		"id":             productID,
+		"customerNumber": a.CustomerNumber,
 	}
 
 	// Build additionalServices from AddOns.
+	// Bring service codes: 1091=eAdvising (SMS+email), 0041=flex delivery.
 	var additionalServices []map[string]interface{}
-	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) {
+	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) ||
+		hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
+		// 1091 handles both SMS and email notification.
 		additionalServices = append(additionalServices, map[string]interface{}{
-			"id":     "EVAS",
-			"mobile": request.Shipment.Receiver.Phone,
-			"email":  request.Shipment.Receiver.Email,
-		})
-	}
-	if hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
-		additionalServices = append(additionalServices, map[string]interface{}{
-			"id":    "EVAE",
-			"email": request.Shipment.Receiver.Email,
+			"id": "1091",
 		})
 	}
 	if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
-		flexSvc := map[string]interface{}{"id": "FLEX_DELIVERY"}
+		flexSvc := map[string]interface{}{"id": "0041"}
 		if flex.Instructions != "" {
 			flexSvc["instructions"] = flex.Instructions
 		}
@@ -172,12 +178,29 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		"packages": packages,
 	}
 
+	// Return booking — include returnProduct block.
+	if strings.EqualFold(request.Shipment.DeliveryType, "return") {
+		returnProduct := map[string]interface{}{
+			"id": "9350", // Return Drop Off — customer brings to service point
+		}
+		// Flex delivery on the return label.
+		if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
+			flexSvc := map[string]interface{}{"id": "0041"}
+			if flex.Instructions != "" {
+				flexSvc["instructions"] = flex.Instructions
+			}
+			returnProduct["additionalServices"] = []interface{}{flexSvc}
+		}
+		consignment["returnProduct"] = returnProduct
+	}
+
 	if request.IdempotencyKey != "" {
 		consignment["clientReference"] = request.IdempotencyKey
 	}
 
 	payload := map[string]interface{}{
-		"consignments": []interface{}{consignment},
+		"schemaVersion": 1,
+		"consignments":  []interface{}{consignment},
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -188,7 +211,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		a.BaseURL+"/booking/api/shipment",
+		a.BaseURL+"/booking/api/create",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
@@ -199,6 +222,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 	req.Header.Set("X-MyBring-API-Key", a.APIKey)
 	req.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/logistics-gateway")
+	req.Header.Set("X-Bring-Test-Indicator", "false")
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {

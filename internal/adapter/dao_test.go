@@ -127,7 +127,7 @@ func TestMockDAOAdapter_BookShipment(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "DAO123456789DK", response.TrackingNumber)
-	assert.Equal(t, "https://example.com/mock-dao-label.png", response.LabelURL)
+	assert.Empty(t, response.LabelURL) // DAO no longer returns a label URL — use FetchLabel instead
 }
 
 func TestMockDAOAdapter_TrackShipment(t *testing.T) {
@@ -138,7 +138,7 @@ func TestMockDAOAdapter_TrackShipment(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "DAO123456789DK", response.TrackingNumber)
-	assert.Equal(t, "In Transit", response.Status)
+	assert.Equal(t, "Pakke modtaget på fordelingscenter", response.Status)
 	assert.Len(t, response.Events, 1)
 }
 

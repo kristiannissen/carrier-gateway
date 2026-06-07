@@ -45,7 +45,8 @@ The server starts on `http://localhost:8080`.
 | `POSTNORD_CUSTOMER_NUMBER` | PostNord account number (partyId) | No | — |
 | `POSTNORD_APPLICATION_ID` | PostNord application ID (integer assigned by portal) | No | — |
 | `BRING_API_KEY` | Bring API key | No | — |
-| `BRING_CUSTOMER_ID` | Bring customer ID | No | — |
+| `BRING_CUSTOMER_ID` | Bring Mybring login email | No | — |
+| `BRING_CUSTOMER_NUMBER` | Bring customer account number | No | — |
 | `GLS_API_KEY` | GLS OAuth2 client ID | No | — |
 | `GLS_CLIENT_SECRET` | GLS OAuth2 client secret | No | — |
 | `GLS_CONTRACT_ID` | GLS shipper contact ID | No | — |
@@ -66,7 +67,8 @@ POSTNORD_API_KEY=your-postnord-key
 POSTNORD_CUSTOMER_NUMBER=150011208
 POSTNORD_APPLICATION_ID=your-application-id
 BRING_API_KEY=your-bring-key
-BRING_CUSTOMER_ID=your-bring-customer-id
+BRING_CUSTOMER_ID=your-mybring-email
+BRING_CUSTOMER_NUMBER=your-bring-customer-number
 GLS_API_KEY=your-gls-client-id
 GLS_CLIENT_SECRET=your-gls-client-secret
 GLS_CONTRACT_ID=your-gls-contact-id
