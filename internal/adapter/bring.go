@@ -9,12 +9,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
 )
 
 // BringAdapter implements CarrierAdapter for Bring.
+// Authentication uses X-MyBring-API-Uid (CustomerID) and X-MyBring-API-Key (APIKey).
 type BringAdapter struct {
 	APIKey     string
 	CustomerID string
@@ -24,95 +26,130 @@ type BringAdapter struct {
 }
 
 // NewBringAdapter creates a new BringAdapter with the given API key and customer ID.
-// A private http.Client with a 10-second transport timeout is used by default;
-// callers may inject their own client via the HTTPClient field for testing or
-// custom timeout budgets.
+// CustomerID is the Mybring login email; APIKey is the Mybring API key from the portal.
 func NewBringAdapter(apiKey, customerID string, log *zap.Logger) *BringAdapter {
 	return &BringAdapter{
 		APIKey:     apiKey,
 		CustomerID: customerID,
 		BaseURL:    "https://api.bring.com",
 		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 30 * time.Second,
 		},
 		log: log,
 	}
 }
 
-// bringParcel converts a single Colli to the Bring parcel wire format.
-// Bring uses explicit unit suffixes: weightInKg, lengthInCm, widthInCm, heightInCm.
-func bringParcel(c Colli) map[string]interface{} {
-	parcel := map[string]interface{}{
-		"weightInKg": c.Weight,
-		"lengthInCm": c.Dimensions.Length,
-		"widthInCm":  c.Dimensions.Width,
-		"heightInCm": c.Dimensions.Height,
-	}
-	if len(c.Items) > 0 {
-		items := make([]map[string]interface{}, len(c.Items))
-		for i, item := range c.Items {
-			items[i] = map[string]interface{}{
-				"description": item.Description,
-				"weight":      item.Weight,
-				"quantity":    item.Quantity,
-				"value":       item.Value,
-			}
+// bringProductID maps DeliveryType to the Bring product code.
+// When DeliveryType is empty the product is inferred from ServicePointID.
+func bringProductID(deliveryType string, hasServicePoint bool) string {
+	switch strings.ToLower(deliveryType) {
+	case "business":
+		return "BUSINESS_PARCEL"
+	case "return":
+		return "PICKUP_PARCEL"
+	case "servicepoint":
+		return "PICKUP_PARCEL"
+	case "home":
+		return "HOME_DELIVERY_PARCEL"
+	default:
+		if hasServicePoint {
+			return "PICKUP_PARCEL"
 		}
-		parcel["items"] = items
+		return "HOME_DELIVERY_PARCEL"
 	}
-	return parcel
+}
+
+// bringParty builds a Bring sender or recipient address block.
+// Bring uses "addressLine" (single combined field) and "countryCode".
+func bringParty(a Address) map[string]interface{} {
+	street := a.Street
+	if a.HouseNumber != "" {
+		street = a.Street + " " + a.HouseNumber
+	}
+	party := map[string]interface{}{
+		"name":        a.Name,
+		"addressLine": street,
+		"postalCode":  a.PostalCode,
+		"city":        a.City,
+		"countryCode": a.Country,
+	}
+	if a.Phone != "" {
+		party["phoneNumber"] = a.Phone
+	}
+	if a.Email != "" {
+		party["email"] = a.Email
+	}
+	return party
+}
+
+// bringPackage converts a single Colli to the Bring package wire format.
+// Dimensions are nested under a "dimensions" block.
+func bringPackage(c Colli) map[string]interface{} {
+	desc := "Goods"
+	if len(c.Items) > 0 {
+		desc = c.Items[0].Description
+	}
+	pkg := map[string]interface{}{
+		"weightInKg":       c.Weight,
+		"goodsDescription": desc,
+	}
+	if c.Dimensions.Length > 0 || c.Dimensions.Width > 0 || c.Dimensions.Height > 0 {
+		pkg["dimensions"] = map[string]interface{}{
+			"lengthInCm": c.Dimensions.Length,
+			"widthInCm":  c.Dimensions.Width,
+			"heightInCm": c.Dimensions.Height,
+		}
+	}
+	return pkg
 }
 
 // BookShipment books a shipment with Bring and returns the booking response.
 //
-// The unified BookingRequest is transformed to the Bring wire format:
-//   - Sender maps to "from", receiver to "to".
-//   - All colli are mapped to "parcels" with Bring's unit-suffixed dimension keys.
-//   - The customer ID is sent both in the payload and as the X-MyBring-API-Uid header.
-//   - When the receiver has a ServicePointID, pickupPointId is set and address fields omitted.
+// Wire format notes:
+//   - Auth via X-MyBring-API-Uid and X-MyBring-API-Key headers (no Bearer).
+//   - Endpoint: POST /booking/api/shipment.
+//   - Payload wrapped in "consignments" array.
+//   - Parties are nested under consignments[0].parties.sender / .recipient.
+//   - Product code maps DeliveryType to Bring product IDs.
+//   - Service point: pickupPointId placed directly on recipient block.
+//   - Response tracking number at consignments[0].confirmation.consignmentNumber.
+//   - Label URL at consignments[0].confirmation.links.labels.
 func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
 
-	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
+	packages := make([]map[string]interface{}, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
-		parcels[i] = bringParcel(c)
+		packages[i] = bringPackage(c)
 	}
 
-	to := map[string]interface{}{
-		"name":    request.Shipment.Receiver.Name,
-		"country": request.Shipment.Receiver.Country,
-	}
-	if request.Shipment.Receiver.ServicePointID != "" {
-		to["pickupPointId"] = request.Shipment.Receiver.ServicePointID
-	} else {
-		to["address"] = request.Shipment.Receiver.Street
-		to["postalCode"] = request.Shipment.Receiver.PostalCode
-		to["city"] = request.Shipment.Receiver.City
+	hasServicePoint := request.Shipment.Receiver.ServicePointID != ""
+	productID := bringProductID(request.Shipment.DeliveryType, hasServicePoint)
+
+	recipient := bringParty(request.Shipment.Receiver)
+	if hasServicePoint {
+		recipient["pickupPointId"] = request.Shipment.Receiver.ServicePointID
 	}
 
-	service := map[string]interface{}{
-		"product": "Servicepakke",
+	consignment := map[string]interface{}{
+		"shippingDateTime": time.Now().UTC().Format("2006-01-02T15:04:05"),
+		"parties": map[string]interface{}{
+			"sender":    bringParty(request.Shipment.Sender),
+			"recipient": recipient,
+		},
+		"product": map[string]interface{}{
+			"id": productID,
+		},
+		"packages": packages,
 	}
-	if request.Shipment.Receiver.ServicePointID != "" {
-		service["pickupPoint"] = true
+
+	if request.IdempotencyKey != "" {
+		consignment["clientReference"] = request.IdempotencyKey
 	}
 
 	payload := map[string]interface{}{
-		"customerId": a.CustomerID,
-		"shipment": map[string]interface{}{
-			"from": map[string]interface{}{
-				"name":       request.Shipment.Sender.Name,
-				"address":    request.Shipment.Sender.Street,
-				"postalCode": request.Shipment.Sender.PostalCode,
-				"city":       request.Shipment.Sender.City,
-				"country":    request.Shipment.Sender.Country,
-			},
-			"to":      to,
-			"parcels": parcels,
-			"service": service,
-		},
+		"consignments": []interface{}{consignment},
 	}
 
 	payloadBytes, err := json.Marshal(payload)
@@ -123,7 +160,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		a.BaseURL+"/shipping/shipment",
+		a.BaseURL+"/booking/api/shipment",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
@@ -131,8 +168,9 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
+	req.Header.Set("X-MyBring-API-Key", a.APIKey)
+	req.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/logistics-gateway")
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
@@ -140,38 +178,67 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Bring response: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		return nil, fmt.Errorf("bring API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var bringResp struct {
-		ConsignmentNumber string  `json:"consignmentNumber"`
-		LabelURL          string  `json:"labelUrl"`
-		Cost              float64 `json:"cost"`
-		Currency          string  `json:"currency"`
-		ServiceLevel      string  `json:"serviceLevel"`
-		Status            string  `json:"status"`
-		PickupPointID     string  `json:"pickupPointId"`
+		Consignments []struct {
+			Confirmation struct {
+				ConsignmentNumber string `json:"consignmentNumber"`
+				Links             struct {
+					Tracking string `json:"tracking"`
+					Labels   string `json:"labels"`
+				} `json:"links"`
+				Packages []struct {
+					PackageNumber string `json:"packageNumber"`
+					CorrelationID string `json:"correlationId"`
+				} `json:"packages"`
+			} `json:"confirmation"`
+		} `json:"consignments"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&bringResp); err != nil {
+	if err := json.Unmarshal(body, &bringResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Bring response: %w", err)
 	}
 
-	return &BookingResponse{
-		TrackingNumber: bringResp.ConsignmentNumber,
-		LabelURL:       bringResp.LabelURL,
+	if len(bringResp.Consignments) == 0 {
+		return nil, fmt.Errorf("bring response contained no consignments")
+	}
+
+	confirmation := bringResp.Consignments[0].Confirmation
+
+	result := &BookingResponse{
+		TrackingNumber: confirmation.ConsignmentNumber,
+		LabelURL:       confirmation.Links.Labels,
 		Carrier:        "bring",
-		Cost:           bringResp.Cost,
-		Currency:       bringResp.Currency,
-		ServiceLevel:   bringResp.ServiceLevel,
-		Status:         bringResp.Status,
-		ServicePointID: bringResp.PickupPointID,
-	}, nil
+		Status:         "booked",
+	}
+
+	if hasServicePoint {
+		result.ServicePointID = request.Shipment.Receiver.ServicePointID
+	}
+
+	if len(confirmation.Packages) > 0 {
+		result.Colli = make([]ColliResponse, len(confirmation.Packages))
+		for i, p := range confirmation.Packages {
+			result.Colli[i] = ColliResponse{
+				ID:     p.PackageNumber,
+				Status: "booked",
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // FetchLabel retrieves a shipping label from Bring.
-// Bring only supports PDF format; other formats return an error.
+// Bring returns a label URL in the booking response; this method fetches it.
+// Only PDF format is supported.
 func (a *BringAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
 	if req.Format != LabelFormatPDF {
 		return nil, unsupportedFormat("Bring", req.Format, LabelFormatPDF)
@@ -183,19 +250,20 @@ func (a *BringAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*Label
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/shipping/v1/labels/%s", a.BaseURL, req.TrackingNumber),
+		fmt.Sprintf("%s/booking/api/shipment/labels/%s", a.BaseURL, req.TrackingNumber),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Bring label request: %w", err)
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+a.APIKey)
 	httpReq.Header.Set("X-MyBring-API-Uid", a.CustomerID)
+	httpReq.Header.Set("X-MyBring-API-Key", a.APIKey)
 
 	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "bring")
 }
 
 // TrackShipment retrieves the tracking status for a Bring shipment.
+// Uses GET /tracking/api/v2/tracking.json?q={trackingNumber}.
 func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -204,15 +272,15 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/tracking/%s", a.BaseURL, trackingNumber),
+		fmt.Sprintf("%s/tracking/api/v2/tracking.json?q=%s", a.BaseURL, trackingNumber),
 		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Bring tracking request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+a.APIKey)
 	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
+	req.Header.Set("X-MyBring-API-Key", a.APIKey)
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
@@ -220,39 +288,67 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Bring tracking response: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
 		return nil, fmt.Errorf("bring tracking API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var bringResp struct {
-		ConsignmentNumber string `json:"consignmentNumber"`
-		Status            string `json:"status"`
-		EstimatedDelivery string `json:"estimatedDelivery"`
-		Events            []struct {
-			Timestamp string `json:"timestamp"`
-			Status    string `json:"status"`
-			Location  string `json:"location"`
-		} `json:"events"`
+		ConsignmentSet []struct {
+			ConsignmentID string `json:"consignmentId"`
+			PackageSet    []struct {
+				StatusID          string `json:"statusId"`
+				StatusDescription string `json:"statusDescription"`
+				EventSet          []struct {
+					Description string `json:"description"`
+					Status      string `json:"status"`
+					ISODateTime string `json:"isoDateTime"`
+					City        string `json:"city"`
+					CountryCode string `json:"countryCode"`
+				} `json:"eventSet"`
+			} `json:"packageSet"`
+		} `json:"consignmentSet"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&bringResp); err != nil {
+	if err := json.Unmarshal(body, &bringResp); err != nil {
 		return nil, fmt.Errorf("failed to decode Bring tracking response: %w", err)
 	}
 
-	events := make([]TrackingEvent, len(bringResp.Events))
-	for i, e := range bringResp.Events {
-		events[i] = TrackingEvent{
-			Timestamp: e.Timestamp,
-			Status:    e.Status,
-			Location:  e.Location,
+	if len(bringResp.ConsignmentSet) == 0 {
+		return nil, fmt.Errorf("no tracking information found for %s", trackingNumber)
+	}
+
+	consignment := bringResp.ConsignmentSet[0]
+	status := "Unknown"
+	var events []TrackingEvent
+
+	if len(consignment.PackageSet) > 0 {
+		pkg := consignment.PackageSet[0]
+		status = pkg.StatusDescription
+		if status == "" {
+			status = pkg.StatusID
+		}
+		for _, e := range pkg.EventSet {
+			location := e.City
+			if e.CountryCode != "" {
+				location = e.City + ", " + e.CountryCode
+			}
+			events = append(events, TrackingEvent{
+				Timestamp: e.ISODateTime,
+				Status:    e.Status,
+				Location:  location,
+				Details:   e.Description,
+			})
 		}
 	}
 
 	return &TrackingResponse{
-		TrackingNumber:    bringResp.ConsignmentNumber,
-		Carrier:           "bring",
-		Status:            bringResp.Status,
-		EstimatedDelivery: bringResp.EstimatedDelivery,
-		Events:            events,
+		TrackingNumber: consignment.ConsignmentID,
+		Carrier:        "bring",
+		Status:         status,
+		Events:         events,
 	}, nil
 }

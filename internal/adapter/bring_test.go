@@ -90,18 +90,24 @@ func TestBringAdapter_BookShipment_PayloadShape(t *testing.T) {
 		Carrier: "bring",
 		Shipment: Shipment{
 			Sender: Address{
-				Name:       "Unisport Group",
-				Street:     "Industrivej 10",
-				City:       "Copenhagen",
-				PostalCode: "2300",
-				Country:    "DK",
+				Name:        "Unisport Group",
+				Street:      "Industrivej",
+				HouseNumber: "10",
+				City:        "Copenhagen",
+				PostalCode:  "2300",
+				Country:     "DK",
+				Phone:       "+4512345678",
+				Email:       "logistics@unisport.dk",
 			},
 			Receiver: Address{
-				Name:       "John Doe",
-				Street:     "Storgatan 1",
-				City:       "Stockholm",
-				PostalCode: "111 22",
-				Country:    "SE",
+				Name:        "John Doe",
+				Street:      "Storgatan",
+				HouseNumber: "1",
+				City:        "Stockholm",
+				PostalCode:  "111 22",
+				Country:     "SE",
+				Phone:       "+46123456789",
+				Email:       "john@example.com",
 			},
 			TotalWeight: 5.0,
 			Colli:       []Colli{bringTestColli("box-1", 5.0)},
@@ -111,41 +117,176 @@ func TestBringAdapter_BookShipment_PayloadShape(t *testing.T) {
 
 	payload := *captured
 
-	// customerId must be present at the top level
-	assert.Equal(t, adapter.CustomerID, payload["customerId"])
+	// Top-level must be "consignments" array
+	_, hasCustomerID := payload["customerId"]
+	assert.False(t, hasCustomerID, "Bring v2 does not use top-level customerId")
+	consignments := bringRequireArray(t, payload, "consignments", 1)
+	consignment := consignments[0].(map[string]interface{})
 
-	shipment := bringRequireNested(t, payload, "shipment")
+	assert.NotEmpty(t, consignment["shippingDateTime"])
 
-	// "from" — not "sender"
-	_, hasSender := shipment["sender"]
-	assert.False(t, hasSender, "Bring expects 'from', not 'sender'")
-	from := bringRequireNested(t, shipment, "from")
-	assert.Equal(t, "Unisport Group", from["name"])
-	assert.Equal(t, "Industrivej 10", from["address"])
-	assert.Equal(t, "2300", from["postalCode"])
-	assert.Equal(t, "Copenhagen", from["city"])
-	assert.Equal(t, "DK", from["country"])
+	// parties.sender
+	parties := bringRequireNested(t, consignment, "parties")
+	sender := bringRequireNested(t, parties, "sender")
+	assert.Equal(t, "Unisport Group", sender["name"])
+	assert.Equal(t, "Industrivej 10", sender["addressLine"])
+	assert.Equal(t, "2300", sender["postalCode"])
+	assert.Equal(t, "Copenhagen", sender["city"])
+	assert.Equal(t, "DK", sender["countryCode"])
 
-	// "to" — not "receiver" or "recipient"
-	_, hasReceiver := shipment["receiver"]
-	assert.False(t, hasReceiver, "Bring expects 'to', not 'receiver'")
-	to := bringRequireNested(t, shipment, "to")
-	assert.Equal(t, "John Doe", to["name"])
-	assert.Equal(t, "SE", to["country"])
+	// parties.recipient — not "to" or "receiver"
+	_, hasTo := parties["to"]
+	assert.False(t, hasTo, "Bring expects 'recipient', not 'to'")
+	recipient := bringRequireNested(t, parties, "recipient")
+	assert.Equal(t, "John Doe", recipient["name"])
+	assert.Equal(t, "Storgatan 1", recipient["addressLine"])
+	assert.Equal(t, "SE", recipient["countryCode"])
 
-	// parcels — unit-suffixed dimension keys
-	parcels := bringRequireArray(t, shipment, "parcels", 1)
-	parcel := parcels[0].(map[string]interface{})
-	assert.Equal(t, float64(5.0), parcel["weightInKg"])
-	assert.Equal(t, float64(10), parcel["lengthInCm"])
-	assert.Equal(t, float64(10), parcel["widthInCm"])
-	assert.Equal(t, float64(10), parcel["heightInCm"])
+	// product.id — home delivery default
+	product := bringRequireNested(t, consignment, "product")
+	assert.Equal(t, "HOME_DELIVERY_PARCEL", product["id"])
+
+	// packages — dimensions nested
+	packages := bringRequireArray(t, consignment, "packages", 1)
+	pkg := packages[0].(map[string]interface{})
+	assert.Equal(t, float64(5.0), pkg["weightInKg"])
+	assert.NotEmpty(t, pkg["goodsDescription"])
+	dims := bringRequireNested(t, pkg, "dimensions")
+	assert.Equal(t, float64(10), dims["lengthInCm"])
+	assert.Equal(t, float64(10), dims["widthInCm"])
+	assert.Equal(t, float64(10), dims["heightInCm"])
 
 	// old flat keys must be absent
-	assert.NotContains(t, parcel, "weight", "use 'weightInKg'")
-	assert.NotContains(t, parcel, "length", "use 'lengthInCm'")
-	assert.NotContains(t, parcel, "width", "use 'widthInCm'")
-	assert.NotContains(t, parcel, "height", "use 'heightInCm'")
+	assert.NotContains(t, pkg, "lengthInCm", "dimensions must be nested")
+	assert.NotContains(t, pkg, "widthInCm", "dimensions must be nested")
+	assert.NotContains(t, pkg, "heightInCm", "dimensions must be nested")
+
+	_ = adapter
+}
+
+func TestBringAdapter_BookShipment_ProductCodes(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name            string
+		deliveryType    string
+		hasServicePoint bool
+		wantProductID   string
+	}{
+		{"default home delivery", "", false, "HOME_DELIVERY_PARCEL"},
+		{"explicit home", "home", false, "HOME_DELIVERY_PARCEL"},
+		{"business delivery", "business", false, "BUSINESS_PARCEL"},
+		{"service point via DeliveryType", "servicepoint", false, "PICKUP_PARCEL"},
+		{"service point via ServicePointID", "", true, "PICKUP_PARCEL"},
+		{"return", "return", false, "PICKUP_PARCEL"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			result := bringProductID(tc.deliveryType, tc.hasServicePoint)
+			assert.Equal(t, tc.wantProductID, result)
+		})
+	}
+}
+
+func TestBringAdapter_BookShipment_AuthHeaders(t *testing.T) {
+	t.Parallel()
+
+	var capturedUID, capturedKey string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedUID = r.Header.Get("X-MyBring-API-Uid")
+		capturedKey = r.Header.Get("X-MyBring-API-Key")
+		// Bearer must NOT be present
+		assert.Empty(t, r.Header.Get("Authorization"), "Bring does not use Authorization header")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(bringMockBookingResponse()))
+	}))
+	t.Cleanup(srv.Close)
+
+	adapter := &BringAdapter{
+		APIKey:     "test-api-key",
+		CustomerID: "test@example.com",
+		BaseURL:    srv.URL,
+		HTTPClient: srv.Client(),
+	}
+
+	_, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
+	require.NoError(t, err)
+	assert.Equal(t, "test@example.com", capturedUID)
+	assert.Equal(t, "test-api-key", capturedKey)
+}
+
+func TestBringAdapter_BookShipment_Endpoint(t *testing.T) {
+	t.Parallel()
+
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(bringMockBookingResponse()))
+	}))
+	t.Cleanup(srv.Close)
+
+	adapter := &BringAdapter{
+		APIKey: "k", CustomerID: "u",
+		BaseURL: srv.URL, HTTPClient: srv.Client(),
+	}
+	_, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
+	require.NoError(t, err)
+	assert.Equal(t, "/booking/api/shipment", capturedPath)
+}
+
+func TestBringAdapter_BookShipment_ServicePoint(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+	req := bringMinimalRequest()
+	req.Shipment.Receiver = Address{
+		Name:           "Recipient Name",
+		Street:         "Storgatan",
+		HouseNumber:    "1",
+		City:           "Stockholm",
+		PostalCode:     "111 22",
+		Country:        "SE",
+		Phone:          "+46701234567",
+		ServicePointID: "pp_456",
+	}
+
+	resp, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+	assert.Equal(t, "pp_456", resp.ServicePointID)
+
+	consignments := bringRequireArray(t, *captured, "consignments", 1)
+	consignment := consignments[0].(map[string]interface{})
+	parties := bringRequireNested(t, consignment, "parties")
+	recipient := bringRequireNested(t, parties, "recipient")
+
+	assert.Equal(t, "pp_456", recipient["pickupPointId"])
+
+	product := bringRequireNested(t, consignment, "product")
+	assert.Equal(t, "PICKUP_PARCEL", product["id"])
+
+	_ = adapter
+}
+
+func TestBringAdapter_BookShipment_IdempotencyKey(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+	req := bringMinimalRequest()
+	req.IdempotencyKey = "order-98765"
+
+	_, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+
+	_ = adapter
+	consignments := bringRequireArray(t, *captured, "consignments", 1)
+	consignment := consignments[0].(map[string]interface{})
+	assert.Equal(t, "order-98765", consignment["clientReference"])
 }
 
 func TestBringAdapter_BookShipment_MultiColli(t *testing.T) {
@@ -164,66 +305,17 @@ func TestBringAdapter_BookShipment_MultiColli(t *testing.T) {
 	require.NoError(t, err)
 
 	_ = adapter
-	shipment := bringRequireNested(t, *captured, "shipment")
-	parcels := bringRequireArray(t, shipment, "parcels", 2)
-
-	p0 := parcels[0].(map[string]interface{})
-	assert.Equal(t, float64(3.0), p0["weightInKg"])
-
-	p1 := parcels[1].(map[string]interface{})
-	assert.Equal(t, float64(5.0), p1["weightInKg"])
-}
-
-func TestBringAdapter_BookShipment_ItemsForwarded(t *testing.T) {
-	t.Parallel()
-
-	adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
-
-	req := bringMinimalRequest()
-	req.Shipment.Colli[0].Items = []Item{
-		{Description: "T-Shirt", Weight: 0.5, Quantity: 5, Value: 25.0},
-	}
-
-	_, err := adapter.BookShipment(t.Context(), req)
-	require.NoError(t, err)
-
-	_ = adapter
-	shipment := bringRequireNested(t, *captured, "shipment")
-	parcels := bringRequireArray(t, shipment, "parcels", 1)
-	parcel := parcels[0].(map[string]interface{})
-
-	items, ok := parcel["items"].([]interface{})
-	require.True(t, ok, "items must be present when colli has items")
-	require.Len(t, items, 1)
-
-	item := items[0].(map[string]interface{})
-	assert.Equal(t, "T-Shirt", item["description"])
-	assert.Equal(t, float64(0.5), item["weight"])
-	assert.Equal(t, float64(5), item["quantity"])
-	assert.Equal(t, float64(25.0), item["value"])
-}
-
-func TestBringAdapter_BookShipment_ResponseMapped(t *testing.T) {
-	t.Parallel()
-
-	adapter, _ := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
-
-	response, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
-	require.NoError(t, err)
-
-	assert.Equal(t, "BR123456789NO", response.TrackingNumber)
-	assert.Equal(t, "bring", response.Carrier)
-	assert.Equal(t, 125.50, response.Cost)
-	assert.Equal(t, "NOK", response.Currency)
-	assert.Equal(t, "Standard", response.ServiceLevel)
-	assert.Equal(t, "booked", response.Status)
+	consignments := bringRequireArray(t, *captured, "consignments", 1)
+	consignment := consignments[0].(map[string]interface{})
+	packages := bringRequireArray(t, consignment, "packages", 2)
+	assert.Equal(t, float64(3.0), packages[0].(map[string]interface{})["weightInKg"])
+	assert.Equal(t, float64(5.0), packages[1].(map[string]interface{})["weightInKg"])
 }
 
 func TestBringAdapter_BookShipment_APIError(t *testing.T) {
 	t.Parallel()
 
 	adapter, _ := newBringTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
-
 	_, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "400")
@@ -232,11 +324,11 @@ func TestBringAdapter_BookShipment_APIError(t *testing.T) {
 func TestBringAdapter_TrackShipment_RequestShape(t *testing.T) {
 	t.Parallel()
 
-	var capturedPath string
+	var capturedURL string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedPath = r.URL.Path
-		assert.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
-		assert.Equal(t, "test-customer", r.Header.Get("X-MyBring-API-Uid"))
+		capturedURL = r.URL.String()
+		assert.Equal(t, "test@example.com", r.Header.Get("X-MyBring-API-Uid"))
+		assert.Equal(t, "test-key", r.Header.Get("X-MyBring-API-Key"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(bringMockTrackingResponse()))
 	}))
@@ -244,51 +336,23 @@ func TestBringAdapter_TrackShipment_RequestShape(t *testing.T) {
 
 	adapter := &BringAdapter{
 		APIKey:     "test-key",
-		CustomerID: "test-customer",
+		CustomerID: "test@example.com",
 		BaseURL:    srv.URL,
 		HTTPClient: srv.Client(),
 	}
 
-	resp, err := adapter.TrackShipment(t.Context(), "BR123456789NO")
+	resp, err := adapter.TrackShipment(t.Context(), "BREG00012345678DK")
 	require.NoError(t, err)
 
-	// Correct endpoint: /tracking/{id}, not /tracking/consignments/{id}
-	assert.Equal(t, "/tracking/BR123456789NO", capturedPath)
-	assert.Equal(t, "BR123456789NO", resp.TrackingNumber)
-	assert.Equal(t, "Delivered", resp.Status)
-	assert.Equal(t, "2026-06-05", resp.EstimatedDelivery)
-	assert.Len(t, resp.Events, 3)
-}
+	// Correct endpoint
+	assert.Contains(t, capturedURL, "/tracking/api/v2/tracking.json")
+	assert.Contains(t, capturedURL, "q=BREG00012345678DK")
 
-func TestBringAdapter_BookShipment_ServicePoint(t *testing.T) {
-	t.Parallel()
-
-	adapter, captured := newBringTestServer(t, http.StatusOK,
-		`{"consignmentNumber":"BR999","labelUrl":"https://bring.com/label.pdf","pickupPointId":"pp_456","status":"booked"}`)
-
-	req := bringMinimalRequest()
-	req.Shipment.Receiver = Address{
-		Name:           "Recipient Name",
-		Country:        "NO",
-		Phone:          "+4787654321",
-		ServicePointID: "pp_456",
-	}
-
-	resp, err := adapter.BookShipment(t.Context(), req)
-	require.NoError(t, err)
-	assert.Equal(t, "pp_456", resp.ServicePointID)
-
-	shipment := bringRequireNested(t, *captured, "shipment")
-	to := bringRequireNested(t, shipment, "to")
-
-	assert.Equal(t, "pp_456", to["pickupPointId"])
-	assert.Equal(t, "Recipient Name", to["name"])
-	assert.Equal(t, "NO", to["country"])
-	_, hasAddr := to["address"]
-	assert.False(t, hasAddr, "address must be absent for pickup point deliveries")
-
-	service := bringRequireNested(t, shipment, "service")
-	assert.Equal(t, true, service["pickupPoint"])
+	assert.Equal(t, "BREG00012345678DK", resp.TrackingNumber)
+	assert.Equal(t, "The package is in transit", resp.Status)
+	assert.Len(t, resp.Events, 2)
+	assert.Equal(t, "Handed over to terminal", resp.Events[0].Details)
+	assert.Equal(t, "Kolding, DK", resp.Events[0].Location)
 }
 
 // =========================================================================
@@ -318,11 +382,52 @@ func newBringTestServer(t *testing.T, statusCode int, body string) (*BringAdapte
 }
 
 func bringMockBookingResponse() string {
-	return `{"consignmentNumber":"BR123456789NO","labelUrl":"https://mock.bring.com/labels/BR123456789NO.pdf","carrier":"bring","cost":125.50,"currency":"NOK","serviceLevel":"Standard","status":"booked"}`
+	return `{
+		"consignments": [
+			{
+				"confirmation": {
+					"consignmentNumber": "BREG00012345678DK",
+					"links": {
+						"tracking": "https://sporing.bring.dk/tracking.html?q=BREG00012345678DK",
+						"labels": "https://api.bring.com/booking/api/shipment/labels/PDF123"
+					},
+					"packages": [
+						{"packageNumber": "70730254433219997", "correlationId": "0"}
+					]
+				}
+			}
+		]
+	}`
 }
 
 func bringMockTrackingResponse() string {
-	return `{"consignmentNumber":"BR123456789NO","carrier":"bring","status":"Delivered","estimatedDelivery":"2026-06-05","events":[{"timestamp":"2026-06-02T14:30:00Z","status":"Picked Up","location":"Copenhagen, DK"},{"timestamp":"2026-06-03T10:00:00Z","status":"In Transit","location":"Malmö, SE"},{"timestamp":"2026-06-04T16:00:00Z","status":"Delivered","location":"Stockholm, SE"}]}`
+	return `{
+		"consignmentSet": [
+			{
+				"consignmentId": "BREG00012345678DK",
+				"packageSet": [
+					{
+						"statusId": "IN_TRANSIT",
+						"statusDescription": "The package is in transit",
+						"eventSet": [
+							{
+								"description": "Handed over to terminal",
+								"status": "IN_TRANSIT",
+								"isoDateTime": "2026-06-07T16:45:00",
+								"city": "Kolding",
+								"countryCode": "DK"
+							},
+							{
+								"description": "EDI notification received",
+								"status": "REGISTERED",
+								"isoDateTime": "2026-06-07T10:12:00"
+							}
+						]
+					}
+				]
+			}
+		]
+	}`
 }
 
 func bringRequireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
@@ -354,15 +459,27 @@ func bringMinimalRequest() BookingRequest {
 
 func bringTestSender() Address {
 	return Address{
-		Name: "Sender", Street: "Street 1",
-		City: "Oslo", PostalCode: "0123", Country: "NO",
+		Name:        "Unisport Group",
+		Street:      "Industrivej",
+		HouseNumber: "10",
+		City:        "Oslo",
+		PostalCode:  "0123",
+		Country:     "NO",
+		Phone:       "+4712345678",
+		Email:       "logistics@unisport.dk",
 	}
 }
 
 func bringTestReceiver() Address {
 	return Address{
-		Name: "Receiver", Street: "Street 2",
-		City: "Stockholm", PostalCode: "111 22", Country: "SE",
+		Name:        "Test Receiver",
+		Street:      "Storgatan",
+		HouseNumber: "1",
+		City:        "Stockholm",
+		PostalCode:  "111 22",
+		Country:     "SE",
+		Phone:       "+46701234567",
+		Email:       "receiver@example.com",
 	}
 }
 
@@ -371,5 +488,6 @@ func bringTestColli(id string, weightKg float64) Colli {
 		ID:         id,
 		Weight:     weightKg,
 		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
+		Items:      []Item{{Description: "Sports goods", Weight: weightKg, Quantity: 1}},
 	}
 }
