@@ -86,6 +86,13 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
 
+	// AddOns are not yet supported for InPost — log a warning if any are requested.
+	if len(request.Shipment.AddOns) > 0 && a.log != nil {
+		a.log.Debug("InPost adapter received add-ons but does not yet support them; add-ons will be ignored",
+			zap.Int("count", len(request.Shipment.AddOns)),
+		)
+	}
+
 	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
 		parcels[i] = inpostParcel(i, c)

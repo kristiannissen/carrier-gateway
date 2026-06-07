@@ -132,15 +132,43 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		recipient["pickupPointId"] = request.Shipment.Receiver.ServicePointID
 	}
 
+	product := map[string]interface{}{
+		"id": productID,
+	}
+
+	// Build additionalServices from AddOns.
+	var additionalServices []map[string]interface{}
+	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) {
+		additionalServices = append(additionalServices, map[string]interface{}{
+			"id":     "EVAS",
+			"mobile": request.Shipment.Receiver.Phone,
+			"email":  request.Shipment.Receiver.Email,
+		})
+	}
+	if hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
+		additionalServices = append(additionalServices, map[string]interface{}{
+			"id":    "EVAE",
+			"email": request.Shipment.Receiver.Email,
+		})
+	}
+	if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
+		flexSvc := map[string]interface{}{"id": "FLEX_DELIVERY"}
+		if flex.Instructions != "" {
+			flexSvc["instructions"] = flex.Instructions
+		}
+		additionalServices = append(additionalServices, flexSvc)
+	}
+	if len(additionalServices) > 0 {
+		product["additionalServices"] = additionalServices
+	}
+
 	consignment := map[string]interface{}{
 		"shippingDateTime": time.Now().UTC().Format("2006-01-02T15:04:05"),
 		"parties": map[string]interface{}{
 			"sender":    bringParty(request.Shipment.Sender),
 			"recipient": recipient,
 		},
-		"product": map[string]interface{}{
-			"id": productID,
-		},
+		"product":  product,
 		"packages": packages,
 	}
 

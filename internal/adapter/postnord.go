@@ -129,14 +129,41 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 		"sender":   postNordParty(request.Shipment.Sender),
 		"receiver": postNordParty(request.Shipment.Receiver),
 		"parcels":  parcels,
-		"options": []map[string]interface{}{
-			{
-				"id": "NOT",
-				"subOptions": []map[string]interface{}{
-					{"id": "SMS"},
-				},
-			},
-		},
+	}
+
+	// Build options array from AddOns — opt-in only, no hardcoded defaults.
+	var options []map[string]interface{}
+
+	wantSMS := hasAddOn(request.Shipment.AddOns, AddOnSMSNotification)
+	wantEmail := hasAddOn(request.Shipment.AddOns, AddOnEmailNotification)
+	if wantSMS || wantEmail {
+		var subOptions []map[string]interface{}
+		if wantSMS {
+			subOptions = append(subOptions, map[string]interface{}{"id": "SMS"})
+		}
+		if wantEmail {
+			subOptions = append(subOptions, map[string]interface{}{"id": "EMAIL"})
+		}
+		options = append(options, map[string]interface{}{
+			"id":         "NOT",
+			"subOptions": subOptions,
+		})
+	}
+
+	if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
+		flexOption := map[string]interface{}{
+			"id": "FLEX",
+		}
+		if flex.Instructions != "" {
+			flexOption["subOptions"] = []map[string]interface{}{
+				{"id": "GARAGE", "value": flex.Instructions},
+			}
+		}
+		options = append(options, flexOption)
+	}
+
+	if len(options) > 0 {
+		shipment["options"] = options
 	}
 
 	if request.Shipment.Receiver.ServicePointID != "" {

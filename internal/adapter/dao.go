@@ -106,11 +106,86 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		return nil, fmt.Errorf("DAO API error: %s (%s)", daoResponse.ErrorText, daoResponse.ErrorCode)
 	}
 
+	barcode := daoResponse.Result.Barcode
+
+	// If SMS or email add-ons are requested, call the separate contact update
+	// endpoint after the booking is confirmed. DAO does not support add-ons
+	// in the initial booking payload.
+	if barcode != "" && (hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) ||
+		hasAddOn(request.Shipment.AddOns, AddOnEmailNotification)) {
+		if err := a.updateContactInfo(ctx, barcode, request.Shipment.Receiver.Phone, request.Shipment.Receiver.Email); err != nil {
+			// Log but do not fail the booking — the shipment is created.
+			if a.log != nil {
+				a.log.Warn("DAO contact update failed after successful booking",
+					zap.String("barcode", barcode),
+					zap.Error(err),
+				)
+			}
+		}
+	}
+
+	if hasAddOn(request.Shipment.AddOns, AddOnFlexDelivery) {
+		return nil, fmt.Errorf("DAO does not support flex delivery")
+	}
+
 	return &BookingResponse{
-		TrackingNumber: daoResponse.Result.Barcode,
-		LabelURL:       "", // DAO does not return a label URL directly; labels are generated separately
+		TrackingNumber: barcode,
+		LabelURL:       "",
 		Carrier:        "dao",
 	}, nil
+}
+
+// updateContactInfo calls the DAO OpdaterKontaktOplysning endpoint to add
+// SMS and/or email notification to an already-booked shipment.
+// This must be called before the parcel is scanned at a DAO terminal.
+func (a *DAOAdapter) updateContactInfo(ctx context.Context, barcode, phone, email string) error {
+	params := url.Values{}
+	params.Set("kundeid", a.CustomerID)
+	params.Set("kode", a.APIKey)
+	params.Set("stregkode", barcode)
+	params.Set("format", "json")
+	if phone != "" {
+		params.Set("mobil", phone)
+	}
+	if email != "" {
+		params.Set("email", email)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		a.BaseURL+"/DAOPakkeshop/OpdaterKontaktOplysning.php?"+params.Encode(),
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create DAO contact update request: %w", err)
+	}
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("DAO contact update request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read DAO contact update response: %w", err)
+	}
+
+	var updateResp struct {
+		Status    string `json:"status"`
+		ErrorCode string `json:"fejlkode"`
+		ErrorText string `json:"fejltekst"`
+	}
+	if err := json.Unmarshal(body, &updateResp); err != nil {
+		return fmt.Errorf("failed to unmarshal DAO contact update response: %w", err)
+	}
+
+	if updateResp.Status != "OK" {
+		return fmt.Errorf("DAO contact update failed: %s (%s)", updateResp.ErrorText, updateResp.ErrorCode)
+	}
+
+	return nil
 }
 
 // FetchLabel is not yet available for DAO.

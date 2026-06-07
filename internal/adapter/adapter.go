@@ -286,6 +286,27 @@ type BookingRequest struct {
 	IdempotencyKey string   `json:"idempotencyKey,omitempty"`
 }
 
+// AddOnType identifies a carrier-agnostic optional service.
+type AddOnType string
+
+const (
+	// AddOnSMSNotification sends an SMS to the receiver when the shipment is ready.
+	AddOnSMSNotification AddOnType = "sms_notification"
+	// AddOnEmailNotification sends an email to the receiver when the shipment is ready.
+	AddOnEmailNotification AddOnType = "email_notification"
+	// AddOnFlexDelivery allows delivery without the receiver being present.
+	// Use Instructions to specify where to leave the parcel.
+	AddOnFlexDelivery AddOnType = "flex_delivery"
+)
+
+// AddOn represents an optional service attached to a shipment.
+// Phone and email for notifications are read from Receiver.Phone and Receiver.Email.
+type AddOn struct {
+	Type AddOnType `json:"type"`
+	// Instructions is used for flex delivery — e.g. "Leave behind the green shed".
+	Instructions string `json:"instructions,omitempty"`
+}
+
 // Shipment represents the shipment details.
 type Shipment struct {
 	Sender      Address  `json:"sender"      validate:"required"`
@@ -296,6 +317,9 @@ type Shipment struct {
 	// selects a sensible default based on whether ServicePointID is set.
 	// Accepted values: "home", "business", "servicepoint", "return".
 	DeliveryType string `json:"deliveryType,omitempty"`
+	// AddOns lists optional services to attach to the shipment.
+	// Each adapter maps these to its own wire format.
+	AddOns []AddOn `json:"addOns,omitempty"`
 	// Customs holds cross-border declaration data. Required for non-EU
 	// destinations and EU B2B shipments above the de minimis threshold.
 	Customs Customs `json:"customs,omitempty"`

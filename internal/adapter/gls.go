@@ -18,7 +18,6 @@ import (
 )
 
 // glsTokenCache holds a cached OAuth2 access token with its expiry time.
-// Tokens are shared across requests to avoid unnecessary roundtrips.
 type glsTokenCache struct {
 	mu          sync.Mutex
 	accessToken string
@@ -32,15 +31,13 @@ func (c *glsTokenCache) valid() bool {
 }
 
 // GLSAdapter implements CarrierAdapter for GLS using the ShipIT Farm API v1.
-// Authentication uses the OAuth2 client credentials flow — the adapter fetches
-// and caches a Bearer token before each request, refreshing it when it expires.
+// Authentication uses the OAuth2 client credentials flow.
 type GLSAdapter struct {
 	// ClientID is the GLS OAuth2 client ID (mapped from GLS_API_KEY env var).
 	ClientID string
 	// ClientSecret is the GLS OAuth2 client secret.
 	ClientSecret string
 	// ContactID is the GLS-assigned shipper contact ID sent on every booking.
-	// Mapped from GLS_CONTRACT_ID env var.
 	ContactID  string
 	BaseURL    string
 	AuthURL    string
@@ -50,7 +47,6 @@ type GLSAdapter struct {
 }
 
 // NewGLSAdapter creates a new GLSAdapter with the given credentials.
-// A private http.Client with a 30-second timeout is used by default.
 func NewGLSAdapter(clientID, clientSecret, contactID string, log *zap.Logger) *GLSAdapter {
 	return &GLSAdapter{
 		ClientID:     clientID,
@@ -65,20 +61,14 @@ func NewGLSAdapter(clientID, clientSecret, contactID string, log *zap.Logger) *G
 	}
 }
 
-// fetchToken obtains a new OAuth2 access token from the GLS token endpoint
-// using the client credentials flow. The result is stored in the token cache.
+// fetchToken obtains a new OAuth2 access token using the client credentials flow.
 func (a *GLSAdapter) fetchToken(ctx context.Context) error {
 	form := url.Values{}
 	form.Set("grant_type", "client_credentials")
 	form.Set("client_id", a.ClientID)
 	form.Set("client_secret", a.ClientSecret)
 
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		a.AuthURL,
-		strings.NewReader(form.Encode()),
-	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.AuthURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create GLS token request: %w", err)
 	}
@@ -98,7 +88,6 @@ func (a *GLSAdapter) fetchToken(ctx context.Context) error {
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
-		TokenType   string `json:"token_type"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
 		return fmt.Errorf("failed to decode GLS token response: %w", err)
@@ -112,8 +101,7 @@ func (a *GLSAdapter) fetchToken(ctx context.Context) error {
 	return nil
 }
 
-// bearerToken returns a valid Bearer token, fetching a new one if the cache
-// is empty or expired.
+// bearerToken returns a valid Bearer token, fetching a new one if expired.
 func (a *GLSAdapter) bearerToken(ctx context.Context) (string, error) {
 	a.tokenCache.mu.Lock()
 	valid := a.tokenCache.valid()
@@ -123,20 +111,16 @@ func (a *GLSAdapter) bearerToken(ctx context.Context) (string, error) {
 	if valid {
 		return token, nil
 	}
-
 	if err := a.fetchToken(ctx); err != nil {
 		return "", err
 	}
-
 	a.tokenCache.mu.Lock()
 	token = a.tokenCache.accessToken
 	a.tokenCache.mu.Unlock()
-
 	return token, nil
 }
 
 // glsAddress converts a unified Address to the GLS ShipIT Address schema.
-// GLS uses PascalCase field names: Name1, Street, StreetNumber, Zipcode, CountryCode.
 func glsAddress(a Address) map[string]interface{} {
 	addr := map[string]interface{}{
 		"Name1":       a.Name,
@@ -180,27 +164,24 @@ func glsShipmentUnit(c Colli) map[string]interface{} {
 	return unit
 }
 
-// glsLabelFormat maps our LabelFormat to the GLS TemplateSet and LabelFormat values.
+// glsLabelFormat maps our LabelFormat to GLS TemplateSet and LabelFormat values.
 func glsLabelFormat(f LabelFormat) (templateSet, labelFormat string) {
 	switch f {
-	case LabelFormatZPL:
-		return "ZPL_200", "ZPL"
-	case LabelFormatZPLGK:
+	case LabelFormatZPL, LabelFormatZPLGK:
 		return "ZPL_200", "ZPL"
 	default:
 		return "NONE", "PDF"
 	}
 }
 
-// BookShipment books a shipment with GLS and returns the booking response.
+// BookShipment books a shipment with GLS.
 //
 // Wire format notes:
-//   - OAuth2 Bearer token is fetched (and cached) before the request.
-//   - Content-Type must be application/glsVersion1+json.
+//   - OAuth2 Bearer token fetched and cached before each request.
+//   - Content-Type: application/glsVersion1+json.
 //   - Endpoint: POST /rs/shipments.
-//   - DeliveryType "servicepoint" or a non-empty ServicePointID uses ShopDelivery service block.
-//   - DeliveryType "business" sets Consignee.Category to "BUSINESS"; default is "PRIVATE".
-//   - Labels are returned inline in PrintData[0].Data[0] as base64.
+//   - Service array built dynamically from ServicePointID and AddOns.
+//   - Labels returned inline in PrintData[0].Data[0] as base64.
 func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
@@ -216,7 +197,6 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		units[i] = glsShipmentUnit(c)
 	}
 
-	// Consignee category — "BUSINESS" for B2B, "PRIVATE" for B2C (default).
 	category := "PRIVATE"
 	if strings.EqualFold(request.Shipment.DeliveryType, "business") {
 		category = "BUSINESS"
@@ -238,31 +218,58 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		"ShipmentUnit": units,
 	}
 
-	// Service point delivery — add ShopDelivery service block.
+	// Build Service array from ServicePointID and AddOns — opt-in only.
+	var services []map[string]interface{}
+
 	isServicePoint := request.Shipment.Receiver.ServicePointID != "" ||
 		strings.EqualFold(request.Shipment.DeliveryType, "servicepoint")
 	if isServicePoint && request.Shipment.Receiver.ServicePointID != "" {
-		shipment["Service"] = []map[string]interface{}{
-			{
-				"Service": map[string]interface{}{
-					"ServiceName": "ShopDelivery",
-				},
-				"ShopDelivery": map[string]interface{}{
-					"ServiceName":  "ShopDelivery",
-					"ParcelShopID": request.Shipment.Receiver.ServicePointID,
-				},
-			},
+		services = append(services, map[string]interface{}{
+			"Service":      map[string]interface{}{"ServiceName": "ShopDelivery"},
+			"ShopDelivery": map[string]interface{}{"ServiceName": "ShopDelivery", "ParcelShopID": request.Shipment.Receiver.ServicePointID},
+		})
+	}
+
+	wantSMS := hasAddOn(request.Shipment.AddOns, AddOnSMSNotification)
+	wantEmail := hasAddOn(request.Shipment.AddOns, AddOnEmailNotification)
+	if wantSMS || wantEmail {
+		notificationType := "EMAIL"
+		if wantSMS && wantEmail {
+			notificationType = "SMS_AND_EMAIL"
+		} else if wantSMS {
+			notificationType = "SMS"
 		}
+		services = append(services, map[string]interface{}{
+			"Service": map[string]interface{}{"ServiceName": "InfoService"},
+			"InfoService": map[string]interface{}{
+				"ServiceName":       "InfoService",
+				"Email":             request.Shipment.Receiver.Email,
+				"MobilePhoneNumber": request.Shipment.Receiver.Phone,
+				"NotificationType":  notificationType,
+			},
+		})
+	}
+
+	if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
+		flexDetail := map[string]interface{}{"ServiceName": "FlexDelivery"}
+		if flex.Instructions != "" {
+			flexDetail["DeliveryInstructions"] = flex.Instructions
+		}
+		services = append(services, map[string]interface{}{
+			"Service":      map[string]interface{}{"ServiceName": "FlexDelivery"},
+			"FlexDelivery": flexDetail,
+		})
+	}
+
+	if len(services) > 0 {
+		shipment["Service"] = services
 	}
 
 	if request.Shipment.Customs.Incoterms != "" {
 		shipment["IncotermCode"] = request.Shipment.Customs.Incoterms
 	}
 
-	// Request label format based on what the caller needs — default PDF.
-	labelFmt := LabelFormatPDF
-	templateSet, labelFormat := glsLabelFormat(labelFmt)
-
+	templateSet, labelFormat := glsLabelFormat(LabelFormatPDF)
 	payload := map[string]interface{}{
 		"Shipment": shipment,
 		"PrintingOptions": map[string]interface{}{
@@ -278,12 +285,7 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		return nil, fmt.Errorf("failed to marshal GLS request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		a.BaseURL+"/rs/shipments",
-		bytes.NewBuffer(payloadBytes),
-	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.BaseURL+"/rs/shipments", bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GLS request: %w", err)
 	}
@@ -325,11 +327,7 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 	colliResponses := make([]ColliResponse, len(glsResp.CreatedShipment.ParcelData))
 	for i, p := range glsResp.CreatedShipment.ParcelData {
-		colliResponses[i] = ColliResponse{
-			ID:             p.ParcelNumber,
-			TrackingNumber: p.TrackID,
-			Status:         "booked",
-		}
+		colliResponses[i] = ColliResponse{ID: p.ParcelNumber, TrackingNumber: p.TrackID, Status: "booked"}
 	}
 
 	return &BookingResponse{
@@ -340,14 +338,10 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	}, nil
 }
 
-// FetchLabel retrieves a shipping label for a GLS shipment.
-// GLS returns the label inline in the booking response as base64 in
-// PrintData[0].Data[0]. This method re-requests it via the label endpoint
-// in the requested format.
+// FetchLabel retrieves a GLS shipping label in the requested format.
 func (a *GLSAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
 	switch req.Format {
 	case LabelFormatPDF, LabelFormatZPL, LabelFormatZPLGK:
-		// supported
 	default:
 		return nil, unsupportedFormat("GLS", req.Format, LabelFormatPDF, LabelFormatZPL, LabelFormatZPLGK)
 	}
@@ -361,13 +355,8 @@ func (a *GLSAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 	}
 
 	_, labelFormat := glsLabelFormat(req.Format)
-
-	httpReq, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodGet,
-		fmt.Sprintf("%s/rs/shipments/%s/labels?format=%s", a.BaseURL, req.TrackingNumber, labelFormat),
-		nil,
-	)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		fmt.Sprintf("%s/rs/shipments/%s/labels?format=%s", a.BaseURL, req.TrackingNumber, labelFormat), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GLS label request: %w", err)
 	}
@@ -377,8 +366,7 @@ func (a *GLSAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "gls")
 }
 
-// TrackShipment retrieves the tracking status for a GLS shipment.
-// GLS tracking uses POST to /rs/tracking/parceldetails with a JSON body.
+// TrackShipment retrieves GLS tracking via POST to /rs/tracking/parceldetails.
 func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -398,12 +386,7 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		return nil, fmt.Errorf("failed to marshal GLS tracking request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		a.BaseURL+"/rs/tracking/parceldetails",
-		bytes.NewBuffer(body),
-	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.BaseURL+"/rs/tracking/parceldetails", bytes.NewBuffer(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GLS tracking request: %w", err)
 	}
@@ -424,16 +407,16 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 
 	var glsResp struct {
 		UnitDetail struct {
-			TrackID string `json:"TrackID"`
+			TrackID string  `json:"TrackID"`
 			Weight  float64 `json:"Weight"`
 			Product string  `json:"Product"`
 			History []struct {
-				Date        string `json:"Date"`
-				Location    string `json:"Location"`
+				Date         string `json:"Date"`
+				Location     string `json:"Location"`
 				LocationCode string `json:"LocationCode"`
-				Country     string `json:"Country"`
-				StatusCode  string `json:"StatusCode"`
-				Description string `json:"description"`
+				Country      string `json:"Country"`
+				StatusCode   string `json:"StatusCode"`
+				Description  string `json:"description"`
 			} `json:"History"`
 		} `json:"UnitDetail"`
 	}
@@ -443,12 +426,7 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 
 	events := make([]TrackingEvent, len(glsResp.UnitDetail.History))
 	for i, h := range glsResp.UnitDetail.History {
-		events[i] = TrackingEvent{
-			Timestamp: h.Date,
-			Status:    h.StatusCode,
-			Location:  h.Location,
-			Details:   h.Description,
-		}
+		events[i] = TrackingEvent{Timestamp: h.Date, Status: h.StatusCode, Location: h.Location, Details: h.Description}
 	}
 
 	status := "Unknown"
