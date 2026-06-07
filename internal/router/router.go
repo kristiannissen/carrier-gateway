@@ -28,6 +28,7 @@ func NewRouter(registry *adapter.Registry, log *zap.Logger) *mux.Router {
 
 	r.HandleFunc("/api/bookings", h.BookShipment).Methods("POST")
 	r.HandleFunc("/api/trackings/{trackingNumber}", h.GetTracking).Methods("GET")
+	r.HandleFunc("/api/labels/{trackingNumber}", h.GetLabel).Methods("GET")
 	r.HandleFunc("/api/health", h.HealthCheck).Methods("GET")
 
 	return r

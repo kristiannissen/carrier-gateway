@@ -113,6 +113,13 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	}, nil
 }
 
+// FetchLabel is not yet available for DAO.
+// DAO label support is under investigation; labels must currently be
+// downloaded from the DAO portal directly.
+func (a *DAOAdapter) FetchLabel(_ context.Context, _ LabelRequest) (*LabelResponse, error) {
+	return nil, fmt.Errorf("DAO label support is under investigation and not yet available; download labels from the DAO portal")
+}
+
 // TrackShipment tracks a shipment with DAO.
 func (a *DAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	params := url.Values{}

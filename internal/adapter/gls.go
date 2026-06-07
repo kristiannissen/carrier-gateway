@@ -195,6 +195,33 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	}, nil
 }
 
+// FetchLabel retrieves a shipping label from GLS in the requested format.
+// GLS supports PDF, ZPL, and ZPLGK. PNG and EPL are not supported.
+func (a *GLSAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
+	switch req.Format {
+	case LabelFormatPDF, LabelFormatZPL, LabelFormatZPLGK:
+		// supported
+	default:
+		return nil, unsupportedFormat("GLS", req.Format, LabelFormatPDF, LabelFormatZPL, LabelFormatZPLGK)
+	}
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/shipment/v1/labels/%s?format=%s", a.BaseURL, req.TrackingNumber, req.Format),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GLS label request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+a.APIKey)
+
+	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "gls")
+}
+
 // TrackShipment retrieves the tracking status for a GLS shipment.
 // GLS tracking uses a POST to /rs/tracking/parcels with a TULReferenceData body.
 func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {

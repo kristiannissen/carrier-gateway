@@ -162,6 +162,30 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 	}, nil
 }
 
+// FetchLabel retrieves a shipping label from InPost.
+// InPost only supports PDF format; other formats return an error.
+func (a *InPostAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
+	if req.Format != LabelFormatPDF {
+		return nil, unsupportedFormat("InPost", req.Format, LabelFormatPDF)
+	}
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/shipments/%s/label", a.BaseURL, req.TrackingNumber),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create InPost label request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+a.APIKey)
+
+	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "inpost")
+}
+
 // TrackShipment retrieves the tracking status for an InPost shipment.
 func (a *InPostAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {

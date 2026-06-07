@@ -11,7 +11,7 @@ import (
 type MockDAOAdapter struct{}
 
 // BookShipment mocks booking a shipment with DAO.
-func (a *MockDAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
+func (a *MockDAOAdapter) BookShipment(_ context.Context, request BookingRequest) (*BookingResponse, error) {
 	if request.Shipment.TotalWeight <= 0 {
 		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
 	}
@@ -32,8 +32,13 @@ func (a *MockDAOAdapter) BookShipment(ctx context.Context, request BookingReques
 	}, nil
 }
 
+// FetchLabel returns an error — DAO label support is under investigation.
+func (a *MockDAOAdapter) FetchLabel(_ context.Context, _ LabelRequest) (*LabelResponse, error) {
+	return nil, fmt.Errorf("DAO label support is under investigation and not yet available; download labels from the DAO portal")
+}
+
 // TrackShipment mocks tracking a shipment with DAO.
-func (a *MockDAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
+func (a *MockDAOAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
 		TrackingNumber: trackingNumber,
 		Status:         "In Transit",
@@ -46,5 +51,3 @@ func (a *MockDAOAdapter) TrackShipment(ctx context.Context, trackingNumber strin
 		},
 	}, nil
 }
-
-

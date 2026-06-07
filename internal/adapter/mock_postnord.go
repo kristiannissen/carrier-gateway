@@ -116,6 +116,17 @@ func (m *MockPostNordAdapter) TrackShipment(ctx context.Context, trackingNumber 
 }
 
 
+// FetchLabel returns a mock label response with minimal base64-encoded PDF data.
+func (m *MockPostNordAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "postnord",
+		Format:         req.Format,
+		Data:           mockLabelData,
+		MimeType:       MimeTypeForFormat(req.Format),
+	}, nil
+}
+
 // NewMockPostNordAdapter returns a new MockPostNordAdapter with default behaviour.
 func NewMockPostNordAdapter() *MockPostNordAdapter {
 	return &MockPostNordAdapter{}

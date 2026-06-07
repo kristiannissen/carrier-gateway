@@ -94,6 +94,17 @@ func (m *MockBringAdapter) TrackShipment(ctx context.Context, trackingNumber str
 }
 
 
+// FetchLabel returns a mock label response.
+func (m *MockBringAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "bring",
+		Format:         req.Format,
+		Data:           mockLabelData,
+		MimeType:       MimeTypeForFormat(req.Format),
+	}, nil
+}
+
 // NewMockBringAdapter returns a new MockBringAdapter with default behaviour.
 func NewMockBringAdapter() *MockBringAdapter {
 	return &MockBringAdapter{}

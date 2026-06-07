@@ -76,6 +76,9 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.FlaggedForReview = flagged
+	if adapter.IsBeta(request.Carrier) {
+		response.BetaWarning = request.Carrier + " support is in beta and may not be fully functional"
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

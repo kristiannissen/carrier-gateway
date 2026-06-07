@@ -11,7 +11,7 @@ import (
 type MockPostiAdapter struct{}
 
 // BookShipment mocks booking a shipment with Posti.
-func (a *MockPostiAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
+func (a *MockPostiAdapter) BookShipment(_ context.Context, request BookingRequest) (*BookingResponse, error) {
 	if request.Shipment.TotalWeight <= 0 {
 		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
 	}
@@ -32,8 +32,19 @@ func (a *MockPostiAdapter) BookShipment(ctx context.Context, request BookingRequ
 	}, nil
 }
 
+// FetchLabel returns a mock label response for Posti.
+func (a *MockPostiAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "posti",
+		Format:         req.Format,
+		Data:           mockLabelData,
+		MimeType:       MimeTypeForFormat(req.Format),
+	}, nil
+}
+
 // TrackShipment mocks tracking a shipment with Posti.
-func (a *MockPostiAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
+func (a *MockPostiAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
 		TrackingNumber: trackingNumber,
 		Status:         "In Transit",
@@ -46,5 +57,3 @@ func (a *MockPostiAdapter) TrackShipment(ctx context.Context, trackingNumber str
 		},
 	}, nil
 }
-
-

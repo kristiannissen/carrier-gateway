@@ -10,6 +10,53 @@ import (
 	"go.uber.org/zap"
 )
 
+// LabelFormat is the requested label output format.
+type LabelFormat string
+
+const (
+	LabelFormatPDF   LabelFormat = "PDF"
+	LabelFormatPNG   LabelFormat = "PNG"
+	LabelFormatZPL   LabelFormat = "ZPL"
+	LabelFormatEPL   LabelFormat = "EPL"
+	LabelFormatZPLGK LabelFormat = "ZPLGK"
+)
+
+// LabelRequest specifies which label to fetch and in what format.
+type LabelRequest struct {
+	// TrackingNumber identifies the shipment whose label to fetch.
+	TrackingNumber string
+	// Format is the requested output format.
+	Format LabelFormat
+}
+
+// LabelResponse contains the base64-encoded label data ready for printing.
+type LabelResponse struct {
+	TrackingNumber string      `json:"trackingNumber"`
+	Carrier        string      `json:"carrier"`
+	Format         LabelFormat `json:"format"`
+	// Data is the base64-encoded label content.
+	Data     string `json:"data"`
+	// MimeType describes the content (e.g. application/pdf, image/png).
+	MimeType string `json:"mimeType"`
+}
+
+// mimeTypes maps label formats to their MIME type.
+var mimeTypes = map[LabelFormat]string{
+	LabelFormatPDF:   "application/pdf",
+	LabelFormatPNG:   "image/png",
+	LabelFormatZPL:   "application/x-zpl",
+	LabelFormatEPL:   "application/x-epl",
+	LabelFormatZPLGK: "application/x-zpl",
+}
+
+// MimeTypeForFormat returns the MIME type for the given label format.
+func MimeTypeForFormat(f LabelFormat) string {
+	if mt, ok := mimeTypes[f]; ok {
+		return mt
+	}
+	return "application/octet-stream"
+}
+
 // CarrierAdapter defines the interface for all carrier adapters.
 type CarrierAdapter interface {
 	// BookShipment books a shipment with the carrier and returns a tracking number and label URL.
@@ -17,6 +64,10 @@ type CarrierAdapter interface {
 
 	// TrackShipment retrieves the tracking status for a shipment.
 	TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error)
+
+	// FetchLabel retrieves the label for a shipment in the requested format.
+	// The label data is returned as base64-encoded bytes.
+	FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error)
 }
 
 // Registry holds the available CarrierAdapters and selects one by name.
@@ -66,6 +117,9 @@ type carrierCapabilities struct {
 	// idempotency key directly and uses it for server-side deduplication.
 	// When false, deduplication must be handled by the integrating system.
 	NativeIdempotency bool
+	// Beta is true when the carrier integration is not yet fully validated
+	// for production use. Callers receive a warning in the booking response.
+	Beta bool
 }
 
 // capabilities maps carrier keys to their known API capabilities.
@@ -73,7 +127,7 @@ var capabilities = map[string]carrierCapabilities{
 	"postnord": {NativeIdempotency: true},
 	"bring":    {NativeIdempotency: false},
 	"gls":      {NativeIdempotency: false},
-	"dao":      {NativeIdempotency: false},
+	"dao":      {NativeIdempotency: false, Beta: true},
 	"posti":    {NativeIdempotency: false},
 	"inpost":   {NativeIdempotency: false},
 }
@@ -83,6 +137,12 @@ var capabilities = map[string]carrierCapabilities{
 // system is responsible for deduplication using the key.
 func SupportsNativeIdempotency(carrier string) bool {
 	return capabilities[carrier].NativeIdempotency
+}
+
+// IsBeta reports whether the given carrier integration is in beta.
+// Beta carriers are functional but not fully validated for production use.
+func IsBeta(carrier string) bool {
+	return capabilities[carrier].Beta
 }
 
 // InitAdapters initializes all carrier adapters based on environment variables.
@@ -291,6 +351,8 @@ type BookingResponse struct {
 	// FlaggedForReview is true when the address passed a ReviewRequired
 	// validation — the booking was accepted but should be checked manually.
 	FlaggedForReview bool `json:"flaggedForReview,omitempty"`
+	// BetaWarning is set when the carrier integration is in beta.
+	BetaWarning string `json:"betaWarning,omitempty"`
 }
 
 // ColliResponse represents the response for an individual colli in a shipment.

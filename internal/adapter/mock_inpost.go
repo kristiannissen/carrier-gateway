@@ -91,6 +91,17 @@ func (m *MockInPostAdapter) TrackShipment(ctx context.Context, trackingNumber st
 }
 
 
+// FetchLabel returns a mock label response for InPost.
+func (m *MockInPostAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "inpost",
+		Format:         req.Format,
+		Data:           mockLabelData,
+		MimeType:       MimeTypeForFormat(req.Format),
+	}, nil
+}
+
 // NewMockInPostAdapter returns a new MockInPostAdapter with default behaviour.
 func NewMockInPostAdapter() *MockInPostAdapter {
 	return &MockInPostAdapter{}

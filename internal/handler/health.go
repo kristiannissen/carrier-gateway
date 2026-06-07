@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
 // serviceStart records when the process started so uptime can be reported.
@@ -43,9 +45,12 @@ func (c *Config) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 	carriers := make(map[string]string, len(c.Registry.Carriers()))
 	for _, name := range c.Registry.Carriers() {
-		if mockMode {
+		switch {
+		case adapter.IsBeta(name):
+			carriers[name] = "beta"
+		case mockMode:
 			carriers[name] = "mock"
-		} else {
+		default:
 			carriers[name] = "production"
 		}
 	}

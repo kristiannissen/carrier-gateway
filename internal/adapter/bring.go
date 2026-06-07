@@ -170,6 +170,31 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}, nil
 }
 
+// FetchLabel retrieves a shipping label from Bring.
+// Bring only supports PDF format; other formats return an error.
+func (a *BringAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
+	if req.Format != LabelFormatPDF {
+		return nil, unsupportedFormat("Bring", req.Format, LabelFormatPDF)
+	}
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/shipping/v1/labels/%s", a.BaseURL, req.TrackingNumber),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Bring label request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+a.APIKey)
+	httpReq.Header.Set("X-MyBring-API-Uid", a.CustomerID)
+
+	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "bring")
+}
+
 // TrackShipment retrieves the tracking status for a Bring shipment.
 func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {

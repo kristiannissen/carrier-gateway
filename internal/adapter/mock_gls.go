@@ -92,6 +92,17 @@ func (m *MockGLSAdapter) TrackShipment(ctx context.Context, trackingNumber strin
 }
 
 
+// FetchLabel returns a mock label response.
+func (m *MockGLSAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "gls",
+		Format:         req.Format,
+		Data:           mockLabelData,
+		MimeType:       MimeTypeForFormat(req.Format),
+	}, nil
+}
+
 // NewMockGLSAdapter returns a new MockGLSAdapter with default behaviour.
 func NewMockGLSAdapter() *MockGLSAdapter {
 	return &MockGLSAdapter{}

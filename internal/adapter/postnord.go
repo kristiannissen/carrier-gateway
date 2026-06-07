@@ -166,7 +166,26 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	}, nil
 }
 
-// TrackShipment retrieves the tracking status for a shipment from PostNord.
+// FetchLabel retrieves a shipping label from PostNord in the requested format.
+// PostNord supports PDF, PNG, ZPL, EPL, and ZPLGK via its label endpoint.
+func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/rest/shipment/v1/label/%s?format=%s", a.BaseURL, req.TrackingNumber, req.Format),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PostNord label request: %w", err)
+	}
+	httpReq.Header.Set("X-API-Key", a.APIKey)
+
+	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "postnord")
+}
 func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")

@@ -151,6 +151,31 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	}, nil
 }
 
+// FetchLabel retrieves a shipping label from Posti.
+// Posti only supports PDF format; other formats return an error.
+func (a *PostiAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
+	if req.Format != LabelFormatPDF {
+		return nil, unsupportedFormat("Posti", req.Format, LabelFormatPDF)
+	}
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("%s/shipment/v1/labels/%s", a.BaseURL, req.TrackingNumber),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Posti label request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+a.APIKey)
+	httpReq.Header.Set("X-Posti-API-Key", a.APIKey)
+
+	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "posti")
+}
+
 // TrackShipment tracks a shipment with Posti.
 func (a *PostiAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	req, err := http.NewRequestWithContext(
