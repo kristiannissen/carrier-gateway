@@ -127,22 +127,23 @@ func TestGetLabel_MethodNotAllowed(t *testing.T) {
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
-func TestGetLabel_DAOReturnsError(t *testing.T) {
+func TestGetLabel_DAOReturnsPDF(t *testing.T) {
 	t.Parallel()
 	cfg := newTestConfig(t)
-	w := routedLabelRequest(t, cfg, "/api/labels/DAO123456789DK?carrier=dao")
+	w := routedLabelRequest(t, cfg, "/api/labels/DAO123456789DK?carrier=dao&format=PDF")
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	var resp ErrorResponse
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp adapter.LabelResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
-	assert.Equal(t, "label fetch failed", resp.Error)
-	assert.Contains(t, resp.Details, "DAO label support is under investigation")
+	assert.Equal(t, "dao", resp.Carrier)
+	assert.Equal(t, adapter.LabelFormatPDF, resp.Format)
+	assert.NotEmpty(t, resp.Data)
 }
 
 func TestGetLabel_AllCarriers(t *testing.T) {
 	t.Parallel()
-	// DAO is excluded — it intentionally returns an error for label fetching.
-	for _, carrier := range []string{"postnord", "bring", "gls", "posti", "inpost"} {
+	// All carriers including DAO now support PDF labels.
+	for _, carrier := range []string{"postnord", "bring", "gls", "dao", "posti", "inpost"} {
 		carrier := carrier
 		t.Run(carrier, func(t *testing.T) {
 			t.Parallel()

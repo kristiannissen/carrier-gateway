@@ -5,6 +5,7 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // MockDAOAdapter is a mock implementation of the CarrierAdapter interface for DAO.
@@ -25,28 +26,52 @@ func (a *MockDAOAdapter) BookShipment(_ context.Context, request BookingRequest)
 		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
 	}
 
-	return &BookingResponse{
+	if hasAddOn(request.Shipment.AddOns, AddOnFlexDelivery) {
+		return nil, fmt.Errorf("DAO does not support flex delivery")
+	}
+
+	result := &BookingResponse{
 		TrackingNumber: "DAO123456789DK",
-		LabelURL:       "https://example.com/mock-dao-label.png",
 		Carrier:        "dao",
-	}, nil
+	}
+
+	// For labelless returns, include the labelless code on the colli response.
+	if strings.EqualFold(request.Shipment.DeliveryType, "return") &&
+		!strings.EqualFold(request.Shipment.ReturnFunctionality, "withlabel") {
+		result.Colli = []ColliResponse{
+			{ID: "DAO123456789DK", TrackingNumber: "DAO123456789DK", LabelURL: "123 456 789", Status: "booked"},
+		}
+	}
+
+	return result, nil
 }
 
-// FetchLabel returns an error — DAO label support is under investigation.
-func (a *MockDAOAdapter) FetchLabel(_ context.Context, _ LabelRequest) (*LabelResponse, error) {
-	return nil, fmt.Errorf("DAO label support is under investigation and not yet available; download labels from the DAO portal")
+// FetchLabel returns a mock label response for DAO.
+func (a *MockDAOAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
+	if req.Format != LabelFormatPDF {
+		return nil, unsupportedFormat("DAO", req.Format, LabelFormatPDF)
+	}
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "dao",
+		Format:         LabelFormatPDF,
+		Data:           mockLabelData,
+		MimeType:       MimeTypeForFormat(LabelFormatPDF),
+	}, nil
 }
 
 // TrackShipment mocks tracking a shipment with DAO.
 func (a *MockDAOAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
 		TrackingNumber: trackingNumber,
-		Status:         "In Transit",
+		Carrier:        "dao",
+		Status:         "Pakke modtaget på fordelingscenter",
 		Events: []TrackingEvent{
 			{
 				Timestamp: "2026-05-31T12:00:00Z",
-				Status:    "Pakke modtaget på fordelingscenter",
+				Status:    "10",
 				Location:  "DAO Erritsø",
+				Details:   "Pakke modtaget på fordelingscenter",
 			},
 		},
 	}, nil
