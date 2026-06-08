@@ -31,9 +31,12 @@ func (c *dhlTokenCache) valid() bool {
 
 // DHLAdapter implements CarrierAdapter for DHL eCommerce Europe (eConnect API).
 //
-// Authentication: OAuth2 client credentials via GET /ccc/v1/auth/accesstoken.
-// Booking: POST /ccc/send-cpan — same token used for tracking.
-// Tracking: GET /track/shipments (DHL Unified Tracking API, service=ecommerce-europe).
+// Authentication:
+//   - Booking (eConnect): OAuth2 Bearer token via GET /ccc/v1/auth/accesstoken
+//     using ClientID and ClientSecret with HTTP Basic auth.
+//   - Tracking (Unified Tracking API): subscription key in DHL-API-Key header,
+//     obtained from developer.dhl.com user dashboard. Separate from eConnect credentials.
+//
 // Cancel: Not supported via API — contact DHL customer service.
 // Update: Not supported via API — contact DHL customer service.
 type DHLAdapter struct {
@@ -43,6 +46,10 @@ type DHLAdapter struct {
 	ClientSecret string
 	// CustomerID is the DHL customerIdentification value sent in the sender block.
 	CustomerID string
+	// TrackingAPIKey is the subscription key for the DHL Unified Tracking API.
+	// Obtained from developer.dhl.com — separate from the eConnect OAuth2 credentials.
+	// Passed in the DHL-API-Key request header.
+	TrackingAPIKey string
 	// BookingBaseURL is the eConnect API base URL.
 	// Production: https://api.dhl.com
 	BookingBaseURL string
@@ -55,13 +62,15 @@ type DHLAdapter struct {
 }
 
 // NewDHLAdapter creates a new DHLAdapter.
-// clientID and clientSecret are the eConnect OAuth2 credentials.
+// clientID and clientSecret are the eConnect OAuth2 credentials used for booking.
 // customerID is the DHL customerIdentification value.
-func NewDHLAdapter(clientID, clientSecret, customerID string, log *zap.Logger) *DHLAdapter {
+// trackingAPIKey is the DHL-API-Key subscription key for the Unified Tracking API.
+func NewDHLAdapter(clientID, clientSecret, customerID, trackingAPIKey string, log *zap.Logger) *DHLAdapter {
 	return &DHLAdapter{
 		ClientID:        clientID,
 		ClientSecret:    clientSecret,
 		CustomerID:      customerID,
+		TrackingAPIKey:  trackingAPIKey,
 		BookingBaseURL:  "https://api.dhl.com",
 		TrackingBaseURL: "https://api.dhl.com/track",
 		HTTPClient: &http.Client{
@@ -473,15 +482,13 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 // TrackShipment retrieves DHL tracking via the Unified Tracking API.
 // Endpoint: GET /track/shipments?trackingNumber=&service=ecommerce-europe
-// Auth: Bearer token from OAuth2 (same credentials as booking).
+// Auth: DHL-API-Key subscription key header — separate from the eConnect OAuth2 credentials.
 func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
 	}
-
-	token, err := a.bearerToken(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to obtain DHL access token: %w", err)
+	if a.TrackingAPIKey == "" {
+		return nil, fmt.Errorf("DHL tracking requires DHL_TRACKING_API_KEY — obtain from developer.dhl.com")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
@@ -491,7 +498,7 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		return nil, fmt.Errorf("failed to create DHL tracking request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("DHL-API-Key", a.TrackingAPIKey)
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {

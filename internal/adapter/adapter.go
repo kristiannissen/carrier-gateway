@@ -279,6 +279,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	dhlClientID := os.Getenv("DHL_CLIENT_ID")
 	dhlClientSecret := os.Getenv("DHL_CLIENT_SECRET")
 	dhlCustomerID := os.Getenv("DHL_CUSTOMER_ID")
+	dhlTrackingAPIKey := os.Getenv("DHL_TRACKING_API_KEY")
 	switch {
 	case mockMode:
 		adapters["dhl"] = &MockDHLAdapter{}
@@ -287,7 +288,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		adapters["dhl"] = &MockDHLAdapter{}
 		log.Warn("DHL adapter falling back to mock mode (DHL_CLIENT_ID or DHL_CLIENT_SECRET not set)")
 	default:
-		a := NewDHLAdapter(dhlClientID, dhlClientSecret, dhlCustomerID, log)
+		a := NewDHLAdapter(dhlClientID, dhlClientSecret, dhlCustomerID, dhlTrackingAPIKey, log)
 		adapters["dhl"] = a
 		log.Info("DHL adapter initialized in production mode (beta)",
 			zap.String("bookingURL", a.BookingBaseURL),
@@ -527,6 +528,11 @@ type BookingResponse struct {
 	FlaggedForReview bool `json:"flaggedForReview,omitempty"`
 	// BetaWarning is set when the carrier integration is in beta.
 	BetaWarning string `json:"betaWarning,omitempty"`
+	// AddOnWarnings lists add-ons that were requested but could not be fully
+	// applied after a successful booking. The shipment is booked and has a
+	// tracking number, but these services are not active.
+	// Retry the failed add-ons via PATCH /api/bookings/{trackingNumber}?carrier=.
+	AddOnWarnings []string `json:"addOnWarnings,omitempty"`
 }
 
 // ColliResponse represents the response for an individual colli in a shipment.

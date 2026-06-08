@@ -51,11 +51,12 @@ The server starts on `http://localhost:8080`.
 | `GLS_CONTRACT_ID` | GLS shipper contact ID | No | — |
 | `DAO_API_KEY` | DAO API key | No | — |
 | `DAO_CUSTOMER_ID` | DAO customer ID | No | — |
-| `DHL_CLIENT_ID` | DHL eConnect OAuth2 client ID | No | — |
-| `DHL_CLIENT_SECRET` | DHL eConnect OAuth2 client secret | No | — |
+| `DHL_CLIENT_ID` | DHL eConnect OAuth2 client ID (for booking) | No | — |
+| `DHL_CLIENT_SECRET` | DHL eConnect OAuth2 client secret (for booking) | No | — |
 | `DHL_CUSTOMER_ID` | DHL customerIdentification (sent in sender block) | No | — |
+| `DHL_TRACKING_API_KEY` | DHL Unified Tracking API subscription key — from [developer.dhl.com](https://developer.dhl.com) | No | — |
 
-DHL uses `https://api.dhl.com` for both booking and tracking. No sandbox URL — use `MOCK_MODE=true` for testing without credentials.
+DHL uses `https://api.dhl.com` for both booking and tracking. The booking and tracking APIs use separate authentication: booking uses OAuth2 (client_id/client_secret), tracking uses a subscription key in the `DHL-API-Key` header. No sandbox URL — use `MOCK_MODE=true` for testing without credentials.
 | `POSTI_API_KEY` | Posti API key | No | — |
 | `INPOST_API_KEY` | InPost API key | No | — |
 

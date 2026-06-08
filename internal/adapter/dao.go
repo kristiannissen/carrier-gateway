@@ -223,7 +223,24 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		return nil, err
 	}
 
+	result := &BookingResponse{
+		TrackingNumber: barcode,
+		Carrier:        "dao",
+	}
+
+	// For labelless returns, surface the code the customer writes on the parcel.
+	if labellessCode != "" {
+		result.Colli = []ColliResponse{
+			{ID: barcode, TrackingNumber: barcode, LabelURL: labellessCode, Status: "booked"},
+		}
+	}
+
 	// For non-return bookings apply SMS/email add-ons via separate endpoint.
+	// DAO requires a post-booking call to OpdaterKontaktOplysning.php before
+	// the parcel is scanned at the first terminal.
+	// If the call fails the shipment is booked but notifications are not active.
+	// The failure is surfaced in AddOnWarnings so the caller can retry via
+	// PATCH /api/bookings/{trackingNumber}?carrier=dao.
 	if !isReturn && barcode != "" &&
 		(hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) ||
 			hasAddOn(request.Shipment.AddOns, AddOnEmailNotification)) {
@@ -236,18 +253,11 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 					zap.Error(updateErr),
 				)
 			}
-		}
-	}
-
-	result := &BookingResponse{
-		TrackingNumber: barcode,
-		Carrier:        "dao",
-	}
-
-	// For labelless returns, surface the code the customer writes on the parcel.
-	if labellessCode != "" {
-		result.Colli = []ColliResponse{
-			{ID: barcode, TrackingNumber: barcode, LabelURL: labellessCode, Status: "booked"},
+			result.AddOnWarnings = append(result.AddOnWarnings,
+				fmt.Sprintf("sms_notification/email_notification: contact update failed — %s. "+
+					"Retry via PATCH /api/bookings/%s?carrier=dao with phone and email.",
+					updateErr.Error(), barcode),
+			)
 		}
 	}
 
