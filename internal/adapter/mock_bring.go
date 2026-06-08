@@ -105,6 +105,19 @@ func (m *MockBringAdapter) FetchLabel(_ context.Context, req LabelRequest) (*Lab
 	}, nil
 }
 
+// CancelShipment returns a mock cancel response for Bring.
+func (m *MockBringAdapter) CancelShipment(_ context.Context, trackingNumber string) (*CancelResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+	return &CancelResponse{TrackingNumber: trackingNumber, Carrier: "bring", Status: "cancelled"}, nil
+}
+
+// UpdateShipment returns unsupported for Bring.
+func (m *MockBringAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
+	return nil, fmt.Errorf("bring does not support post-booking updates")
+}
+
 // NewMockBringAdapter returns a new MockBringAdapter with default behaviour.
 func NewMockBringAdapter() *MockBringAdapter {
 	return &MockBringAdapter{}

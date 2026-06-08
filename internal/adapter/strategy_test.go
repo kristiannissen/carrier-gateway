@@ -20,6 +20,7 @@ func TestCarrierAdapterInterface(t *testing.T) {
 		&MockBringAdapter{},
 		&MockGLSAdapter{},
 		&MockDAOAdapter{},
+		&MockDHLAdapter{},
 		&MockPostiAdapter{},
 		&MockInPostAdapter{},
 	}
@@ -44,7 +45,7 @@ func TestRegistry_Select(t *testing.T) {
 
 	t.Run("known carriers return an adapter", func(t *testing.T) {
 		t.Parallel()
-		for _, carrier := range []string{"postnord", "bring", "gls", "dao", "posti", "inpost"} {
+		for _, carrier := range []string{"postnord", "bring", "gls", "dao", "dhl", "posti", "inpost"} {
 			a, err := registry.Select(carrier)
 			require.NoErrorf(t, err, "Select(%q) should not error", carrier)
 			assert.NotNilf(t, a, "Select(%q) should return a non-nil adapter", carrier)
@@ -66,7 +67,7 @@ func TestRegistry_Carriers(t *testing.T) {
 	registry := NewRegistry(zaptest.NewLogger(t))
 	carriers := registry.Carriers()
 
-	assert.ElementsMatch(t, []string{"postnord", "bring", "gls", "dao", "posti", "inpost"}, carriers)
+	assert.ElementsMatch(t, []string{"postnord", "bring", "gls", "dao", "dhl", "posti", "inpost"}, carriers)
 }
 
 // TestRegistry_StrategyExecution verifies that selecting a carrier and calling
@@ -77,7 +78,7 @@ func TestRegistry_StrategyExecution(t *testing.T) {
 
 	registry := NewRegistry(zaptest.NewLogger(t))
 
-	carriers := []string{"postnord", "bring", "gls", "dao", "posti", "inpost"}
+	carriers := []string{"postnord", "bring", "gls", "dao", "dhl", "posti", "inpost"}
 
 	for _, carrier := range carriers {
 		carrier := carrier
@@ -108,7 +109,7 @@ func TestRegistry_SwitchingCarriers(t *testing.T) {
 
 	registry := NewRegistry(zaptest.NewLogger(t))
 
-	for _, carrier := range []string{"postnord", "bring", "gls", "dao", "posti", "inpost"} {
+	for _, carrier := range []string{"postnord", "bring", "gls", "dao", "dhl", "posti", "inpost"} {
 		carrier := carrier
 		t.Run(carrier, func(t *testing.T) {
 			t.Parallel()

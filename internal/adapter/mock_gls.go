@@ -103,6 +103,16 @@ func (m *MockGLSAdapter) FetchLabel(_ context.Context, req LabelRequest) (*Label
 	}, nil
 }
 
+// CancelShipment returns unsupported for GLS.
+func (m *MockGLSAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
+	return nil, fmt.Errorf("GLS cancellation is not yet supported — contact GLS directly")
+}
+
+// UpdateShipment returns unsupported for GLS.
+func (m *MockGLSAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
+	return nil, fmt.Errorf("GLS post-booking updates are not yet supported")
+}
+
 // NewMockGLSAdapter returns a new MockGLSAdapter with default behaviour.
 func NewMockGLSAdapter() *MockGLSAdapter {
 	return &MockGLSAdapter{}

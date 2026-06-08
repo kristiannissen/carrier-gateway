@@ -27,6 +27,8 @@ func NewRouter(registry *adapter.Registry, log *zap.Logger) *mux.Router {
 	r.Use(middleware.LogPayloads(log))
 
 	r.HandleFunc("/api/bookings", h.BookShipment).Methods("POST")
+	r.HandleFunc("/api/bookings/{trackingNumber}", h.CancelShipment).Methods("DELETE")
+	r.HandleFunc("/api/bookings/{trackingNumber}", h.UpdateShipment).Methods("PATCH")
 	r.HandleFunc("/api/trackings/{trackingNumber}", h.GetTracking).Methods("GET")
 	r.HandleFunc("/api/labels/{trackingNumber}", h.GetLabel).Methods("GET")
 	r.HandleFunc("/api/health", h.HealthCheck).Methods("GET")

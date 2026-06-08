@@ -402,6 +402,166 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	return result, nil
 }
 
+// CancelShipment cancels a PostNord shipment via the v3 EDI endpoint.
+// Uses messageFunction "Cancellation" and updateIndicator "Delete".
+// The shipment must not yet have been collected by PostNord.
+func (a *PostNordAdapter) CancelShipment(ctx context.Context, trackingNumber string) (*CancelResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	payload := map[string]interface{}{
+		"messageDate":     time.Now().UTC().Format(time.RFC3339),
+		"messageFunction": "Cancellation",
+		"messageId":       fmt.Sprintf("cancel-%d", time.Now().UnixMilli()),
+		"application": map[string]interface{}{
+			"applicationId": a.ApplicationID,
+			"name":          "logistics-gateway",
+			"version":       "1.0",
+		},
+		"updateIndicator": "Delete",
+		"shipment": []interface{}{
+			map[string]interface{}{
+				"shipmentIdentification": map[string]interface{}{
+					"shipmentId": trackingNumber,
+				},
+			},
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal PostNord cancel request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/rest/shipment/v3/edi?apikey=%s", a.BaseURL, a.APIKey),
+		bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PostNord cancel request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("PostNord cancel request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PostNord cancel response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("PostNord cancel returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return &CancelResponse{
+		TrackingNumber: trackingNumber,
+		Carrier:        "postnord",
+		Status:         "cancelled",
+	}, nil
+}
+
+// UpdateShipment sends a PostNord v3 EDI update instruction.
+// Only ReceiverPhone and ReceiverEmail are supported — address updates are
+// SE-only per PostNord's API. The carrier will return an error for DK bookings.
+func (a *PostNordAdapter) UpdateShipment(ctx context.Context, req UpdateRequest) (*UpdateResponse, error) {
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+	if req.ReceiverPhone == "" && req.ReceiverEmail == "" && req.Weight == 0 && req.ServicePointID == "" {
+		return nil, fmt.Errorf("at least one field must be specified for update")
+	}
+	// PostNord does not support weight or service point updates post-booking.
+	if req.Weight > 0 {
+		return nil, fmt.Errorf("PostNord does not support post-booking weight updates")
+	}
+	if req.ServicePointID != "" {
+		return nil, fmt.Errorf("PostNord does not support post-booking service point changes")
+	}
+
+	consigneeContact := map[string]interface{}{}
+	if req.ReceiverPhone != "" {
+		consigneeContact["smsNo"] = req.ReceiverPhone
+	}
+	if req.ReceiverEmail != "" {
+		consigneeContact["emailAddress"] = req.ReceiverEmail
+	}
+
+	payload := map[string]interface{}{
+		"messageDate":     time.Now().UTC().Format(time.RFC3339),
+		"messageFunction": "Instruction",
+		"messageId":       fmt.Sprintf("update-%d", time.Now().UnixMilli()),
+		"application": map[string]interface{}{
+			"applicationId": a.ApplicationID,
+			"name":          "logistics-gateway",
+			"version":       "1.0",
+		},
+		"updateIndicator": "Update",
+		"shipment": []interface{}{
+			map[string]interface{}{
+				"shipmentIdentification": map[string]interface{}{
+					"shipmentId": req.TrackingNumber,
+				},
+				"parties": map[string]interface{}{
+					"consignee": map[string]interface{}{
+						"party": map[string]interface{}{
+							"contact": consigneeContact,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal PostNord update request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/rest/shipment/v3/edi?apikey=%s", a.BaseURL, a.APIKey),
+		bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PostNord update request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("PostNord update request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PostNord update response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("PostNord update returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var updatedFields []string
+	if req.ReceiverPhone != "" {
+		updatedFields = append(updatedFields, "phone")
+	}
+	if req.ReceiverEmail != "" {
+		updatedFields = append(updatedFields, "email")
+	}
+
+	return &UpdateResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "postnord",
+		Status:         "updated",
+		UpdatedFields:  updatedFields,
+	}, nil
+}
+
 // FetchLabel retrieves a shipping label for a PostNord shipment.
 // Uses POST /rest/shipment/v3/edi/labels/pdf with the itemId as reference.
 func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {

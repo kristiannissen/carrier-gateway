@@ -69,6 +69,17 @@ type CarrierAdapter interface {
 	// FetchLabel retrieves the label for a shipment in the requested format.
 	// The label data is returned as base64-encoded bytes.
 	FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error)
+
+	// CancelShipment cancels a booked shipment before it is collected.
+	// Returns an error if the carrier does not support cancellation or the
+	// shipment has already been collected by the carrier.
+	CancelShipment(ctx context.Context, trackingNumber string) (*CancelResponse, error)
+
+	// UpdateShipment applies partial updates to a booked shipment.
+	// Only non-zero fields in UpdateRequest are forwarded to the carrier.
+	// Returns an error if the carrier does not support the requested update
+	// or the shipment has already been scanned.
+	UpdateShipment(ctx context.Context, req UpdateRequest) (*UpdateResponse, error)
 }
 
 // Registry holds the available CarrierAdapters and selects one by name.
@@ -112,6 +123,39 @@ func (r *Registry) Carriers() []string {
 	return keys
 }
 
+// CancelResponse is returned after a successful shipment cancellation.
+type CancelResponse struct {
+	TrackingNumber string `json:"trackingNumber"`
+	Carrier        string `json:"carrier"`
+	Status         string `json:"status"` // always "cancelled"
+}
+
+// UpdateRequest specifies which fields to update on a booked shipment.
+// Only non-zero fields are forwarded to the carrier.
+type UpdateRequest struct {
+	Carrier        string `json:"carrier"`
+	TrackingNumber string `json:"trackingNumber"`
+	// ReceiverPhone updates the receiver's contact phone number.
+	ReceiverPhone string `json:"phone,omitempty"`
+	// ReceiverEmail updates the receiver's contact email address.
+	ReceiverEmail string `json:"email,omitempty"`
+	// Weight updates the parcel weight in kg.
+	// DAO converts to grams internally. Must be set before first terminal scan.
+	Weight float64 `json:"weight,omitempty"`
+	// ServicePointID redirects delivery to a different service point.
+	// DAO only — uses OpdaterShopid.php.
+	ServicePointID string `json:"servicePointId,omitempty"`
+}
+
+// UpdateResponse is returned after a successful shipment update.
+type UpdateResponse struct {
+	TrackingNumber string   `json:"trackingNumber"`
+	Carrier        string   `json:"carrier"`
+	Status         string   `json:"status"` // always "updated"
+	// UpdatedFields lists the field names that were successfully updated.
+	UpdatedFields []string `json:"updatedFields"`
+}
+
 // carrierCapabilities describes optional features a carrier's API supports natively.
 type carrierCapabilities struct {
 	// NativeIdempotency is true when the carrier's booking API accepts an
@@ -121,16 +165,23 @@ type carrierCapabilities struct {
 	// Beta is true when the carrier integration is not yet fully validated
 	// for production use. Callers receive a warning in the booking response.
 	Beta bool
+	// SupportsCancellation is true when the carrier's API supports cancelling
+	// a booked shipment before collection.
+	SupportsCancellation bool
+	// SupportsUpdate is true when the carrier's API supports partial updates
+	// to a booked shipment (contact, weight, service point).
+	SupportsUpdate bool
 }
 
 // capabilities maps carrier keys to their known API capabilities.
 var capabilities = map[string]carrierCapabilities{
-	"postnord": {NativeIdempotency: true},
-	"bring":    {NativeIdempotency: false},
-	"gls":      {NativeIdempotency: false},
-	"dao":      {NativeIdempotency: false, Beta: true},
-	"posti":    {NativeIdempotency: false},
-	"inpost":   {NativeIdempotency: false},
+	"postnord": {NativeIdempotency: true, SupportsCancellation: true, SupportsUpdate: true},
+	"bring":    {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
+	"gls":      {NativeIdempotency: false, SupportsCancellation: false, SupportsUpdate: false},
+	"dao":      {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: true},
+	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	"posti":    {NativeIdempotency: false, SupportsCancellation: false, SupportsUpdate: false},
+	"inpost":   {NativeIdempotency: false, SupportsCancellation: false, SupportsUpdate: false},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -144,6 +195,16 @@ func SupportsNativeIdempotency(carrier string) bool {
 // Beta carriers are functional but not fully validated for production use.
 func IsBeta(carrier string) bool {
 	return capabilities[carrier].Beta
+}
+
+// SupportsCancellation reports whether the given carrier supports post-booking cancellation.
+func SupportsCancellation(carrier string) bool {
+	return capabilities[carrier].SupportsCancellation
+}
+
+// SupportsUpdate reports whether the given carrier supports partial post-booking updates.
+func SupportsUpdate(carrier string) bool {
+	return capabilities[carrier].SupportsUpdate
 }
 
 // InitAdapters initializes all carrier adapters based on environment variables.
@@ -213,6 +274,25 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	default:
 		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey, log)
 		log.Info("DAO adapter initialized in production mode (beta)")
+	}
+
+	dhlClientID := os.Getenv("DHL_CLIENT_ID")
+	dhlClientSecret := os.Getenv("DHL_CLIENT_SECRET")
+	dhlCustomerID := os.Getenv("DHL_CUSTOMER_ID")
+	switch {
+	case mockMode:
+		adapters["dhl"] = &MockDHLAdapter{}
+		log.Info("DHL adapter initialized in mock mode (MOCK_MODE=true)")
+	case dhlClientID == "" || dhlClientSecret == "":
+		adapters["dhl"] = &MockDHLAdapter{}
+		log.Warn("DHL adapter falling back to mock mode (DHL_CLIENT_ID or DHL_CLIENT_SECRET not set)")
+	default:
+		a := NewDHLAdapter(dhlClientID, dhlClientSecret, dhlCustomerID, log)
+		adapters["dhl"] = a
+		log.Info("DHL adapter initialized in production mode (beta)",
+			zap.String("bookingURL", a.BookingBaseURL),
+			zap.String("trackingURL", a.TrackingBaseURL),
+		)
 	}
 
 	postiAPIKey := os.Getenv("POSTI_API_KEY")

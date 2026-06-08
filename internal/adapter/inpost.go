@@ -170,6 +170,16 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 	}, nil
 }
 
+// CancelShipment is not supported for InPost.
+func (a *InPostAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
+	return nil, fmt.Errorf("InPost does not support cancellation via this gateway")
+}
+
+// UpdateShipment is not supported for InPost.
+func (a *InPostAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
+	return nil, fmt.Errorf("InPost does not support post-booking updates via this gateway")
+}
+
 // FetchLabel retrieves a shipping label from InPost.
 // InPost only supports PDF format; other formats return an error.
 func (a *InPostAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {

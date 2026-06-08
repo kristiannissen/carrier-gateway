@@ -127,6 +127,29 @@ func (m *MockPostNordAdapter) FetchLabel(_ context.Context, req LabelRequest) (*
 	}, nil
 }
 
+// CancelShipment returns a mock cancel response.
+func (m *MockPostNordAdapter) CancelShipment(_ context.Context, trackingNumber string) (*CancelResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+	return &CancelResponse{TrackingNumber: trackingNumber, Carrier: "postnord", Status: "cancelled"}, nil
+}
+
+// UpdateShipment returns a mock update response.
+func (m *MockPostNordAdapter) UpdateShipment(_ context.Context, req UpdateRequest) (*UpdateResponse, error) {
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+	var fields []string
+	if req.ReceiverPhone != "" {
+		fields = append(fields, "phone")
+	}
+	if req.ReceiverEmail != "" {
+		fields = append(fields, "email")
+	}
+	return &UpdateResponse{TrackingNumber: req.TrackingNumber, Carrier: "postnord", Status: "updated", UpdatedFields: fields}, nil
+}
+
 // NewMockPostNordAdapter returns a new MockPostNordAdapter with default behaviour.
 func NewMockPostNordAdapter() *MockPostNordAdapter {
 	return &MockPostNordAdapter{}

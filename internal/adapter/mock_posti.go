@@ -43,6 +43,16 @@ func (a *MockPostiAdapter) FetchLabel(_ context.Context, req LabelRequest) (*Lab
 	}, nil
 }
 
+// CancelShipment returns unsupported for Posti.
+func (a *MockPostiAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
+	return nil, fmt.Errorf("posti does not support cancellation via this gateway")
+}
+
+// UpdateShipment returns unsupported for Posti.
+func (a *MockPostiAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
+	return nil, fmt.Errorf("posti does not support post-booking updates via this gateway")
+}
+
 // TrackShipment mocks tracking a shipment with Posti.
 func (a *MockPostiAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{

@@ -60,6 +60,35 @@ func (a *MockDAOAdapter) FetchLabel(_ context.Context, req LabelRequest) (*Label
 	}, nil
 }
 
+// CancelShipment returns a mock cancel response for DAO.
+func (a *MockDAOAdapter) CancelShipment(_ context.Context, trackingNumber string) (*CancelResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+	return &CancelResponse{TrackingNumber: trackingNumber, Carrier: "dao", Status: "cancelled"}, nil
+}
+
+// UpdateShipment returns a mock update response for DAO.
+func (a *MockDAOAdapter) UpdateShipment(_ context.Context, req UpdateRequest) (*UpdateResponse, error) {
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+	var fields []string
+	if req.ReceiverPhone != "" {
+		fields = append(fields, "phone")
+	}
+	if req.ReceiverEmail != "" {
+		fields = append(fields, "email")
+	}
+	if req.Weight > 0 {
+		fields = append(fields, "weight")
+	}
+	if req.ServicePointID != "" {
+		fields = append(fields, "servicePointId")
+	}
+	return &UpdateResponse{TrackingNumber: req.TrackingNumber, Carrier: "dao", Status: "updated", UpdatedFields: fields}, nil
+}
+
 // TrackShipment mocks tracking a shipment with DAO.
 func (a *MockDAOAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{

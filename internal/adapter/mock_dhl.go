@@ -1,0 +1,80 @@
+// Package adapter provides interfaces and implementations for carrier integrations.
+// This file is located at /internal/adapter/mock_dhl.go.
+package adapter
+
+import (
+	"context"
+	"fmt"
+)
+
+// MockDHLAdapter is a mock implementation of the CarrierAdapter interface for DHL.
+type MockDHLAdapter struct{}
+
+// BookShipment mocks booking a DHL shipment.
+func (m *MockDHLAdapter) BookShipment(_ context.Context, request BookingRequest) (*BookingResponse, error) {
+	if request.Shipment.TotalWeight <= 0 {
+		return nil, fmt.Errorf("TotalWeight is required and must be greater than 0")
+	}
+	var sumColliWeight float64
+	for _, c := range request.Shipment.Colli {
+		sumColliWeight += c.Weight
+	}
+	if request.Shipment.TotalWeight != sumColliWeight {
+		return nil, fmt.Errorf("TotalWeight must match the sum of all colli weights")
+	}
+
+	return &BookingResponse{
+		TrackingNumber: "JJD14900053379980",
+		Carrier:        "dhl",
+		Status:         "booked",
+		Colli: []ColliResponse{
+			{
+				ID:             "JJD14900053379980",
+				TrackingNumber: "JJD14900053379980",
+				LabelURL:       mockLabelData,
+				Status:         "booked",
+			},
+		},
+	}, nil
+}
+
+// TrackShipment mocks tracking a DHL shipment.
+func (m *MockDHLAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
+	return &TrackingResponse{
+		TrackingNumber: trackingNumber,
+		Carrier:        "dhl",
+		Status:         "transit",
+		Events: []TrackingEvent{
+			{
+				Timestamp: "2026-06-07T12:00:00Z",
+				Status:    "transit",
+				Location:  "Hamburg, DE",
+				Details:   "Shipment is in transit",
+			},
+		},
+	}, nil
+}
+
+// FetchLabel returns a mock label for DHL. Only PDF is supported.
+func (m *MockDHLAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
+	if req.Format != LabelFormatPDF {
+		return nil, unsupportedFormat("DHL", req.Format, LabelFormatPDF)
+	}
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "dhl",
+		Format:         LabelFormatPDF,
+		Data:           mockLabelData,
+		MimeType:       MimeTypeForFormat(LabelFormatPDF),
+	}, nil
+}
+
+// CancelShipment returns unsupported for DHL.
+func (m *MockDHLAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
+	return nil, fmt.Errorf("DHL does not support cancellation via API — contact DHL customer service")
+}
+
+// UpdateShipment returns unsupported for DHL.
+func (m *MockDHLAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
+	return nil, fmt.Errorf("DHL does not support post-booking updates via API — contact DHL customer service")
+}

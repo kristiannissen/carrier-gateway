@@ -313,6 +313,48 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	return result, nil
 }
 
+// CancelShipment cancels a Bring shipment via DELETE /booking/api/create/{consignmentNumber}.
+// The shipment must not yet have been collected by Bring.
+func (a *BringAdapter) CancelShipment(ctx context.Context, trackingNumber string) (*CancelResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
+		fmt.Sprintf("%s/booking/api/create/%s", a.BaseURL, trackingNumber), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Bring cancel request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
+	req.Header.Set("X-MyBring-API-Key", a.APIKey)
+	req.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/logistics-gateway")
+	req.Header.Set("X-Bring-Test-Indicator", "false")
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("bring cancel request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		return nil, fmt.Errorf("bring cancel returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return &CancelResponse{
+		TrackingNumber: trackingNumber,
+		Carrier:        "bring",
+		Status:         "cancelled",
+	}, nil
+}
+
+// UpdateShipment is not supported for Bring.
+// Post-booking updates are not available via the Bring Booking API.
+func (a *BringAdapter) UpdateShipment(_ context.Context, req UpdateRequest) (*UpdateResponse, error) {
+	return nil, fmt.Errorf("bring does not support post-booking updates")
+}
+
 // FetchLabel retrieves a shipping label from Bring.
 // Bring returns a label URL in the booking response; this method fetches it.
 // Only PDF format is supported.

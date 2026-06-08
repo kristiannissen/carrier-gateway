@@ -297,6 +297,177 @@ func (a *DAOAdapter) updateContactInfo(ctx context.Context, barcode, phone, emai
 	return nil
 }
 
+// CancelShipment cancels a DAO shipment via AnnullerePakke.php.
+// The parcel must not yet have been scanned at a DAO terminal.
+func (a *DAOAdapter) CancelShipment(ctx context.Context, trackingNumber string) (*CancelResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	params := a.daoBaseParams()
+	params.Set("stregkode", trackingNumber)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		a.BaseURL+"/AnnullerePakke.php?"+params.Encode(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create DAO cancel request: %w", err)
+	}
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("DAO cancel request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read DAO cancel response: %w", err)
+	}
+
+	var daoResp struct {
+		Status    string `json:"status"`
+		ErrorCode string `json:"fejlkode"`
+		ErrorText string `json:"fejltekst"`
+	}
+	if err := json.Unmarshal(body, &daoResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal DAO cancel response: %w", err)
+	}
+	if daoResp.Status != "OK" {
+		return nil, fmt.Errorf("DAO cancel failed: %s (%s)", daoResp.ErrorText, daoResp.ErrorCode)
+	}
+
+	return &CancelResponse{
+		TrackingNumber: trackingNumber,
+		Carrier:        "dao",
+		Status:         "cancelled",
+	}, nil
+}
+
+// UpdateShipment applies partial updates to a DAO shipment.
+// Supported fields: ReceiverPhone, ReceiverEmail (via OpdaterKontaktOplysning.php),
+// Weight (via OpdaterVaegt.php), ServicePointID (via OpdaterShopid.php).
+// All updates must happen before the parcel is scanned at a DAO terminal.
+func (a *DAOAdapter) UpdateShipment(ctx context.Context, req UpdateRequest) (*UpdateResponse, error) {
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+	if req.ReceiverPhone == "" && req.ReceiverEmail == "" && req.Weight == 0 && req.ServicePointID == "" {
+		return nil, fmt.Errorf("at least one field must be specified for update")
+	}
+
+	var updatedFields []string
+
+	// Contact update — phone and/or email.
+	if req.ReceiverPhone != "" || req.ReceiverEmail != "" {
+		if err := a.updateContactInfo(ctx, req.TrackingNumber, req.ReceiverPhone, req.ReceiverEmail); err != nil {
+			return nil, fmt.Errorf("DAO contact update failed: %w", err)
+		}
+		if req.ReceiverPhone != "" {
+			updatedFields = append(updatedFields, "phone")
+		}
+		if req.ReceiverEmail != "" {
+			updatedFields = append(updatedFields, "email")
+		}
+	}
+
+	// Weight update.
+	if req.Weight > 0 {
+		if err := a.updateWeight(ctx, req.TrackingNumber, req.Weight); err != nil {
+			return nil, fmt.Errorf("DAO weight update failed: %w", err)
+		}
+		updatedFields = append(updatedFields, "weight")
+	}
+
+	// Service point redirect.
+	if req.ServicePointID != "" {
+		if err := a.updateShopID(ctx, req.TrackingNumber, req.ServicePointID); err != nil {
+			return nil, fmt.Errorf("DAO service point update failed: %w", err)
+		}
+		updatedFields = append(updatedFields, "servicePointId")
+	}
+
+	return &UpdateResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "dao",
+		Status:         "updated",
+		UpdatedFields:  updatedFields,
+	}, nil
+}
+
+// updateWeight calls OpdaterVaegt.php to change the parcel weight before first terminal scan.
+func (a *DAOAdapter) updateWeight(ctx context.Context, barcode string, weightKg float64) error {
+	params := a.daoBaseParams()
+	params.Set("stregkode", barcode)
+	params.Set("vaegt", strconv.Itoa(int(math.Round(weightKg*1000)))) // kg → grams
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		a.BaseURL+"/OpdaterVaegt.php?"+params.Encode(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create DAO weight update request: %w", err)
+	}
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("DAO weight update request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read DAO weight update response: %w", err)
+	}
+
+	var daoResp struct {
+		Status    string `json:"status"`
+		ErrorCode string `json:"fejlkode"`
+		ErrorText string `json:"fejltekst"`
+	}
+	if err := json.Unmarshal(body, &daoResp); err != nil {
+		return fmt.Errorf("failed to unmarshal DAO weight update response: %w", err)
+	}
+	if daoResp.Status != "OK" {
+		return fmt.Errorf("DAO weight update failed: %s (%s)", daoResp.ErrorText, daoResp.ErrorCode)
+	}
+	return nil
+}
+
+// updateShopID calls OpdaterShopid.php to redirect a parcel to a different daoSHOP.
+func (a *DAOAdapter) updateShopID(ctx context.Context, barcode, shopID string) error {
+	params := a.daoBaseParams()
+	params.Set("stregkode", barcode)
+	params.Set("shopid", shopID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		a.BaseURL+"/DAOPakkeshop/OpdaterShopid.php?"+params.Encode(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create DAO shop update request: %w", err)
+	}
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("DAO shop update request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read DAO shop update response: %w", err)
+	}
+
+	var daoResp struct {
+		Status    string `json:"status"`
+		ErrorCode string `json:"fejlkode"`
+		ErrorText string `json:"fejltekst"`
+	}
+	if err := json.Unmarshal(body, &daoResp); err != nil {
+		return fmt.Errorf("failed to unmarshal DAO shop update response: %w", err)
+	}
+	if daoResp.Status != "OK" {
+		return fmt.Errorf("DAO shop update failed: %s (%s)", daoResp.ErrorText, daoResp.ErrorCode)
+	}
+	return nil
+}
+
 // FetchLabel retrieves a PDF label for a DAO shipment using HentLabel.php.
 // Only PDF format is supported — DAO does not offer ZPL or other formats.
 // The response is raw PDF bytes which are base64-encoded before returning.

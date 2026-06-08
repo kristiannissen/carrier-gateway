@@ -12,6 +12,7 @@ A stateless Go microservice for booking, tracking, and returning shipments acros
 | `bring` | Bring | NO, SE, DK, FI | ✅ | ✅ | ✅ | PDF | Production |
 | `gls` | GLS | DK, SE, DE, NL, and more | ✅ | ✅ | ❌ | PDF, ZPL, ZPLGK | Production |
 | `dao` | DAO | DK | ✅ | ✅ | ✅ | PDF | Production |
+| `dhl` | DHL eCommerce Europe | 28 European countries | ✅ | ✅ | ❌ | PDF | Beta |
 | `posti` | Posti | FI | ✅ | ✅ | ❌ | PDF | Production |
 | `inpost` | InPost | PL | ✅ | ✅ | ❌ | PDF | Production |
 
@@ -50,6 +51,11 @@ The server starts on `http://localhost:8080`.
 | `GLS_CONTRACT_ID` | GLS shipper contact ID | No | — |
 | `DAO_API_KEY` | DAO API key | No | — |
 | `DAO_CUSTOMER_ID` | DAO customer ID | No | — |
+| `DHL_CLIENT_ID` | DHL eConnect OAuth2 client ID | No | — |
+| `DHL_CLIENT_SECRET` | DHL eConnect OAuth2 client secret | No | — |
+| `DHL_CUSTOMER_ID` | DHL customerIdentification (sent in sender block) | No | — |
+
+DHL uses `https://api.dhl.com` for both booking and tracking. No sandbox URL — use `MOCK_MODE=true` for testing without credentials.
 | `POSTI_API_KEY` | Posti API key | No | — |
 | `INPOST_API_KEY` | InPost API key | No | — |
 
@@ -72,6 +78,9 @@ GLS_CLIENT_SECRET=your-gls-client-secret
 GLS_CONTRACT_ID=your-gls-contact-id
 DAO_API_KEY=your-dao-key
 DAO_CUSTOMER_ID=your-dao-customer-id
+DHL_CLIENT_ID=your-dhl-client-id
+DHL_CLIENT_SECRET=your-dhl-client-secret
+DHL_CUSTOMER_ID=your-dhl-customer-id
 POSTI_API_KEY=your-posti-key
 INPOST_API_KEY=your-inpost-key
 ```
@@ -100,6 +109,8 @@ docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development logistics-gatew
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/bookings` | Book a shipment |
+| `DELETE` | `/api/bookings/{trackingNumber}` | Cancel a shipment |
+| `PATCH` | `/api/bookings/{trackingNumber}` | Update a shipment |
 | `GET` | `/api/trackings/{trackingNumber}` | Track a shipment |
 | `GET` | `/api/labels/{trackingNumber}` | Fetch a shipping label |
 | `GET` | `/api/health` | Health check |
@@ -444,6 +455,100 @@ curl -X POST http://localhost:8080/api/bookings \
       ]
     }
   }'
+```
+
+---
+
+### DELETE /api/bookings/{trackingNumber}
+
+Cancels a booked shipment. The shipment must not yet have been collected or scanned by the carrier.
+
+| Query parameter | Description | Required |
+|---|---|---|
+| `carrier` | Carrier key | Yes |
+
+| Carrier | Support | Constraint |
+|---|---|---|
+| PostNord | ✅ | Before collection |
+| Bring | ✅ | Before collection |
+| GLS | ❌ | Contact GLS directly |
+| DAO | ✅ | Before first terminal scan |
+| Posti | ❌ | Not supported |
+| InPost | ❌ | Not supported |
+
+```bash
+# Cancel a PostNord shipment
+curl -X DELETE "http://localhost:8080/api/bookings/00073215400599388772?carrier=postnord"
+
+# Cancel a Bring shipment
+curl -X DELETE "http://localhost:8080/api/bookings/70438101263797410?carrier=bring"
+
+# Cancel a DAO shipment
+curl -X DELETE "http://localhost:8080/api/bookings/00057126960000003016?carrier=dao"
+```
+
+#### Response
+
+```json
+{
+  "trackingNumber": "00073215400599388772",
+  "carrier": "postnord",
+  "status": "cancelled"
+}
+```
+
+---
+
+### PATCH /api/bookings/{trackingNumber}
+
+Updates one or more fields on a booked shipment. Only the fields you include are forwarded to the carrier. All updates must happen before the carrier collects or scans the parcel.
+
+| Query parameter | Description | Required |
+|---|---|---|
+| `carrier` | Carrier key | Yes |
+
+| Field | Type | Description |
+|---|---|---|
+| `phone` | string | Updated receiver phone number |
+| `email` | string | Updated receiver email address |
+| `weight` | float | Updated parcel weight in kg |
+| `servicePointId` | string | Redirect delivery to a different service point |
+
+| Carrier | phone/email | weight | servicePointId | Notes |
+|---|---|---|---|---|
+| PostNord | ✅ | ❌ | ❌ | SE only per PostNord API — DK bookings may return an error |
+| Bring | ❌ | ❌ | ❌ | Not supported |
+| GLS | ❌ | ❌ | ❌ | Not supported |
+| DAO | ✅ | ✅ | ✅ | Before first terminal scan |
+| Posti | ❌ | ❌ | ❌ | Not supported |
+| InPost | ❌ | ❌ | ❌ | Not supported |
+
+```bash
+# Update receiver contact info (PostNord)
+curl -X PATCH "http://localhost:8080/api/bookings/00073215400599388772?carrier=postnord" \
+  -H "Content-Type: application/json" \
+  -d '{"phone": "+4587654321", "email": "new@example.com"}'
+
+# Update weight (DAO only)
+curl -X PATCH "http://localhost:8080/api/bookings/00057126960000003016?carrier=dao" \
+  -H "Content-Type: application/json" \
+  -d '{"weight": 2.3}'
+
+# Redirect to a different service point (DAO only)
+curl -X PATCH "http://localhost:8080/api/bookings/00057126960000003016?carrier=dao" \
+  -H "Content-Type: application/json" \
+  -d '{"servicePointId": "44012"}'
+```
+
+#### Response
+
+```json
+{
+  "trackingNumber": "00057126960000003016",
+  "carrier": "dao",
+  "status": "updated",
+  "updatedFields": ["phone", "email", "weight"]
+}
 ```
 
 ---

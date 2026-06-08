@@ -102,6 +102,16 @@ func (m *MockInPostAdapter) FetchLabel(_ context.Context, req LabelRequest) (*La
 	}, nil
 }
 
+// CancelShipment returns unsupported for InPost.
+func (m *MockInPostAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
+	return nil, fmt.Errorf("InPost does not support cancellation via this gateway")
+}
+
+// UpdateShipment returns unsupported for InPost.
+func (m *MockInPostAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
+	return nil, fmt.Errorf("InPost does not support post-booking updates via this gateway")
+}
+
 // NewMockInPostAdapter returns a new MockInPostAdapter with default behaviour.
 func NewMockInPostAdapter() *MockInPostAdapter {
 	return &MockInPostAdapter{}
