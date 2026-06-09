@@ -453,18 +453,26 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 
 	events := make([]TrackingEvent, len(glsResp.UnitDetail.History))
 	for i, h := range glsResp.UnitDetail.History {
-		events[i] = TrackingEvent{Timestamp: h.Date, Status: h.StatusCode, Location: h.Location, Details: h.Description}
+		events[i] = TrackingEvent{
+			Timestamp:        h.Date,
+			Status:           h.StatusCode,
+			NormalizedStatus: normalizeStatus("gls", h.StatusCode),
+			Location:         h.Location,
+			Details:          h.Description,
+		}
 	}
 
-	status := "Unknown"
+	rawStatus := ""
 	if len(glsResp.UnitDetail.History) > 0 {
-		status = glsResp.UnitDetail.History[0].StatusCode
+		rawStatus = glsResp.UnitDetail.History[0].StatusCode
 	}
 
 	return &TrackingResponse{
-		TrackingNumber: glsResp.UnitDetail.TrackID,
-		Carrier:        "gls",
-		Status:         status,
-		Events:         events,
+		TrackingNumber:   glsResp.UnitDetail.TrackID,
+		Carrier:          "gls",
+		Status:           rawStatus,
+		NormalizedStatus: normalizeStatus("gls", rawStatus),
+		OriginalStatus:   rawStatus,
+		Events:           events,
 	}, nil
 }

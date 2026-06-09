@@ -84,16 +84,18 @@ func (m *MockPostNordAdapter) TrackShipment(ctx context.Context, trackingNumber 
 
 	events := []TrackingEvent{
 		{
-			Timestamp: time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
-			Status:    "Picked Up",
-			Location:  "Copenhagen, DK",
-			Details:   "Package picked up at sender location",
+			Timestamp:        time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+			Status:           "INFORMED",
+			NormalizedStatus: StatusBooked,
+			Location:         "Copenhagen, DK",
+			Details:          "Package picked up at sender location",
 		},
 		{
-			Timestamp: time.Now().Add(-12 * time.Hour).UTC().Format(time.RFC3339),
-			Status:    "In Transit",
-			Location:  "Malmö, SE",
-			Details:   "Package arrived at Malmö hub",
+			Timestamp:        time.Now().Add(-12 * time.Hour).UTC().Format(time.RFC3339),
+			Status:           "IN_TRANSPORT",
+			NormalizedStatus: StatusInTransit,
+			Location:         "Malmö, SE",
+			Details:          "Package arrived at Malmö hub",
 		},
 	}
 
@@ -101,14 +103,16 @@ func (m *MockPostNordAdapter) TrackShipment(ctx context.Context, trackingNumber 
 		ShipmentID:        fmt.Sprintf("shipment_%d", rand.Intn(1000000)), //nolint:gosec // mock data, not security-sensitive
 		TrackingNumber:    trackingNumber,
 		Carrier:           "postnord",
-		Status:            "In Transit",
+		Status:            "IN_TRANSPORT",
+		NormalizedStatus:  StatusInTransit,
+		OriginalStatus:    "IN_TRANSPORT",
 		EstimatedDelivery: time.Now().Add(48 * time.Hour).UTC().Format("2006-01-02"),
 		Events:            events,
 		Colli: []ColliTracking{
 			{
 				ID:             "1",
 				TrackingNumber: trackingNumber + "-1",
-				Status:         "In Transit",
+				Status:         "IN_TRANSPORT",
 				Events:         events,
 			},
 		},

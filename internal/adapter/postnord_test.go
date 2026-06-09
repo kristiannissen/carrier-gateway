@@ -73,7 +73,8 @@ func TestMockPostNordAdapter_TrackShipment(t *testing.T) {
 	response, err := (&MockPostNordAdapter{}).TrackShipment(t.Context(), "PN123456789DK")
 	require.NoError(t, err)
 	assert.Equal(t, "PN123456789DK", response.TrackingNumber)
-	assert.Equal(t, "In Transit", response.Status)
+	assert.Equal(t, "IN_TRANSPORT", response.Status)
+	assert.Equal(t, StatusInTransit, response.NormalizedStatus)
 	assert.Len(t, response.Events, 2)
 }
 

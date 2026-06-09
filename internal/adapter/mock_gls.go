@@ -76,16 +76,19 @@ func (m *MockGLSAdapter) TrackShipment(ctx context.Context, trackingNumber strin
 
 	events := []TrackingEvent{
 		{
-			Timestamp: time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
-			Status:    "Shipment Accepted",
-			Location:  "Copenhagen, DK",
+			Timestamp:        time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+			Status:           "Shipment Accepted",
+			NormalizedStatus: StatusUnknown, // GLS StatusCode enum not yet available
+			Location:         "Copenhagen, DK",
 		},
 	}
 
 	return &TrackingResponse{
 		TrackingNumber:    trackingNumber,
 		Carrier:           "gls",
-		Status:            "In Transit",
+		Status:            "Shipment Accepted",
+		NormalizedStatus:  StatusUnknown, // GLS StatusCode enum not yet available
+		OriginalStatus:    "Shipment Accepted",
 		EstimatedDelivery: time.Now().Add(48 * time.Hour).UTC().Format("2006-01-02"),
 		Events:            events,
 	}, nil

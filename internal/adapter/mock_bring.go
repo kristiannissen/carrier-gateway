@@ -68,19 +68,22 @@ func (m *MockBringAdapter) TrackShipment(ctx context.Context, trackingNumber str
 
 	events := []TrackingEvent{
 		{
-			Timestamp: time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339),
-			Status:    "Picked Up",
-			Location:  "Oslo, NO",
+			Timestamp:        time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339),
+			Status:           "HANDED_IN",
+			NormalizedStatus: StatusPickedUp,
+			Location:         "Oslo, NO",
 		},
 		{
-			Timestamp: time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
-			Status:    "In Transit",
-			Location:  "Gothenburg, SE",
+			Timestamp:        time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+			Status:           "IN_TRANSIT",
+			NormalizedStatus: StatusInTransit,
+			Location:         "Gothenburg, SE",
 		},
 		{
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Status:    "Delivered",
-			Location:  "Stockholm, SE",
+			Timestamp:        time.Now().UTC().Format(time.RFC3339),
+			Status:           "DELIVERED",
+			NormalizedStatus: StatusDelivered,
+			Location:         "Stockholm, SE",
 		},
 	}
 
@@ -88,6 +91,8 @@ func (m *MockBringAdapter) TrackShipment(ctx context.Context, trackingNumber str
 		TrackingNumber:    trackingNumber,
 		Carrier:           "bring",
 		Status:            "Delivered",
+		NormalizedStatus:  StatusDelivered,
+		OriginalStatus:    "DELIVERED",
 		EstimatedDelivery: time.Now().UTC().Format("2006-01-02"),
 		Events:            events,
 	}, nil

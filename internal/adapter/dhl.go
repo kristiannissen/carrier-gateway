@@ -567,10 +567,11 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 			loc = e.Location.Address.CountryCode
 		}
 		events[i] = TrackingEvent{
-			Timestamp: e.Timestamp,
-			Status:    e.StatusCode,
-			Location:  loc,
-			Details:   e.Description,
+			Timestamp:        e.Timestamp,
+			Status:           e.StatusCode,
+			NormalizedStatus: normalizeStatus("dhl", e.StatusCode),
+			Location:         loc,
+			Details:          e.Description,
 		}
 	}
 
@@ -578,6 +579,8 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		TrackingNumber:    s.ID,
 		Carrier:           "dhl",
 		Status:            s.Status.StatusCode,
+		NormalizedStatus:  normalizeStatus("dhl", s.Status.StatusCode),
+		OriginalStatus:    s.Status.StatusCode,
 		EstimatedDelivery: s.EstimatedTimeOfDelivery,
 		Events:            events,
 	}, nil

@@ -70,14 +70,16 @@ func (m *MockInPostAdapter) TrackShipment(ctx context.Context, trackingNumber st
 
 	events := []TrackingEvent{
 		{
-			Timestamp: time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
-			Status:    "Picked Up",
-			Location:  "Warsaw, PL",
+			Timestamp:        time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+			Status:           "Picked Up",
+			NormalizedStatus: StatusUnknown,
+			Location:         "Warsaw, PL",
 		},
 		{
-			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			Status:    "In Transit",
-			Location:  "Krakow, PL",
+			Timestamp:        time.Now().UTC().Format(time.RFC3339),
+			Status:           "In Transit",
+			NormalizedStatus: StatusUnknown,
+			Location:         "Krakow, PL",
 		},
 	}
 
@@ -85,6 +87,8 @@ func (m *MockInPostAdapter) TrackShipment(ctx context.Context, trackingNumber st
 		TrackingNumber:    trackingNumber,
 		Carrier:           "inpost",
 		Status:            "In Transit",
+		NormalizedStatus:  StatusUnknown,
+		OriginalStatus:    "In Transit",
 		EstimatedDelivery: time.Now().Add(24 * time.Hour).UTC().Format("2006-01-02"),
 		Events:            events,
 	}, nil

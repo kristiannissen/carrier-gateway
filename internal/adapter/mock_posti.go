@@ -56,13 +56,17 @@ func (a *MockPostiAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*
 // TrackShipment mocks tracking a shipment with Posti.
 func (a *MockPostiAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
-		TrackingNumber: trackingNumber,
-		Status:         "In Transit",
+		TrackingNumber:   trackingNumber,
+		Carrier:          "posti",
+		Status:           "In Transit",
+		NormalizedStatus: StatusUnknown,
+		OriginalStatus:   "In Transit",
 		Events: []TrackingEvent{
 			{
-				Timestamp: "2026-05-31T12:00:00Z",
-				Status:    "Shipment Accepted",
-				Location:  "Helsinki",
+				Timestamp:        "2026-05-31T12:00:00Z",
+				Status:           "Shipment Accepted",
+				NormalizedStatus: StatusUnknown,
+				Location:         "Helsinki",
 			},
 		},
 	}, nil

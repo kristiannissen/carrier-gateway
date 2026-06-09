@@ -165,6 +165,10 @@ type carrierCapabilities struct {
 	// Beta is true when the carrier integration is not yet fully validated
 	// for production use. Callers receive a warning in the booking response.
 	Beta bool
+	// Demo is true when the carrier integration is a placeholder only.
+	// Demo adapters return mock data and are not connected to any live API.
+	// They exist to satisfy the CarrierAdapter interface for future implementation.
+	Demo bool
 	// SupportsCancellation is true when the carrier's API supports cancelling
 	// a booked shipment before collection.
 	SupportsCancellation bool
@@ -180,8 +184,8 @@ var capabilities = map[string]carrierCapabilities{
 	"gls":      {NativeIdempotency: false, SupportsCancellation: false, SupportsUpdate: false},
 	"dao":      {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: true},
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	"posti":    {NativeIdempotency: false, SupportsCancellation: false, SupportsUpdate: false},
-	"inpost":   {NativeIdempotency: false, SupportsCancellation: false, SupportsUpdate: false},
+	"posti":    {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
+	"inpost":   {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -195,6 +199,12 @@ func SupportsNativeIdempotency(carrier string) bool {
 // Beta carriers are functional but not fully validated for production use.
 func IsBeta(carrier string) bool {
 	return capabilities[carrier].Beta
+}
+
+// IsDemo reports whether the given carrier is a demo placeholder.
+// Demo carriers return mock data and are not connected to any live API.
+func IsDemo(carrier string) bool {
+	return capabilities[carrier].Demo
 }
 
 // SupportsCancellation reports whether the given carrier supports post-booking cancellation.
@@ -544,12 +554,41 @@ type ColliResponse struct {
 	Status         string `json:"status,omitempty"`
 }
 
+// TrackingStatus is a carrier-agnostic normalized shipment status.
+type TrackingStatus string
+
+const (
+	// StatusBooked means the shipment has been booked but not yet collected.
+	StatusBooked TrackingStatus = "booked"
+	// StatusPickedUp means the carrier has collected the parcel from the sender.
+	StatusPickedUp TrackingStatus = "picked_up"
+	// StatusInTransit means the parcel is moving through the carrier network.
+	StatusInTransit TrackingStatus = "in_transit"
+	// StatusOutForDelivery means the parcel is on the delivery vehicle.
+	StatusOutForDelivery TrackingStatus = "out_for_delivery"
+	// StatusDelivered means the parcel has been delivered to the recipient.
+	StatusDelivered TrackingStatus = "delivered"
+	// StatusFailed means a delivery attempt failed.
+	StatusFailed TrackingStatus = "failed"
+	// StatusReturned means the parcel is being returned to the sender.
+	StatusReturned TrackingStatus = "returned"
+	// StatusDelayed means the parcel is delayed relative to the original ETA.
+	StatusDelayed TrackingStatus = "delayed"
+	// StatusUnknown is the fallback for any raw status not in the mapping table.
+	StatusUnknown TrackingStatus = "unknown"
+)
+
 // TrackingResponse represents the tracking status of a shipment.
 type TrackingResponse struct {
 	ShipmentID        string          `json:"shipmentId,omitempty"`
 	TrackingNumber    string          `json:"trackingNumber"`
 	Carrier           string          `json:"carrier"`
+	// Status is the raw carrier-specific status string. Preserved for backward compatibility.
 	Status            string          `json:"status"`
+	// NormalizedStatus is the carrier-agnostic status. Always present.
+	NormalizedStatus  TrackingStatus  `json:"normalizedStatus"`
+	// OriginalStatus is the unmodified raw status string from the carrier.
+	OriginalStatus    string          `json:"originalStatus"`
 	Events            []TrackingEvent `json:"events"`
 	EstimatedDelivery string          `json:"estimatedDelivery,omitempty"`
 	Colli             []ColliTracking `json:"colli,omitempty"`
@@ -567,7 +606,10 @@ type ColliTracking struct {
 // TrackingEvent represents a single tracking event.
 type TrackingEvent struct {
 	Timestamp string `json:"timestamp"`
-	Status    string `json:"status"`
-	Location  string `json:"location,omitempty"`
-	Details   string `json:"details,omitempty"`
+	// Status is the raw carrier-specific status string. Preserved for backward compatibility.
+	Status           string         `json:"status"`
+	// NormalizedStatus is the carrier-agnostic status for this event.
+	NormalizedStatus TrackingStatus `json:"normalizedStatus"`
+	Location         string         `json:"location,omitempty"`
+	Details          string         `json:"details,omitempty"`
 }

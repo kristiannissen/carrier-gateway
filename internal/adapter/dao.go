@@ -591,27 +591,29 @@ func (a *DAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 
 	events := make([]TrackingEvent, len(daoResp.Result.Events))
 	for i, e := range daoResp.Result.Events {
-		// For HOME parcels the delivered text is in "sted"; for others it is in "beskrivelse".
 		details := e.Description
 		location := e.Location
 		events[i] = TrackingEvent{
-			Timestamp: e.Timestamp,
-			Status:    e.EventCode,
-			Location:  location,
-			Details:   details,
+			Timestamp:        e.Timestamp,
+			Status:           e.EventCode,
+			NormalizedStatus: normalizeStatus("dao", e.EventCode),
+			Location:         location,
+			Details:          details,
 		}
 	}
 
 	// Use the most recent event description as the overall status.
-	status := daoResp.Result.ParcelType
+	rawStatus := daoResp.Result.ParcelType
 	if len(daoResp.Result.Events) > 0 {
-		status = daoResp.Result.Events[0].Description
+		rawStatus = daoResp.Result.Events[0].EventCode
 	}
 
 	return &TrackingResponse{
-		TrackingNumber: daoResp.Result.TrackingNumber,
-		Carrier:        "dao",
-		Status:         status,
-		Events:         events,
+		TrackingNumber:   daoResp.Result.TrackingNumber,
+		Carrier:          "dao",
+		Status:           rawStatus,
+		NormalizedStatus: normalizeStatus("dao", rawStatus),
+		OriginalStatus:   rawStatus,
+		Events:           events,
 	}, nil
 }

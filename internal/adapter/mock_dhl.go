@@ -41,15 +41,18 @@ func (m *MockDHLAdapter) BookShipment(_ context.Context, request BookingRequest)
 // TrackShipment mocks tracking a DHL shipment.
 func (m *MockDHLAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
-		TrackingNumber: trackingNumber,
-		Carrier:        "dhl",
-		Status:         "transit",
+		TrackingNumber:   trackingNumber,
+		Carrier:          "dhl",
+		Status:           "transit",
+		NormalizedStatus: StatusInTransit,
+		OriginalStatus:   "transit",
 		Events: []TrackingEvent{
 			{
-				Timestamp: "2026-06-07T12:00:00Z",
-				Status:    "transit",
-				Location:  "Hamburg, DE",
-				Details:   "Shipment is in transit",
+				Timestamp:        "2026-06-07T12:00:00Z",
+				Status:           "transit",
+				NormalizedStatus: StatusInTransit,
+				Location:         "Hamburg, DE",
+				Details:          "Shipment is in transit",
 			},
 		},
 	}, nil

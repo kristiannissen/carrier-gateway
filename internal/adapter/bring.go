@@ -446,9 +446,10 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 
 	if len(consignment.PackageSet) > 0 {
 		pkg := consignment.PackageSet[0]
+		statusID := pkg.StatusID
 		status = pkg.StatusDescription
 		if status == "" {
-			status = pkg.StatusID
+			status = statusID
 		}
 		for _, e := range pkg.EventSet {
 			location := e.City
@@ -456,18 +457,28 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 				location = e.City + ", " + e.CountryCode
 			}
 			events = append(events, TrackingEvent{
-				Timestamp: e.ISODateTime,
-				Status:    e.Status,
-				Location:  location,
-				Details:   e.Description,
+				Timestamp:        e.ISODateTime,
+				Status:           e.Status,
+				NormalizedStatus: normalizeStatus("bring", e.Status),
+				Location:         location,
+				Details:          e.Description,
 			})
 		}
 	}
 
+	normalizedStatus := StatusUnknown
+	originalStatus := ""
+	if len(consignment.PackageSet) > 0 {
+		originalStatus = consignment.PackageSet[0].StatusID
+		normalizedStatus = normalizeStatus("bring", originalStatus)
+	}
+
 	return &TrackingResponse{
-		TrackingNumber: consignment.ConsignmentID,
-		Carrier:        "bring",
-		Status:         status,
-		Events:         events,
+		TrackingNumber:   consignment.ConsignmentID,
+		Carrier:          "bring",
+		Status:           status,
+		NormalizedStatus: normalizedStatus,
+		OriginalStatus:   originalStatus,
+		Events:           events,
 	}, nil
 }

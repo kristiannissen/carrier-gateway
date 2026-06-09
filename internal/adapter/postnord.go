@@ -721,10 +721,11 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 				location = e.Location.City
 			}
 			events = append(events, TrackingEvent{
-				Timestamp: e.EventTime,
-				Status:    e.Status,
-				Location:  location,
-				Details:   e.Description,
+				Timestamp:        e.EventTime,
+				Status:           e.Status,
+				NormalizedStatus: normalizeStatus("postnord", e.Status),
+				Location:         location,
+				Details:          e.Description,
 			})
 		}
 	}
@@ -733,6 +734,8 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 		TrackingNumber:    s.ShipmentID,
 		Carrier:           "postnord",
 		Status:            s.Status,
+		NormalizedStatus:  normalizeStatus("postnord", s.Status),
+		OriginalStatus:    s.Status,
 		EstimatedDelivery: s.DeliveryDate,
 		Events:            events,
 	}, nil

@@ -73,7 +73,8 @@ func TestMockGLSAdapter_TrackShipment(t *testing.T) {
 	response, err := (&MockGLSAdapter{}).TrackShipment(t.Context(), "GLS123456789DK")
 	require.NoError(t, err)
 	assert.Equal(t, "GLS123456789DK", response.TrackingNumber)
-	assert.Equal(t, "In Transit", response.Status)
+	assert.Equal(t, "Shipment Accepted", response.Status)
+	assert.Equal(t, StatusUnknown, response.NormalizedStatus)
 	assert.Len(t, response.Events, 1)
 }
 

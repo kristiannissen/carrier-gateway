@@ -92,15 +92,18 @@ func (a *MockDAOAdapter) UpdateShipment(_ context.Context, req UpdateRequest) (*
 // TrackShipment mocks tracking a shipment with DAO.
 func (a *MockDAOAdapter) TrackShipment(_ context.Context, trackingNumber string) (*TrackingResponse, error) {
 	return &TrackingResponse{
-		TrackingNumber: trackingNumber,
-		Carrier:        "dao",
-		Status:         "Pakke modtaget på fordelingscenter",
+		TrackingNumber:   trackingNumber,
+		Carrier:          "dao",
+		Status:           "10",
+		NormalizedStatus: StatusInTransit,
+		OriginalStatus:   "10",
 		Events: []TrackingEvent{
 			{
-				Timestamp: "2026-05-31T12:00:00Z",
-				Status:    "10",
-				Location:  "DAO Erritsø",
-				Details:   "Pakke modtaget på fordelingscenter",
+				Timestamp:        "2026-05-31T12:00:00Z",
+				Status:           "10",
+				NormalizedStatus: StatusInTransit,
+				Location:         "DAO Erritsø",
+				Details:          "Pakke modtaget på fordelingscenter",
 			},
 		},
 	}, nil
