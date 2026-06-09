@@ -264,7 +264,8 @@ func TestMockDAOAdapter_TrackShipment(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, response)
 	assert.Equal(t, "DAO123456789DK", response.TrackingNumber)
-	assert.Equal(t, "Pakke modtaget på fordelingscenter", response.Status)
+	assert.Equal(t, "10", response.Status)
+	assert.Equal(t, StatusInTransit, response.NormalizedStatus)
 	assert.Len(t, response.Events, 1)
 }
 
