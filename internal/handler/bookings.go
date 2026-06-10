@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/kristiannissen/carrier-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/notification"
 	"github.com/kristiannissen/carrier-gateway/internal/parser"
 	"github.com/kristiannissen/carrier-gateway/internal/validation"
 )
@@ -98,6 +99,17 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(customsWarnings) > 0 {
 		response.CustomsWarnings = append(response.CustomsWarnings, customsWarnings...)
+	}
+
+	if request.Notifications != nil && c.NotificationService != nil {
+		prefs := notificationPrefsFrom(request.Notifications)
+		payload := notification.Payload{
+			TrackingNumber: response.TrackingNumber,
+			Carrier:        response.Carrier,
+		}
+		sent, failed := c.NotificationService.Dispatch(r.Context(), notification.EventBooked, prefs, payload)
+		response.NotificationsSent = notificationRecordsFrom(sent)
+		response.NotificationsFailed = notificationRecordsFrom(failed)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -268,4 +280,42 @@ func validateBookingRequest(request *adapter.BookingRequest) (flagged bool, err 
 	}
 
 	return flagged, nil
+}
+
+// notificationPrefsFrom converts adapter.NotificationPreferences into the
+// notification.Preferences type used by the notification package.
+func notificationPrefsFrom(p *adapter.NotificationPreferences) notification.Preferences {
+	if p == nil {
+		return notification.Preferences{}
+	}
+	events := make([]notification.Event, 0, len(p.Events))
+	for _, e := range p.Events {
+		events = append(events, notification.Event(e))
+	}
+	return notification.Preferences{
+		Webhook: &notification.WebhookPrefs{
+			URL:    p.WebhookURL,
+			Secret: p.WebhookSecret,
+			Events: events,
+		},
+	}
+}
+
+// notificationRecordsFrom converts []notification.Record to []adapter.NotificationRecord.
+func notificationRecordsFrom(records []notification.Record) []adapter.NotificationRecord {
+	if len(records) == 0 {
+		return nil
+	}
+	out := make([]adapter.NotificationRecord, len(records))
+	for i, r := range records {
+		out[i] = adapter.NotificationRecord{
+			Event:     string(r.Event),
+			Channel:   r.Channel,
+			URL:       r.URL,
+			Status:    r.Status,
+			Error:     r.Error,
+			Timestamp: r.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+	return out
 }

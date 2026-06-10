@@ -10,6 +10,7 @@ import (
 
 	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 	"github.com/kristiannissen/carrier-gateway/internal/middleware"
+	"github.com/kristiannissen/carrier-gateway/internal/notification"
 )
 
 // Config holds shared configuration for HTTP handlers.
@@ -20,6 +21,9 @@ type Config struct {
 	// Captured at startup so the health endpoint reflects the actual
 	// adapter state rather than re-reading the env var per request.
 	MockMode bool
+	// NotificationService dispatches shipment event webhooks. May be nil
+	// when the feature is not configured; handlers must check before use.
+	NotificationService *notification.Service
 }
 
 // ErrorResponse represents a standardized error response.

@@ -378,12 +378,29 @@ type Customs struct {
 	ShipmentType string `json:"shipmentType,omitempty"`
 }
 
+// NotificationPreferences holds the integrator-supplied webhook configuration
+// for a booking. Kept in the adapter package to avoid an import cycle between
+// adapter and notification.
+type NotificationPreferences struct {
+	// WebhookURL is the endpoint that receives shipment event payloads.
+	WebhookURL string `json:"webhookUrl"`
+	// WebhookSecret is used to sign the payload with HMAC-SHA256.
+	// Leave empty to skip signing.
+	WebhookSecret string `json:"webhookSecret,omitempty"`
+	// Events filters which events trigger a dispatch.
+	// An empty slice means all events are dispatched.
+	Events []string `json:"events,omitempty"`
+}
+
 // BookingRequest represents a generic shipment booking request.
 type BookingRequest struct {
 	Carrier        string   `json:"carrier"        validate:"required"`
 	Shipment       Shipment `json:"shipment"       validate:"required"`
 	CallbackURL    string   `json:"callbackUrl,omitempty"`
 	IdempotencyKey string   `json:"idempotencyKey,omitempty"`
+	// Notifications configures optional event-driven webhook dispatch.
+	// When set, the gateway fires a "booked" notification after a successful booking.
+	Notifications *NotificationPreferences `json:"notifications,omitempty"`
 }
 
 // AddOnType identifies a carrier-agnostic optional service.
@@ -548,6 +565,24 @@ type BookingResponse struct {
 	// yet support them. The shipment is booked; customs data must be submitted
 	// manually or via the carrier's own portal.
 	CustomsWarnings []string `json:"customsWarnings,omitempty"`
+	// NotificationsSent lists notifications that were successfully dispatched
+	// at booking time. Callers may store this for auditing.
+	NotificationsSent []NotificationRecord `json:"notificationsSent,omitempty"`
+	// NotificationsFailed lists notifications that failed at booking time.
+	// Callers should store these and retry via POST /api/notifications.
+	NotificationsFailed []NotificationRecord `json:"notificationsFailed,omitempty"`
+}
+
+// NotificationRecord describes the outcome of a single notification dispatch.
+// Mirrors notification.Record but lives here to keep the adapter package
+// free of a dependency on the notification package.
+type NotificationRecord struct {
+	Event     string `json:"event"`
+	Channel   string `json:"channel"`
+	URL       string `json:"url"`
+	Status    string `json:"status"`
+	Error     string `json:"error,omitempty"`
+	Timestamp string `json:"timestamp"`
 }
 
 // ColliResponse represents the response for an individual colli in a shipment.

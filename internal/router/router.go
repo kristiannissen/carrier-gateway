@@ -11,14 +11,18 @@ import (
 	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 	"github.com/kristiannissen/carrier-gateway/internal/handler"
 	"github.com/kristiannissen/carrier-gateway/internal/middleware"
+	"github.com/kristiannissen/carrier-gateway/internal/notification"
 )
 
 // NewRouter creates and configures the HTTP router for the API.
-func NewRouter(registry *adapter.Registry, log *zap.Logger) *mux.Router {
+// notifSvc may be nil when the notification feature is not configured;
+// the relevant endpoints will return 503 in that case.
+func NewRouter(registry *adapter.Registry, notifSvc *notification.Service, log *zap.Logger) *mux.Router {
 	h := &handler.Config{
-		Registry: registry,
-		Log:      log,
-		MockMode: os.Getenv("MOCK_MODE") == "true",
+		Registry:            registry,
+		Log:                 log,
+		MockMode:            os.Getenv("MOCK_MODE") == "true",
+		NotificationService: notifSvc,
 	}
 
 	r := mux.NewRouter()
@@ -31,6 +35,7 @@ func NewRouter(registry *adapter.Registry, log *zap.Logger) *mux.Router {
 	r.HandleFunc("/api/bookings/{trackingNumber}", h.UpdateShipment).Methods("PATCH")
 	r.HandleFunc("/api/trackings/{trackingNumber}", h.GetTracking).Methods("GET")
 	r.HandleFunc("/api/labels/{trackingNumber}", h.GetLabel).Methods("GET")
+	r.HandleFunc("/api/notifications", h.SendNotification).Methods("POST")
 	r.HandleFunc("/api/health", h.HealthCheck).Methods("GET")
 
 	return r

@@ -15,6 +15,7 @@ import (
 
 	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 	"github.com/kristiannissen/carrier-gateway/internal/logger"
+	"github.com/kristiannissen/carrier-gateway/internal/notification"
 	"github.com/kristiannissen/carrier-gateway/internal/router"
 )
 
@@ -28,7 +29,8 @@ func main() {
 	log.Info("starting logistics-gateway API server")
 
 	registry := adapter.NewRegistry(log)
-	rtr := router.NewRouter(registry, log)
+	notifSvc := notification.NewService(notification.NewHTTPSender(), log)
+	rtr := router.NewRouter(registry, notifSvc, log)
 
 	port := os.Getenv("PORT")
 	if port == "" {
