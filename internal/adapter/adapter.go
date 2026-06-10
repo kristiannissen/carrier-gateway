@@ -543,6 +543,11 @@ type BookingResponse struct {
 	// tracking number, but these services are not active.
 	// Retry the failed add-ons via PATCH /api/bookings/{trackingNumber}?carrier=.
 	AddOnWarnings []string `json:"addOnWarnings,omitempty"`
+	// CustomsWarnings lists customs fields that were validated but could not be
+	// forwarded to the carrier API because the carrier's wire format does not
+	// yet support them. The shipment is booked; customs data must be submitted
+	// manually or via the carrier's own portal.
+	CustomsWarnings []string `json:"customsWarnings,omitempty"`
 }
 
 // ColliResponse represents the response for an individual colli in a shipment.

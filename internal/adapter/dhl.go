@@ -383,6 +383,26 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		"product":   product,
 	}
 
+	// Forward customs data into the cPAN general block when present.
+	// PostNord, Bring, and GLS wire format customs fields are pending
+	// carrier documentation — their adapters surface these in CustomsWarnings.
+	customs := request.Shipment.Customs
+	if customs.Incoterms != "" {
+		general["incoterms"] = customs.Incoterms
+	}
+	if customs.HSCode != "" {
+		general["hsCode"] = customs.HSCode
+	}
+	if customs.CountryOfOrigin != "" {
+		general["countryOfOrigin"] = customs.CountryOfOrigin
+	}
+	if customs.CustomsValue > 0 {
+		general["customsValue"] = fmt.Sprintf("%.2f", customs.CustomsValue)
+		if customs.CustomsCurrency != "" {
+			general["customsCurrency"] = customs.CustomsCurrency
+		}
+	}
+
 	dataElement := map[string]interface{}{
 		"parcelOriginOrganization":      request.Shipment.Sender.Country,
 		"parcelDestinationOrganization": request.Shipment.Receiver.Country,

@@ -4,9 +4,14 @@
 package validation
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
@@ -105,14 +110,51 @@ var prohibitedHSPrefixes = []string{"22", "24"}
 // rather than on every call to validateHSCode.
 var hsCodeRegex = regexp.MustCompile(`^\d{6,10}$`)
 
+// iso3166Alpha2 matches a valid ISO 3166-1 alpha-2 country code (two uppercase letters).
+var iso3166Alpha2 = regexp.MustCompile(`^[A-Z]{2}$`)
+
 // euDeMinimisEUR is the de minimis threshold for EU B2C shipments.
 const euDeMinimisEUR = 150.0
+
+// viesEUCountries is the set of EU member states whose VAT numbers can be
+// verified via the VIES REST API. Non-EU countries (NO, GB, CH, US etc.) are
+// not registered on VIES and must never be looked up.
+var viesEUCountries = map[string]bool{
+	"AT": true, "BE": true, "BG": true, "CY": true, "CZ": true,
+	"DE": true, "DK": true, "EE": true, "ES": true, "FI": true,
+	"FR": true, "GR": true, "HR": true, "HU": true, "IE": true,
+	"IT": true, "LT": true, "LU": true, "LV": true, "MT": true,
+	"NL": true, "PL": true, "PT": true, "RO": true, "SE": true,
+	"SI": true, "SK": true,
+}
+
+// viesBaseURL is the VIES REST API base URL. Overridable in tests via package-level
+// assignment so tests can point at an httptest.Server without DNS tricks.
+var viesBaseURL = "https://ec.europa.eu/taxation_customs/vies/rest-api/ms"
+
+// viesTimeout is the hard per-call deadline for VIES. Kept short so a VIES
+// outage cannot add noticeable latency to the booking path.
+const viesTimeout = 2 * time.Second
+
+// viesResponse is the relevant subset of the VIES REST API JSON response.
+type viesResponse struct {
+	IsValid   bool   `json:"isValid"`
+	UserError string `json:"userError"`
+}
 
 // ValidateCustoms validates the Customs block for a shipment from origin to
 // destination with the given shipment type ("B2B" or "B2C").
 func ValidateCustoms(c adapter.Customs, origin, destination, shipmentType string) error {
 	if destination == "AX" {
 		return fmt.Errorf("åland Islands (AX) require special VAT handling: contact your carrier")
+	}
+
+	if err := validateShipmentType(shipmentType); err != nil {
+		return err
+	}
+
+	if err := validateCountryOfOrigin(c.CountryOfOrigin); err != nil {
+		return err
 	}
 
 	if err := validateTransportMode(c); err != nil {
@@ -255,7 +297,6 @@ func validateEUCustoms(c adapter.Customs, destination, shipmentType string) erro
 }
 
 // validateHSCode checks that the HS code is 6-10 digits.
-// Uses a package-level compiled regex to avoid recompilation on every call.
 func validateHSCode(code string) error {
 	if !hsCodeRegex.MatchString(code) {
 		return fmt.Errorf("HS code must be 6-10 digits, got %q", code)
@@ -274,4 +315,116 @@ func validateVATNumber(number, country string) error {
 		return fmt.Errorf("invalid %s VAT number format: %q", countryName(country), number)
 	}
 	return nil
+}
+
+// validateCountryOfOrigin checks that CountryOfOrigin is a valid ISO 3166-1
+// alpha-2 code when present.
+func validateCountryOfOrigin(code string) error {
+	if code == "" {
+		return nil
+	}
+	if !iso3166Alpha2.MatchString(strings.ToUpper(code)) {
+		return fmt.Errorf("countryOfOrigin must be a 2-letter ISO 3166-1 alpha-2 code, got %q", code)
+	}
+	return nil
+}
+
+// validateShipmentType checks that ShipmentType is one of the accepted values.
+func validateShipmentType(shipmentType string) error {
+	if shipmentType == "" {
+		return nil
+	}
+	switch strings.ToUpper(shipmentType) {
+	case "B2B", "B2C":
+		return nil
+	default:
+		return fmt.Errorf("shipmentType must be B2B or B2C, got %q", shipmentType)
+	}
+}
+
+// RequiresCustomsBlock reports whether a shipment from origin to destination
+// requires a non-empty Customs block. True for all non-EU destinations
+// regardless of shipment type — B2B requires full customs unconditionally;
+// B2C requires it above de minimis and we cannot know the value without the block.
+//
+// Used by validateBookingRequest to reject requests that omit customs data
+// entirely when shipping to a known non-EU destination.
+func RequiresCustomsBlock(origin, destination string) bool {
+	if origin == destination {
+		return false
+	}
+	return nonEUDestinations[destination]
+}
+
+// ValidateVATNumberLive calls the VIES REST API to verify that number is a
+// registered, active VAT number for country.
+//
+// It only makes a network call when country is an EU member state registered
+// on VIES. For all other countries (NO, GB, CH, US …) it returns immediately
+// (valid=true, unavailable=false) so callers never pay network latency for
+// shipments that do not need VIES.
+//
+// Both VAT numbers on a booking (importer + exporter) should be checked in
+// parallel under the same context deadline so the total overhead is one round
+// trip, not two.
+//
+// Return values:
+//
+//	(true,  false, nil)  — VIES confirmed the number is active
+//	(false, false, err)  — VIES confirmed the number is invalid or not found
+//	(false, true,  nil)  — VIES was unreachable or timed out; degrade gracefully
+func ValidateVATNumberLive(ctx context.Context, number, country string) (valid, unavailable bool, err error) {
+	if !viesEUCountries[country] {
+		// Non-EU country — VIES does not cover it; pass through immediately.
+		return true, false, nil
+	}
+
+	// Strip the country prefix from the VAT number if present; VIES encodes
+	// the member state separately in the URL path.
+	vatNumber := strings.TrimPrefix(strings.ToUpper(number), strings.ToUpper(country))
+
+	url := fmt.Sprintf("%s/%s/vat/%s", viesBaseURL, country, vatNumber)
+
+	// Apply a tight timeout independent of the parent context so a VIES outage
+	// cannot delay the booking path beyond viesTimeout even if the parent
+	// context has a much longer deadline.
+	timeoutCtx, cancel := context.WithTimeout(ctx, viesTimeout)
+	defer cancel()
+
+	req, reqErr := http.NewRequestWithContext(timeoutCtx, http.MethodGet, url, nil)
+	if reqErr != nil {
+		return false, true, nil
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, doErr := http.DefaultClient.Do(req)
+	if doErr != nil {
+		// Network error, context cancelled, or timeout — degrade gracefully.
+		return false, true, nil
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		// VIES returned an unexpected status — degrade gracefully.
+		return false, true, nil
+	}
+
+	body, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return false, true, nil
+	}
+
+	var result viesResponse
+	if jsonErr := json.Unmarshal(body, &result); jsonErr != nil {
+		return false, true, nil
+	}
+
+	if !result.IsValid {
+		return false, false, fmt.Errorf(
+			"VAT number %q is not registered as active in VIES for country %s",
+			number, country,
+		)
+	}
+
+	return true, false, nil
 }

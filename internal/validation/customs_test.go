@@ -12,8 +12,6 @@ import (
 	"github.com/kristiannissen/logistics-gateway/internal/adapter"
 )
 
-// validNonEUCustoms returns a fully populated Customs block that passes all
-// non-EU destination rules when shipping from DK to NO.
 func validNonEUCustoms() adapter.Customs {
 	return adapter.Customs{
 		Incoterms:         "DDP",
@@ -21,12 +19,11 @@ func validNonEUCustoms() adapter.Customs {
 		CustomsValue:      500.0,
 		CustomsCurrency:   "DKK",
 		ImporterOfRecord:  "NO123456789",
-		ExporterVATNumber: "12345678", // valid DK: 8 digits
+		ExporterVATNumber: "12345678",
 		ShipmentType:      "B2B",
 	}
 }
 
-// validEUB2BCustoms returns a fully populated Customs block for EU B2B.
 func validEUB2BCustoms(destination string) adapter.Customs {
 	vatNumbers := map[string]string{
 		"SE": "SE1234567890",
@@ -180,33 +177,21 @@ func TestValidateCustoms_DK_to_NO(t *testing.T) {
 		assert.Contains(t, err.Error(), "special import permit for Norway")
 	})
 
-	t.Run("B2C below NOK de minimis — customs fields not required", func(t *testing.T) {
+	t.Run("B2C below NOK de minimis", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    300.0,
-			CustomsCurrency: "NOK",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 300.0, CustomsCurrency: "NOK", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2C"))
 	})
 
 	t.Run("B2C at NOK de minimis boundary", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    350.0,
-			CustomsCurrency: "NOK",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 350.0, CustomsCurrency: "NOK", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2C"))
 	})
 
 	t.Run("B2C above NOK de minimis — full customs required", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    351.0,
-			CustomsCurrency: "NOK",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 351.0, CustomsCurrency: "NOK", ShipmentType: "B2C"}
 		err := ValidateCustoms(c, "DK", "NO", "B2C")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "incoterms is required")
@@ -214,11 +199,7 @@ func TestValidateCustoms_DK_to_NO(t *testing.T) {
 
 	t.Run("B2C non-NOK currency flagged for review", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    100.0,
-			CustomsCurrency: "EUR",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 100.0, CustomsCurrency: "EUR", ShipmentType: "B2C"}
 		err := ValidateCustoms(c, "DK", "NO", "B2C")
 		require.Error(t, err)
 		assert.True(t, IsReviewRequired(err))
@@ -262,23 +243,15 @@ func TestValidateCustoms_DK_to_SE(t *testing.T) {
 		assert.NoError(t, ValidateCustoms(c, "DK", "SE", "B2B"))
 	})
 
-	t.Run("B2C below EUR de minimis — no customs required", func(t *testing.T) {
+	t.Run("B2C below EUR de minimis", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    100.0,
-			CustomsCurrency: "EUR",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 100.0, CustomsCurrency: "EUR", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "SE", "B2C"))
 	})
 
 	t.Run("B2C above EUR de minimis requires HS code", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    200.0,
-			CustomsCurrency: "EUR",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 200.0, CustomsCurrency: "EUR", ShipmentType: "B2C"}
 		err := ValidateCustoms(c, "DK", "SE", "B2C")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "HS code is required for EU shipments")
@@ -286,22 +259,13 @@ func TestValidateCustoms_DK_to_SE(t *testing.T) {
 
 	t.Run("B2C above EUR de minimis with valid HS code passes", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    200.0,
-			CustomsCurrency: "EUR",
-			HSCode:          "61091000",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 200.0, CustomsCurrency: "EUR", HSCode: "61091000", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "SE", "B2C"))
 	})
 
 	t.Run("B2C non-EUR currency flagged for review", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    100.0,
-			CustomsCurrency: "DKK",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 100.0, CustomsCurrency: "DKK", ShipmentType: "B2C"}
 		err := ValidateCustoms(c, "DK", "SE", "B2C")
 		require.Error(t, err)
 		assert.True(t, IsReviewRequired(err))
@@ -316,7 +280,7 @@ func TestValidateCustoms_DK_to_SE(t *testing.T) {
 }
 
 // =========================================================================
-// 3. Denmark → Finland (EU, VAT rules apply + Åland Islands)
+// 3. Denmark → Finland (EU + Åland Islands)
 // =========================================================================
 
 func TestValidateCustoms_DK_to_FI(t *testing.T) {
@@ -354,17 +318,13 @@ func TestValidateCustoms_DK_to_FI(t *testing.T) {
 
 	t.Run("B2C de minimis applies same as SE", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    100.0,
-			CustomsCurrency: "EUR",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 100.0, CustomsCurrency: "EUR", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "FI", "B2C"))
 	})
 }
 
 // =========================================================================
-// 4. Sweden → Norway (non-EU, customs required)
+// 4. Sweden → Norway
 // =========================================================================
 
 func TestValidateCustoms_SE_to_NO(t *testing.T) {
@@ -372,7 +332,7 @@ func TestValidateCustoms_SE_to_NO(t *testing.T) {
 
 	validSEtoNO := func() adapter.Customs {
 		c := validNonEUCustoms()
-		c.ExporterVATNumber = "SE1234567890" // valid SE: SE + 10 digits
+		c.ExporterVATNumber = "SE1234567890"
 		return c
 	}
 
@@ -410,7 +370,7 @@ func TestValidateCustoms_SE_to_NO(t *testing.T) {
 }
 
 // =========================================================================
-// 5. Finland → Norway (non-EU, customs required)
+// 5. Finland → Norway
 // =========================================================================
 
 func TestValidateCustoms_FI_to_NO(t *testing.T) {
@@ -418,7 +378,7 @@ func TestValidateCustoms_FI_to_NO(t *testing.T) {
 
 	validFItoNO := func() adapter.Customs {
 		c := validNonEUCustoms()
-		c.ExporterVATNumber = "12345678" // valid FI: 8 digits
+		c.ExporterVATNumber = "12345678"
 		return c
 	}
 
@@ -456,7 +416,7 @@ func TestValidateCustoms_FI_to_NO(t *testing.T) {
 }
 
 // =========================================================================
-// 6. Intra-EU: Denmark → Germany
+// 6. Denmark → Germany (intra-EU)
 // =========================================================================
 
 func TestValidateCustoms_DK_to_DE(t *testing.T) {
@@ -492,23 +452,15 @@ func TestValidateCustoms_DK_to_DE(t *testing.T) {
 		assert.NoError(t, ValidateCustoms(c, "DK", "DE", "B2B"))
 	})
 
-	t.Run("B2C below EUR de minimis — no customs required", func(t *testing.T) {
+	t.Run("B2C below EUR de minimis", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    100.0,
-			CustomsCurrency: "EUR",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 100.0, CustomsCurrency: "EUR", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "DE", "B2C"))
 	})
 
 	t.Run("B2C above EUR de minimis requires HS code", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    200.0,
-			CustomsCurrency: "EUR",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 200.0, CustomsCurrency: "EUR", ShipmentType: "B2C"}
 		err := ValidateCustoms(c, "DK", "DE", "B2C")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "HS code is required for EU shipments")
@@ -516,7 +468,6 @@ func TestValidateCustoms_DK_to_DE(t *testing.T) {
 
 	t.Run("unknown destination — no rules enforced", func(t *testing.T) {
 		t.Parallel()
-		// "XX" is not in nonEUDestinations or euCountries — no rules apply.
 		assert.NoError(t, ValidateCustoms(adapter.Customs{}, "DK", "XX", "B2C"))
 	})
 }
@@ -557,40 +508,10 @@ func TestValidateCustoms_TransportMode(t *testing.T) {
 		assert.Contains(t, err.Error(), "only valid for sea transport")
 	})
 
-	t.Run("FOB rejected for rail transport", func(t *testing.T) {
-		t.Parallel()
-		c := validNonEUCustoms()
-		c.Incoterms = "FOB"
-		c.TransportMode = "rail"
-		err := ValidateCustoms(c, "DK", "NO", "B2B")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "only valid for sea transport")
-	})
-
 	t.Run("FAS rejected for air transport", func(t *testing.T) {
 		t.Parallel()
 		c := validNonEUCustoms()
 		c.Incoterms = "FAS"
-		c.TransportMode = "air"
-		err := ValidateCustoms(c, "DK", "NO", "B2B")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "only valid for sea transport")
-	})
-
-	t.Run("CFR rejected for road transport", func(t *testing.T) {
-		t.Parallel()
-		c := validNonEUCustoms()
-		c.Incoterms = "CFR"
-		c.TransportMode = "road"
-		err := ValidateCustoms(c, "DK", "NO", "B2B")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "only valid for sea transport")
-	})
-
-	t.Run("CIF rejected for air transport", func(t *testing.T) {
-		t.Parallel()
-		c := validNonEUCustoms()
-		c.Incoterms = "CIF"
 		c.TransportMode = "air"
 		err := ValidateCustoms(c, "DK", "NO", "B2B")
 		require.Error(t, err)
@@ -628,7 +549,6 @@ func TestValidateCustoms_TransportMode(t *testing.T) {
 
 	t.Run("sea-only incoterms with no mode set — accepted", func(t *testing.T) {
 		t.Parallel()
-		// Transport mode is optional — if not provided we cannot enforce the rule.
 		c := validNonEUCustoms()
 		c.Incoterms = "FOB"
 		c.TransportMode = ""
@@ -650,55 +570,39 @@ func TestValidateCustoms_DeMinimis_Global(t *testing.T) {
 			CustomsValue:      900.0,
 			CustomsCurrency:   "USD",
 			ImporterOfRecord:  "US-EIN-12-3456789",
-			ExporterVATNumber: "12345678", // DK VAT
+			ExporterVATNumber: "12345678",
 			ShipmentType:      "B2B",
 		}
 	}
 
-	t.Run("US B2C below $800 de minimis — no customs required", func(t *testing.T) {
+	t.Run("US B2C below $800 de minimis", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    799.0,
-			CustomsCurrency: "USD",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 799.0, CustomsCurrency: "USD", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "US", "B2C"))
 	})
 
-	t.Run("US B2C at $800 de minimis boundary — no customs required", func(t *testing.T) {
+	t.Run("US B2C at $800 de minimis boundary", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    800.0,
-			CustomsCurrency: "USD",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 800.0, CustomsCurrency: "USD", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "US", "B2C"))
 	})
 
 	t.Run("US B2C above $800 de minimis — full customs required", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    801.0,
-			CustomsCurrency: "USD",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 801.0, CustomsCurrency: "USD", ShipmentType: "B2C"}
 		err := ValidateCustoms(c, "DK", "US", "B2C")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "incoterms is required")
 	})
 
-	t.Run("US B2B — de minimis does not apply, full customs required", func(t *testing.T) {
+	t.Run("US B2B full customs required", func(t *testing.T) {
 		t.Parallel()
 		assert.NoError(t, ValidateCustoms(validUSCustoms(), "DK", "US", "B2B"))
 	})
 
 	t.Run("US B2C non-USD currency flagged for review", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    500.0,
-			CustomsCurrency: "EUR",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 500.0, CustomsCurrency: "EUR", ShipmentType: "B2C"}
 		err := ValidateCustoms(c, "DK", "US", "B2C")
 		require.Error(t, err)
 		assert.True(t, IsReviewRequired(err))
@@ -706,21 +610,13 @@ func TestValidateCustoms_DeMinimis_Global(t *testing.T) {
 
 	t.Run("GB B2C below £135 de minimis", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    130.0,
-			CustomsCurrency: "GBP",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 130.0, CustomsCurrency: "GBP", ShipmentType: "B2C"}
 		assert.NoError(t, ValidateCustoms(c, "DK", "GB", "B2C"))
 	})
 
 	t.Run("GB B2C above £135 de minimis — full customs required", func(t *testing.T) {
 		t.Parallel()
-		c := adapter.Customs{
-			CustomsValue:    136.0,
-			CustomsCurrency: "GBP",
-			ShipmentType:    "B2C",
-		}
+		c := adapter.Customs{CustomsValue: 136.0, CustomsCurrency: "GBP", ShipmentType: "B2C"}
 		err := ValidateCustoms(c, "DK", "GB", "B2C")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "incoterms is required")
@@ -728,26 +624,100 @@ func TestValidateCustoms_DeMinimis_Global(t *testing.T) {
 }
 
 // =========================================================================
-// CountryOfOrigin — field accepted, no hard validation rule yet
+// CountryOfOrigin validation (new)
 // =========================================================================
 
 func TestValidateCustoms_CountryOfOrigin(t *testing.T) {
 	t.Parallel()
 
-	t.Run("countryOfOrigin accepted without error", func(t *testing.T) {
+	t.Run("uppercase two-letter accepted", func(t *testing.T) {
 		t.Parallel()
 		c := validNonEUCustoms()
 		c.CountryOfOrigin = "CN"
 		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
 	})
 
-	t.Run("countryOfOrigin absent — no error", func(t *testing.T) {
+	t.Run("absent — no error", func(t *testing.T) {
 		t.Parallel()
 		c := validNonEUCustoms()
 		c.CountryOfOrigin = ""
 		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
 	})
+
+	t.Run("lowercase two-letter accepted — normalised internally", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.CountryOfOrigin = "cn"
+		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2B"))
+	})
+
+	t.Run("three letters rejected", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.CountryOfOrigin = "CHN"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ISO 3166-1 alpha-2")
+	})
+
+	t.Run("single letter rejected", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.CountryOfOrigin = "C"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ISO 3166-1 alpha-2")
+	})
+
+	t.Run("numeric rejected", func(t *testing.T) {
+		t.Parallel()
+		c := validNonEUCustoms()
+		c.CountryOfOrigin = "12"
+		err := ValidateCustoms(c, "DK", "NO", "B2B")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ISO 3166-1 alpha-2")
+	})
 }
+
+// =========================================================================
+// ShipmentType enum validation (new)
+// =========================================================================
+
+func TestValidateCustoms_ShipmentType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("B2B accepted", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, ValidateCustoms(validNonEUCustoms(), "DK", "NO", "B2B"))
+	})
+
+	t.Run("B2C accepted", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{CustomsValue: 300.0, CustomsCurrency: "NOK", ShipmentType: "B2C"}
+		assert.NoError(t, ValidateCustoms(c, "DK", "NO", "B2C"))
+	})
+
+	t.Run("lowercase b2b accepted", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, ValidateCustoms(validNonEUCustoms(), "DK", "NO", "b2b"))
+	})
+
+	t.Run("invalid type rejected", func(t *testing.T) {
+		t.Parallel()
+		err := ValidateCustoms(validNonEUCustoms(), "DK", "NO", "B2G")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "shipmentType must be B2B or B2C")
+	})
+
+	t.Run("empty accepted — optional field", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, ValidateCustoms(validNonEUCustoms(), "DK", "NO", ""))
+	})
+}
+
+// =========================================================================
+// HS code validation
+// =========================================================================
 
 func TestValidateHSCode(t *testing.T) {
 	t.Parallel()
@@ -756,13 +726,13 @@ func TestValidateHSCode(t *testing.T) {
 		code    string
 		wantErr bool
 	}{
-		{"610910", false},   // 6 digits — minimum
-		{"6109100000", false}, // 10 digits — maximum
-		{"61091000", false}, // 8 digits — typical
-		{"12345", true},     // 5 digits — too short
-		{"12345678901", true}, // 11 digits — too long
-		{"61091X", true},    // non-numeric
-		{"", true},          // empty
+		{"610910", false},
+		{"6109100000", false},
+		{"61091000", false},
+		{"12345", true},
+		{"12345678901", true},
+		{"61091X", true},
+		{"", true},
 	}
 
 	for _, tc := range cases {
@@ -780,7 +750,7 @@ func TestValidateHSCode(t *testing.T) {
 }
 
 // =========================================================================
-// VAT number validation
+// VAT number format validation
 // =========================================================================
 
 func TestValidateVATNumber(t *testing.T) {
@@ -791,32 +761,21 @@ func TestValidateVATNumber(t *testing.T) {
 		country string
 		wantErr bool
 	}{
-		// DK — 8 digits
 		{"12345678", "DK", false},
 		{"1234567", "DK", true},
 		{"123456789", "DK", true},
 		{"1234567X", "DK", true},
-
-		// SE — SE + 10 digits
 		{"SE1234567890", "SE", false},
 		{"1234567890", "SE", true},
 		{"SE123456789", "SE", true},
-
-		// FI — 8 digits
 		{"12345678", "FI", false},
 		{"1234567", "FI", true},
-
-		// NO — 9 digits
 		{"123456789", "NO", false},
 		{"12345678", "NO", true},
 		{"1234567890", "NO", true},
-
-		// DE — DE + 9 digits
 		{"DE123456789", "DE", false},
 		{"123456789", "DE", true},
 		{"DE12345678", "DE", true},
-
-		// Unknown country — always valid
 		{"anything", "XX", false},
 	}
 

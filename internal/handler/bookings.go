@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -58,6 +59,22 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
+	// Restricted items check — block hard-prohibited goods before hitting the carrier.
+	blocked, warned := validation.ValidateRestrictedItems(request.Carrier, request.Shipment)
+	if err := validation.RestrictedItemsError(blocked); err != nil {
+		c.writeError(w, r, http.StatusBadRequest, "shipment contains prohibited items", err.Error())
+		return
+	}
+
+	// VIES live VAT validation — only for EU VAT numbers, parallel, non-blocking on outage.
+	var customsWarnings []string
+	if len(warned) > 0 {
+		for _, w := range warned {
+			customsWarnings = append(customsWarnings, w.Reason)
+		}
+	}
+	customsWarnings = append(customsWarnings, validateVATNumbersLive(r, request)...)
+
 	carrierAdapter, err := c.selectAdapter(request.Carrier)
 	if err != nil {
 		c.writeError(w, r, http.StatusBadRequest, "unsupported carrier", err.Error())
@@ -79,12 +96,65 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	if adapter.IsBeta(request.Carrier) {
 		response.BetaWarning = request.Carrier + " support is in beta and may not be fully functional"
 	}
+	if len(customsWarnings) > 0 {
+		response.CustomsWarnings = append(response.CustomsWarnings, customsWarnings...)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Error("failed to write response", zap.Error(err))
 	}
+}
+
+// validateVATNumbersLive runs VIES live checks for any EU VAT numbers on the
+// customs block. Both importer and exporter are checked in parallel under a
+// shared 2-second deadline. Returns warning strings for any VIES unavailability;
+// returns hard errors inline (caller adds them to customsWarnings, not errors,
+// because a VIES soft failure must not block the booking).
+//
+// VIES hard failures (number confirmed invalid) are returned as warning strings
+// with a "VIES:" prefix so the caller can surface them without blocking.
+func validateVATNumbersLive(r *http.Request, request *adapter.BookingRequest) []string {
+	c := request.Shipment.Customs
+	if c.ImporterVATNumber == "" && c.ExporterVATNumber == "" {
+		return nil
+	}
+
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		warnings []string
+	)
+
+	check := func(number, country, label string) {
+		defer wg.Done()
+		valid, unavailable, err := validation.ValidateVATNumberLive(r.Context(), number, country)
+		var msg string
+		switch {
+		case unavailable:
+			msg = fmt.Sprintf("VIES unavailable for %s VAT %s — accepted on format only", label, number)
+		case err != nil:
+			msg = fmt.Sprintf("VIES: %s VAT number %s may be invalid: %s", label, number, err.Error())
+		case valid:
+			return
+		}
+		mu.Lock()
+		warnings = append(warnings, msg)
+		mu.Unlock()
+	}
+
+	if c.ImporterVATNumber != "" {
+		wg.Add(1)
+		go check(c.ImporterVATNumber, request.Shipment.Receiver.Country, "importer")
+	}
+	if c.ExporterVATNumber != "" {
+		wg.Add(1)
+		go check(c.ExporterVATNumber, request.Shipment.Sender.Country, "exporter")
+	}
+	wg.Wait()
+
+	return warnings
 }
 
 // validateBookingRequest runs all stateless validation rules against the
@@ -167,10 +237,22 @@ func validateBookingRequest(request *adapter.BookingRequest) (flagged bool, err 
 		return false, err
 	}
 
-	// Customs validation — only when a Customs block is present.
+	// Customs validation — mandatory block for non-EU destinations.
 	c := request.Shipment.Customs
-	if c.Incoterms != "" || c.HSCode != "" || c.CustomsValue > 0 ||
-		c.ImporterOfRecord != "" || c.ImporterVATNumber != "" || c.ExporterVATNumber != "" {
+	isCustomsEmpty := c.Incoterms == "" && c.HSCode == "" && c.CustomsValue == 0 &&
+		c.ImporterOfRecord == "" && c.ImporterVATNumber == "" && c.ExporterVATNumber == ""
+
+	if isCustomsEmpty && validation.RequiresCustomsBlock(
+		request.Shipment.Sender.Country,
+		request.Shipment.Receiver.Country,
+	) {
+		return false, fmt.Errorf(
+			"customs data is required for shipments to %s — provide incoterms, HS code, customs value, and importer of record",
+			request.Shipment.Receiver.Country,
+		)
+	}
+
+	if !isCustomsEmpty {
 		if err := validation.ValidateCustoms(
 			c,
 			request.Shipment.Sender.Country,
