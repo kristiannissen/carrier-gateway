@@ -11,10 +11,12 @@ A stateless Go microservice for booking, tracking, and returning shipments acros
 | `postnord` | PostNord | DK, SE, NO, FI | ✅ | ✅ | ✅ | PDF, ZPL, ZPLGK | Production |
 | `bring` | Bring | NO, SE, DK, FI | ✅ | ✅ | ✅ | PDF | Production |
 | `gls` | GLS | DK, SE, DE, NL, and more | ✅ | ✅ | ❌ | PDF, ZPL, ZPLGK | Production |
-| `dao` | DAO | DK | ✅ | ✅ | ✅ | PDF | Production |
-| `dhl` | DHL eCommerce Europe | 28 European countries | ✅ | ✅ | ❌ | PDF | Beta |
-| `posti` | Posti | FI | ✅ | ✅ | ❌ | PDF | Production |
-| `inpost` | InPost | PL | ✅ | ✅ | ❌ | PDF | Production |
+| `dao` | DAO | DK | ✅ | ✅ | ✅ | PDF | Beta |
+| `dhl` | DHL eCommerce Europe | 28 European countries | ✅ | ✅ | ✅ | PDF | Beta |
+| `posti` | Posti | FI | — | — | — | — | Demo |
+| `inpost` | InPost | PL | — | — | — | — | Demo |
+
+Demo carriers return mock data only and are not connected to any live API.
 
 ---
 
@@ -56,9 +58,7 @@ The server starts on `http://localhost:8080`.
 | `DHL_CUSTOMER_ID` | DHL customerIdentification (sent in sender block) | No | — |
 | `DHL_TRACKING_API_KEY` | DHL Unified Tracking API subscription key — from [developer.dhl.com](https://developer.dhl.com) | No | — |
 
-DHL uses `https://api.dhl.com` for both booking and tracking. The booking and tracking APIs use separate authentication: booking uses OAuth2 (client_id/client_secret), tracking uses a subscription key in the `DHL-API-Key` header. No sandbox URL — use `MOCK_MODE=true` for testing without credentials.
-| `POSTI_API_KEY` | Posti API key | No | — |
-| `INPOST_API_KEY` | InPost API key | No | — |
+DHL uses `https://api.dhl.com` for both booking and tracking. Booking uses OAuth2 (client_id/client_secret); tracking uses a subscription key in the `DHL-API-Key` header. Use `MOCK_MODE=true` for testing without credentials.
 
 When a carrier's key is absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter automatically.
 
@@ -82,8 +82,7 @@ DAO_CUSTOMER_ID=your-dao-customer-id
 DHL_CLIENT_ID=your-dhl-client-id
 DHL_CLIENT_SECRET=your-dhl-client-secret
 DHL_CUSTOMER_ID=your-dhl-customer-id
-POSTI_API_KEY=your-posti-key
-INPOST_API_KEY=your-inpost-key
+DHL_TRACKING_API_KEY=your-dhl-tracking-key
 ```
 
 ---
@@ -116,27 +115,27 @@ docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development logistics-gatew
 | `GET` | `/api/labels/{trackingNumber}` | Fetch a shipping label |
 | `GET` | `/api/health` | Health check |
 
-Every request receives an `X-Request-ID` header in the response. Pass it in your request to forward your own correlation ID — useful for tying gateway logs to your own system's logs.
+Every request receives an `X-Request-ID` header in the response. Pass it in your request to forward your own correlation ID.
 
 ---
 
 ### POST /api/bookings
 
-Books a shipment with the specified carrier. The request body is identical regardless of carrier — only the `carrier` field changes.
+Books a shipment with the specified carrier.
 
 #### Shipment fields
 
 | Field | Type | Description | Required |
 |---|---|---|---|
-| `carrier` | string | Carrier key (`postnord`, `bring`, `gls`, `dao`, `posti`, `inpost`) | Yes |
+| `carrier` | string | Carrier key (`postnord`, `bring`, `gls`, `dao`, `dhl`) | Yes |
 | `shipment.sender` | object | Sender address | Yes |
 | `shipment.receiver` | object | Receiver address | Yes |
 | `shipment.totalWeight` | float | Total shipment weight in kg — must equal the sum of all colli weights | Yes |
 | `shipment.colli` | array | Array of packages | Yes |
 | `shipment.deliveryType` | string | `home`, `business`, `servicepoint`, or `return` | No |
-| `shipment.returnFunctionality` | string | For return bookings: `standard` or `labelless` (PostNord) / `withlabel` or `labelless` (DAO). Defaults to `standard`/`labelless`. | No |
+| `shipment.returnFunctionality` | string | `standard` or `labelless` (PostNord); `withlabel` or `labelless` (DAO). Defaults vary by carrier. | No |
 | `shipment.addOns` | array | Optional service add-ons — see [Add-ons](#add-ons) | No |
-| `shipment.customs` | object | Customs declaration — required for non-EU destinations | No |
+| `shipment.customs` | object | Customs declaration — see [Cross-border shipments](#cross-border-shipments-and-customs) | No |
 | `idempotencyKey` | string | Deduplication key, max 64 characters | No |
 
 #### Address fields
@@ -165,14 +164,39 @@ Books a shipment with the specified carrier. The request body is identical regar
 | `dimensions.length` | float | Length in cm | No |
 | `dimensions.width` | float | Width in cm | No |
 | `dimensions.height` | float | Height in cm | No |
-| `items` | array | Line items in this package | Yes |
+| `items` | array | Line items — description, weight, quantity, value | Yes |
 
-#### Book a single-package shipment
+#### Booking response
+
+```json
+{
+  "trackingNumber": "00073215400599388772",
+  "carrier": "postnord",
+  "status": "booked",
+  "colli": [
+    {
+      "id": "00073215400599388772",
+      "trackingNumber": "00073215400599388772",
+      "labelUrl": "JVBERi0xLj...",
+      "status": "booked"
+    }
+  ],
+  "addOnWarnings": [],
+  "customsWarnings": []
+}
+```
+
+`addOnWarnings` is populated when an add-on was requested but could not be fully applied after a successful booking (e.g. DAO contact update failure). The booking is not rolled back — the tracking number is valid.
+
+`customsWarnings` is populated when customs data was validated but could not be forwarded to the carrier's wire format (carrier documentation pending), or when a VIES VAT lookup was unavailable and format-only validation was used instead.
+
+For PostNord and GLS the label is returned inline as base64 in `colli[0].labelUrl`. For Bring a URL is returned. For DAO labels are fetched separately via `GET /api/labels`.
+
+#### Example request
 
 ```bash
 curl -X POST http://localhost:8080/api/bookings \
   -H "Content-Type: application/json" \
-  -H "X-Request-ID: my-correlation-id-001" \
   -d '{
     "carrier": "postnord",
     "shipment": {
@@ -204,12 +228,7 @@ curl -X POST http://localhost:8080/api/bookings \
           "weight": 2.5,
           "dimensions": { "length": 30, "width": 20, "height": 10 },
           "items": [
-            {
-              "description": "Football boots",
-              "weight": 0.8,
-              "quantity": 1,
-              "value": 129.95
-            }
+            { "description": "Football boots", "weight": 0.8, "quantity": 1, "value": 129.95 }
           ]
         }
       ]
@@ -218,255 +237,58 @@ curl -X POST http://localhost:8080/api/bookings \
   }'
 ```
 
-#### Successful response
-
-```json
-{
-  "trackingNumber": "00073215400599388772",
-  "labelUrl": "",
-  "carrier": "postnord",
-  "status": "booked",
-  "colli": [
-    {
-      "id": "00073215400599388772",
-      "trackingNumber": "00073215400599388772",
-      "labelUrl": "JVBERi0xLj...",
-      "status": "booked"
-    }
-  ]
-}
-```
-
-For PostNord and GLS, the label is returned inline as base64 in `colli[0].labelUrl`. For Bring, a URL is returned in `labelUrl`. For DAO, labels are fetched separately via `GET /api/labels`.
-
 ---
 
 ### Service point delivery
 
-Set `deliveryType: "servicepoint"` and `servicePointId` on the receiver. The gateway maps `servicePointId` to the correct carrier-specific wire field:
+Set `deliveryType: "servicepoint"` and `servicePointId` on the receiver.
 
-| Carrier | Wire field | Notes |
-|---|---|---|
-| PostNord | `parties.deliveryParty.partyIdentification.partyId` with `partyIdType: "156"` | Service code `19` (MyPack Collect) |
-| Bring | `recipient.pickupPointId` | Product `PICKUP_PARCEL` |
-| GLS | `Service[ShopDelivery].ParcelShopID` | |
-| DAO | `shopid` | Routes to `/DAOPakkeshop/leveringsordre.php` |
-| Posti | `pickupPointId` | |
-| InPost | `service.targetLocker` | |
-
-```bash
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "carrier": "postnord",
-    "shipment": {
-      "sender": { ... },
-      "receiver": {
-        "name": "Anna Svensson",
-        "country": "SE",
-        "phone": "+46701234567",
-        "email": "anna@example.com",
-        "servicePointId": "9814"
-      },
-      "deliveryType": "servicepoint",
-      "totalWeight": 1.0,
-      "colli": [...]
-    }
-  }'
-```
+| Carrier | Wire field |
+|---|---|
+| PostNord | `parties.deliveryParty.partyIdentification.partyId` with `partyIdType: "156"`, service code `19` |
+| Bring | `recipient.pickupPointId` |
+| GLS | `Service[ShopDelivery].ParcelShopID` |
+| DAO | `shopid` — routes to `/DAOPakkeshop/leveringsordre.php` |
+| DHL | Recipient array `parcelshop` entry with `street1Nr=servicePointID` |
 
 ---
 
 ### Return bookings
 
-Set `deliveryType: "return"` to book a return shipment. The caller provides `sender` (the customer returning the parcel) and `receiver` (the merchant) — the gateway does not swap addresses automatically.
+Set `deliveryType: "return"`. Provide `sender` as the customer returning the parcel and `receiver` as the merchant — addresses are not swapped automatically.
 
-| Carrier | Mechanism | Labelless option | Notes |
-|---|---|---|---|
-| PostNord | Separate endpoint `/rest/shipment/v3/returns/edi/labels/pdf` | Yes — `returnFunctionality: "labelless"` | QR code sent via SMS/email add-ons |
-| Bring | `returnProduct.id: "9350"` added to standard booking | No | Single API call returns both outgoing and return labels |
-| GLS | ❌ Not supported | — | Returns an error |
-| DAO | Separate endpoint `/DAOPakkeshop/returordre.php` | Yes — `returnFunctionality: "labelless"` (default) | Labelless code returned in `colli[0].labelUrl` |
-
-```bash
-# PostNord standard return (customer prints label at service point)
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "carrier": "postnord",
-    "shipment": {
-      "sender": {
-        "name": "Anna Svensson",
-        "street": "Storgatan 1",
-        "city": "Stockholm",
-        "postalCode": "11122",
-        "country": "SE",
-        "phone": "+46701234567",
-        "email": "anna@example.com"
-      },
-      "receiver": {
-        "name": "Unisport Group",
-        "street": "Industrivej",
-        "houseNumber": "10",
-        "city": "Copenhagen",
-        "postalCode": "2300",
-        "country": "DK"
-      },
-      "deliveryType": "return",
-      "returnFunctionality": "standard",
-      "totalWeight": 1.0,
-      "colli": [...]
-    }
-  }'
-
-# PostNord labelless return (customer writes code on parcel)
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "carrier": "postnord",
-    "shipment": {
-      ...
-      "deliveryType": "return",
-      "returnFunctionality": "labelless",
-      "addOns": [
-        { "type": "sms_notification" }
-      ]
-    }
-  }'
-
-# DAO return — labelless by default
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "carrier": "dao",
-    "shipment": {
-      "sender": { "name": "Customer", ... },
-      "receiver": { "name": "Unisport Group", ... },
-      "deliveryType": "return",
-      "returnFunctionality": "withlabel",
-      "totalWeight": 0.5,
-      "colli": [...]
-    }
-  }'
-```
+| Carrier | Mechanism | Labelless |
+|---|---|---|
+| PostNord | Separate endpoint `/rest/shipment/v3/returns/edi/labels/pdf` | Yes — `returnFunctionality: "labelless"`, QR code sent via SMS/email add-on |
+| Bring | `returnProduct.id: "9350"` added to standard booking | No |
+| GLS | ❌ Not supported | — |
+| DAO | Separate endpoint `/DAOPakkeshop/returordre.php` | Yes — `returnFunctionality: "labelless"` (default), code returned in `colli[0].labelUrl` |
+| DHL | `product: "ParcelEurope.return.network"` | Yes — `returnFunctionality: "labelless"`, QR code as base64 PNG (BE, BG, DE, ES, LU, PL, PT, SE only) |
 
 ---
 
 ### Add-ons
 
-Optional services are specified in the `addOns` array on the shipment. Each add-on has a `type` and an optional `instructions` field for flex delivery.
+Optional services in the `addOns` array.
 
-| Type | Description | PostNord | Bring | GLS | DAO |
-|---|---|---|---|---|---|
-| `sms_notification` | SMS notification to receiver | Via `contact.smsNo` | Service code `1091` | `InfoService` with `NotificationType: "SMS"` | Post-booking call to `OpdaterKontaktOplysning.php` |
-| `email_notification` | Email notification to receiver | Via `contact.emailAddress` | Service code `1091` (same as SMS) | `InfoService` with `NotificationType: "EMAIL"` | Post-booking call to `OpdaterKontaktOplysning.php` |
-| `flex_delivery` | Deliver without recipient present | `additionalServiceCode: "A7"` | Service code `0041` | `FlexDelivery` service | ❌ Not supported |
-| `signature_required` | Recipient must sign on delivery | `additionalServiceCode: "A2"` | Service code `1131` | `DirectSignature` service | ❌ Not supported |
-| `cash_on_delivery` | Collect payment on delivery. Requires `codAmount`, `codCurrency`, `codAccountNumber` on the add-on. | ❌ Not supported | Service code `1000` + `cashOnDelivery` companion object | ❌ Not supported | ❌ Not supported |
-| `insurance` | Declare insured value. Requires `insuranceValue` and `insuranceCurrency` on the add-on. | `additionalServiceCode: "A8"` | ❌ Not supported | ❌ Not supported | ❌ Not supported |
+| Type | Description | PostNord | Bring | GLS | DAO | DHL |
+|---|---|---|---|---|---|---|
+| `sms_notification` | SMS to receiver | Contact field | VAS `1091` | `InfoService SMS` | Post-booking call | Not mapped |
+| `email_notification` | Email to receiver | Contact field | VAS `1091` | `InfoService EMAIL` | Post-booking call | Not mapped |
+| `flex_delivery` | Deliver without recipient | `A7` | VAS `0041` | `FlexDelivery` | ❌ | Not mapped |
+| `signature_required` | Recipient must sign | `A2` | VAS `1131` | `DirectSignature` | ❌ | Not mapped |
+| `cash_on_delivery` | Collect payment on delivery | ❌ | VAS `1000` + `cashOnDelivery` object | ❌ | ❌ | ❌ |
+| `insurance` | Declared insured value | `A8` | ❌ | ❌ | ❌ | ❌ |
 
-Posti and InPost accept the `addOns` array but currently ignore it with a debug log — documentation for their add-on APIs is not yet available.
-
-A few carrier-specific notes worth knowing:
-
-PostNord notifications work differently from the others. SMS and email are contact fields on the consignee block, not discrete service codes. `sms_notification` and `email_notification` act as validation guards — if requested but the receiver has no phone or email, the booking is rejected.
-
-DAO's two-step add-on flow has an important constraint: the `OpdaterKontaktOplysning.php` call must happen before the parcel reaches the first DAO terminal. If it fails after a successful booking, the shipment is created without notifications and a warning is logged. The booking is not rolled back.
-
-For return bookings on PostNord, `sms_notification` and `email_notification` trigger QR code delivery — the return code is sent to the customer via SMS or email rather than requiring a label printout.
-
-```bash
-# Booking with SMS + email notification and flex delivery
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "carrier": "bring",
-    "shipment": {
-      "sender": { ... },
-      "receiver": {
-        "name": "Anna Svensson",
-        "phone": "+46701234567",
-        "email": "anna@example.com",
-        ...
-      },
-      "deliveryType": "home",
-      "totalWeight": 1.5,
-      "colli": [...],
-      "addOns": [
-        { "type": "sms_notification" },
-        { "type": "email_notification" },
-        { "type": "flex_delivery", "instructions": "Leave behind the green shed" }
-      ]
-    }
-  }'
-
-# Signature required (PostNord and Bring)
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "carrier": "postnord",
-    "shipment": {
-      "sender": { ... },
-      "receiver": { ... },
-      "totalWeight": 2.0,
-      "colli": [...],
-      "addOns": [
-        { "type": "signature_required" }
-      ]
-    }
-  }'
-
-# Cash on delivery (Bring only)
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "carrier": "bring",
-    "shipment": {
-      "sender": { ... },
-      "receiver": { ... },
-      "totalWeight": 1.0,
-      "colli": [...],
-      "addOns": [
-        {
-          "type": "cash_on_delivery",
-          "codAmount": 499.95,
-          "codCurrency": "NOK",
-          "codAccountNumber": "12345678901"
-        }
-      ]
-    }
-  }'
-
-# Insurance / declared value (PostNord only)
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "carrier": "postnord",
-    "shipment": {
-      "sender": { ... },
-      "receiver": { ... },
-      "totalWeight": 1.0,
-      "colli": [...],
-      "addOns": [
-        {
-          "type": "insurance",
-          "insuranceValue": 5000.0,
-          "insuranceCurrency": "DKK"
-        }
-      ]
-    }
-  }'
-```
+**DAO two-step add-ons:** SMS and email are applied via a separate `OpdaterKontaktOplysning.php` call after booking. If that call fails the shipment is created without notifications and `addOnWarnings` is populated in the response. Retry via `PATCH /api/bookings/{trackingNumber}?carrier=dao` with `phone` and `email`.
 
 ---
 
 ### DELETE /api/bookings/{trackingNumber}
 
-Cancels a booked shipment. The shipment must not yet have been collected or scanned by the carrier.
-
-| Query parameter | Description | Required |
-|---|---|---|
-| `carrier` | Carrier key | Yes |
+| Query parameter | Required |
+|---|---|
+| `carrier` | Yes |
 
 | Carrier | Support | Constraint |
 |---|---|---|
@@ -474,134 +296,41 @@ Cancels a booked shipment. The shipment must not yet have been collected or scan
 | Bring | ✅ | Before collection |
 | GLS | ❌ | Contact GLS directly |
 | DAO | ✅ | Before first terminal scan |
-| Posti | ❌ | Not supported |
-| InPost | ❌ | Not supported |
+| DHL | ❌ | eConnect portal or customer service |
 
 ```bash
-# Cancel a PostNord shipment
 curl -X DELETE "http://localhost:8080/api/bookings/00073215400599388772?carrier=postnord"
-
-# Cancel a Bring shipment
-curl -X DELETE "http://localhost:8080/api/bookings/70438101263797410?carrier=bring"
-
-# Cancel a DAO shipment
-curl -X DELETE "http://localhost:8080/api/bookings/00057126960000003016?carrier=dao"
 ```
 
-#### Response
-
-```json
-{
-  "trackingNumber": "00073215400599388772",
-  "carrier": "postnord",
-  "status": "cancelled"
-}
-```
+Response: `{"trackingNumber":"...","carrier":"postnord","status":"cancelled"}`
 
 ---
 
 ### PATCH /api/bookings/{trackingNumber}
 
-Updates one or more fields on a booked shipment. Only the fields you include are forwarded to the carrier. All updates must happen before the carrier collects or scans the parcel.
-
-| Query parameter | Description | Required |
-|---|---|---|
-| `carrier` | Carrier key | Yes |
+| Query parameter | Required |
+|---|---|
+| `carrier` | Yes |
 
 | Field | Type | Description |
 |---|---|---|
-| `phone` | string | Updated receiver phone number |
-| `email` | string | Updated receiver email address |
-| `weight` | float | Updated parcel weight in kg |
-| `servicePointId` | string | Redirect delivery to a different service point |
+| `phone` | string | Updated receiver phone |
+| `email` | string | Updated receiver email |
+| `weight` | float | Updated weight in kg |
+| `servicePointId` | string | Redirect to different service point |
 
 | Carrier | phone/email | weight | servicePointId | Notes |
 |---|---|---|---|---|
-| PostNord | ✅ | ❌ | ❌ | SE only per PostNord API — DK bookings may return an error |
+| PostNord | ✅ | ❌ | ❌ | SE only per PostNord API |
 | Bring | ❌ | ❌ | ❌ | Not supported |
 | GLS | ❌ | ❌ | ❌ | Not supported |
 | DAO | ✅ | ✅ | ✅ | Before first terminal scan |
-| Posti | ❌ | ❌ | ❌ | Not supported |
-| InPost | ❌ | ❌ | ❌ | Not supported |
+| DHL | ❌ | ❌ | ❌ | Not supported |
 
 ```bash
-# Update receiver contact info (PostNord)
-curl -X PATCH "http://localhost:8080/api/bookings/00073215400599388772?carrier=postnord" \
-  -H "Content-Type: application/json" \
-  -d '{"phone": "+4587654321", "email": "new@example.com"}'
-
-# Update weight (DAO only)
 curl -X PATCH "http://localhost:8080/api/bookings/00057126960000003016?carrier=dao" \
   -H "Content-Type: application/json" \
-  -d '{"weight": 2.3}'
-
-# Redirect to a different service point (DAO only)
-curl -X PATCH "http://localhost:8080/api/bookings/00057126960000003016?carrier=dao" \
-  -H "Content-Type: application/json" \
-  -d '{"servicePointId": "44012"}'
-```
-
-#### Response
-
-```json
-{
-  "trackingNumber": "00057126960000003016",
-  "carrier": "dao",
-  "status": "updated",
-  "updatedFields": ["phone", "email", "weight"]
-}
-```
-
----
-
-### GET /api/labels/{trackingNumber}
-
-Fetches the shipping label for a booked shipment and returns it as base64-encoded data.
-
-| Query parameter | Description | Default |
-|---|---|---|
-| `carrier` | Carrier key | `postnord` |
-| `format` | Label format: `PDF`, `PNG`, `ZPL`, `EPL`, `ZPLGK` | `PDF` |
-
-#### Label format support by carrier
-
-| Carrier | PDF | ZPL | ZPLGK | PNG | EPL |
-|---|---|---|---|---|---|
-| PostNord | ✅ | ✅ | ✅ | — | — |
-| Bring | ✅ | — | — | — | — |
-| GLS | ✅ | ✅ | ✅ | — | — |
-| DAO | ✅ | — | — | — | — |
-| Posti | ✅ | — | — | — | — |
-| InPost | ✅ | — | — | — | — |
-
-```bash
-# Fetch a PDF label
-curl "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord"
-
-# Fetch a ZPL label for a thermal printer
-curl "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord&format=ZPL"
-
-# Decode and save
-curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord" \
-  | jq -r '.data' \
-  | base64 -d > label.pdf
-
-# Send directly to a ZPL printer
-curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord&format=ZPL" \
-  | jq -r '.data' \
-  | base64 -d > /dev/usb/lp0
-```
-
-#### Response
-
-```json
-{
-  "trackingNumber": "00073215400599388772",
-  "carrier": "postnord",
-  "format": "PDF",
-  "data": "JVBERi0xLj...",
-  "mimeType": "application/pdf"
-}
+  -d '{"phone": "+4587654321", "email": "new@example.com", "weight": 2.3}'
 ```
 
 ---
@@ -619,34 +348,77 @@ curl "http://localhost:8080/api/trackings/00073215400599388772?carrier=postnord"
   "trackingNumber": "00073215400599388772",
   "carrier": "postnord",
   "status": "INFORMED",
-  "estimatedDelivery": "",
+  "normalizedStatus": "booked",
+  "originalStatus": "INFORMED",
+  "estimatedDelivery": "2026-06-12",
   "events": [
     {
       "timestamp": "2026-06-07T18:37:36",
       "status": "INFORMED",
-      "location": "PostNord",
-      "details": "We have received a notification from your shipper that they are preparing an item for you."
+      "normalizedStatus": "booked",
+      "location": "Copenhagen, DK",
+      "details": "Shipment registered"
     }
   ]
 }
 ```
 
-Tracking endpoints and response shapes per carrier:
+`status` is the raw carrier-specific string preserved for backward compatibility. `normalizedStatus` is a consistent value across all carriers.
 
-| Carrier | Endpoint | Method | Status field |
+#### Normalized status values
+
+| Value | Meaning |
+|---|---|
+| `booked` | Booked but not yet collected |
+| `picked_up` | Collected from sender |
+| `in_transit` | Moving through carrier network |
+| `out_for_delivery` | On the delivery vehicle |
+| `delivered` | Delivered to recipient |
+| `failed` | Delivery attempt failed |
+| `returned` | Being returned to sender |
+| `delayed` | Delayed relative to original ETA |
+| `unknown` | Status not in mapping table |
+
+#### Carrier status mapping notes
+
+| Carrier | Source field | Notes |
+|---|---|---|
+| PostNord | `status` string | Only `INFORMED` confirmed from production. Full enum pending from PostNord support. |
+| Bring | `statusId` | Full enum from Bring Tracking API YAML spec. |
+| GLS | `History[0].StatusCode` | All map to `unknown` — enum not publicly documented. Pending GLS support. |
+| DAO | `haendelse` numeric code | Codes 10–70 mapped. Full list at `GET /TrackNTraceKoder.php`. |
+| DHL | `status.statusCode` | Fully documented: `delivered`, `failure`, `pre-transit`, `transit`, `unknown`. |
+
+---
+
+### GET /api/labels/{trackingNumber}
+
+| Query parameter | Default |
+|---|---|
+| `carrier` | `postnord` |
+| `format` | `PDF` |
+
+| Carrier | PDF | ZPL | ZPLGK |
 |---|---|---|---|
-| PostNord | `/rest/shipment/v5/trackandtrace/findByIdentifier.json` | GET | `status` string |
-| Bring | `/tracking/api/v2/tracking.json` | GET | `statusDescription` |
-| GLS | `/rs/tracking/parceldetails` | POST | Most recent `StatusCode` |
-| DAO | `/TrackNTrace_v2.php` | GET | Most recent event description |
+| PostNord | ✅ | ✅ | ✅ |
+| Bring | ✅ | — | — |
+| GLS | ✅ | ✅ | ✅ |
+| DAO | ✅ | — | — |
+| DHL | ✅ | — | — |
+
+```bash
+# Decode and save as PDF
+curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord" \
+  | jq -r '.data' | base64 -d > label.pdf
+
+# Send ZPL directly to a thermal printer
+curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord&format=ZPL" \
+  | jq -r '.data' | base64 -d > /dev/usb/lp0
+```
 
 ---
 
 ### GET /api/health
-
-```bash
-curl http://localhost:8080/api/health
-```
 
 ```json
 {
@@ -658,26 +430,18 @@ curl http://localhost:8080/api/health
     "bring": "production",
     "gls": "mock",
     "dao": "mock",
+    "dhl": "mock",
     "posti": "mock",
     "inpost": "mock"
   }
 }
 ```
 
-`carriers` shows each registered carrier and whether it is running against the real API (`production`) or the built-in mock (`mock`). A carrier shows `mock` either because `MOCK_MODE=true` is set or because its API key is not configured.
-
 ---
 
 ## Idempotency
 
-Pass `idempotencyKey` in the request body to deduplicate bookings. Keys must be 64 characters or fewer.
-
-```bash
-curl -X POST http://localhost:8080/api/bookings \
-  -H "Content-Type: application/json" \
-  -H "Idempotency-Key: order-98765-attempt-1" \
-  -d '{ "carrier": "postnord", "shipment": { ... }, "idempotencyKey": "order-98765-attempt-1" }'
-```
+Pass `idempotencyKey` in the request body (max 64 characters) to deduplicate bookings.
 
 | Carrier | Native idempotency | Behaviour |
 |---|---|---|
@@ -685,41 +449,22 @@ curl -X POST http://localhost:8080/api/bookings \
 | Bring | No | Key logged as `clientReference`; deduplication is your responsibility |
 | GLS | No | Key logged; deduplication is your responsibility |
 | DAO | No | Key logged; deduplication is your responsibility |
-
----
-
-## Edge cases and validation
-
-### Postal codes
-
-| Country | Format | Example |
-|---|---|---|
-| DK | 4 digits | `2300` |
-| NO | 4 digits | `0158` |
-| SE | 5 digits | `11122` |
-| FI | 5 digits | `00100` |
-| PL | `NN-NNN` | `00-001` |
-
-### Carrier weight and dimension limits
-
-| Carrier | Max weight | Max dimensions |
-|---|---|---|
-| PostNord | 30 kg | L+W+H ≤ 300 cm |
-| Bring | 30 kg | L ≤ 250 cm, W ≤ 120 cm, H ≤ 100 cm |
-| GLS | 40 kg | L ≤ 270 cm, W ≤ 120 cm, H ≤ 120 cm |
-| DAO | 35 kg | L ≤ 250 cm, W ≤ 120 cm, H ≤ 120 cm |
-| Posti | 30 kg | L ≤ 200 cm, W ≤ 100 cm, H ≤ 100 cm |
+| DHL | No | Key logged as `sender.referenceNr`; deduplication is your responsibility |
 
 ---
 
 ## Cross-border shipments and customs
 
-The `customs` block is optional for domestic and intra-EU B2C shipments below the de minimis threshold. It is required for everything else.
+The `customs` block is required for all non-EU destinations (NO, GB, CH, US, CA, AU, JP, CN etc.) regardless of shipment type. It is optional for intra-EU B2C shipments below the de minimis threshold.
+
+The gateway rejects a booking with a missing `customs` block when the destination is a known non-EU country — the error message names the missing fields.
 
 ```json
 "customs": {
   "incoterms": "DDP",
+  "transportMode": "road",
   "hsCode": "61091000",
+  "countryOfOrigin": "CN",
   "customsValue": 500.0,
   "customsCurrency": "DKK",
   "importerOfRecord": "NO123456789",
@@ -729,13 +474,85 @@ The `customs` block is optional for domestic and intra-EU B2C shipments below th
 }
 ```
 
-Norway applies a de minimis threshold of 350 NOK for B2C. The EU applies 150 EUR for B2C. B2B shipments within the EU always require a valid `importerVatNumber`.
+#### Customs fields
+
+| Field | Type | Description | Required |
+|---|---|---|---|
+| `incoterms` | string | Incoterms 2020 trade term (e.g. `DDP`, `DAP`, `FCA`) | Non-EU destinations |
+| `transportMode` | string | `sea`, `air`, `road`, or `rail` | No |
+| `hsCode` | string | 6–10 digit HS commodity code | Non-EU; EU above de minimis |
+| `countryOfOrigin` | string | ISO 3166-1 alpha-2 country where goods were manufactured | No |
+| `customsValue` | float | Declared value for customs | Non-EU |
+| `customsCurrency` | string | ISO 4217 currency for `customsValue` | Non-EU |
+| `importerOfRecord` | string | VAT or EORI number of the importer | Non-EU destinations |
+| `importerVatNumber` | string | VAT number of the receiver | EU B2B |
+| `exporterVatNumber` | string | VAT number of the sender | Non-EU destinations |
+| `shipmentType` | string | `B2B` or `B2C` | No |
+
+#### De minimis thresholds
+
+| Destination | Threshold | Notes |
+|---|---|---|
+| EU (all countries) | 150 EUR | B2C only — above this, HS code required |
+| Norway (NO) | 350 NOK | B2C only — above this, full customs required |
+| United Kingdom (GB) | 135 GBP | B2C only |
+| United States (US) | 800 USD | B2C only |
+| Canada (CA) | 150 CAD | B2C only |
+| Australia (AU) | 1000 AUD | B2C only |
+| Switzerland (CH) | 65 CHF | B2C only |
+| Japan (JP) | 10000 JPY | B2C only |
+
+B2B shipments always require full customs data regardless of value.
+
+#### Incoterms validation
+
+Sea-only Incoterms (`FOB`, `FAS`, `CFR`, `CIF`) are rejected when `transportMode` is `air`, `road`, or `rail`. All 11 Incoterms 2020 terms are accepted.
+
+#### VAT number validation
+
+VAT numbers are validated against known format rules for DK, SE, FI, NO, DE, FR, NL, and PL. For EU member state VAT numbers, the gateway additionally calls the [VIES REST API](https://ec.europa.eu/taxation_customs/vies/) to confirm the number is registered and active.
+
+VIES lookups are non-blocking: if VIES is unavailable or times out (2 second hard limit), the booking proceeds with format-only validation and a `customsWarnings` entry is added to the response. Both importer and exporter VAT numbers are checked in parallel so the total overhead is one round trip, not two. Non-EU VAT numbers (NO, GB, CH etc.) are never sent to VIES.
+
+#### Customs wire format support per carrier
+
+DHL forwards `incoterms`, `hsCode`, `countryOfOrigin`, `customsValue`, and `customsCurrency` into the cPAN booking payload. PostNord, Bring, and GLS customs wire format fields are pending carrier documentation — validated customs data is accepted and logged but not forwarded; a `customsWarnings` entry describes which fields were not sent.
+
+#### Norway-specific rules
+
+HS codes starting with chapter `22` (alcohol) or `24` (tobacco) require a special import permit and are rejected at validation time.
+
+---
+
+## Restricted goods
+
+The gateway validates item descriptions against a per-carrier prohibited and restricted goods list before forwarding the booking to the carrier.
+
+**Blocked items** (booking rejected):
+
+| Carrier | Examples |
+|---|---|
+| All | Explosives, ammunition, weapons, firearms |
+| PostNord | Flammable liquids |
+| Bring, GLS, DHL | Flammable liquids, dangerous goods |
+| DHL | Aerosols |
+
+**Warned items** (booking proceeds, `customsWarnings` populated):
+
+| Carrier | Examples |
+|---|---|
+| All | Lithium batteries (UN3480/UN3481 labelling required) |
+| Bring, DHL | Dry ice (UN1845 labelling required), perishables |
+| DHL | Aerosols (blocked for eCommerce Europe), alcohol/wine |
+| DAO | Alcohol (age verification compliance required) |
+
+Item matching is case-insensitive substring matching against `colli[].items[].description`.
 
 ---
 
 ## Payload logging
 
-In development (`LOG_ENV=development`), full request and response bodies are logged at `DEBUG` level. Sensitive fields are scrubbed before any log entry is written (`Authorization` header is SHA-256 hashed; `password`, `token`, `apiKey`, and `secret` JSON fields are replaced with `[redacted]`).
+In development (`LOG_ENV=development`), full request and response bodies are logged at `DEBUG` level. Sensitive fields are scrubbed before writing (`Authorization` header is SHA-256 hashed; `password`, `token`, `apiKey`, and `secret` JSON fields are replaced with `[redacted]`).
 
 ---
 
@@ -747,38 +564,45 @@ In development (`LOG_ENV=development`), full request and response bodies are log
 logistics-gateway/
 ├── cmd/
 │   └── api/
-│       └── main.go               # HTTP server entry point
+│       └── main.go
 ├── internal/
 │   ├── adapter/
-│   │   ├── adapter.go            # CarrierAdapter interface, Registry, shared types
-│   │   ├── addon.go              # hasAddOn / getAddOn helpers
-│   │   ├── postnord.go           # PostNord v3 EDI adapter
-│   │   ├── bring.go              # Bring Booking API adapter
-│   │   ├── gls.go                # GLS ShipIT Farm v1 adapter
-│   │   ├── dao.go                # DAO adapter
-│   │   ├── posti.go              # Posti adapter
-│   │   ├── inpost.go             # InPost adapter
-│   │   ├── mock_*.go             # Mock adapters for testing and MOCK_MODE
-│   │   └── *_test.go             # Adapter tests
+│   │   ├── adapter.go        # CarrierAdapter interface, Registry, shared types,
+│   │   │                     # TrackingStatus constants, BookingResponse fields
+│   │   ├── addon.go          # hasAddOn / getAddOn helpers
+│   │   ├── status.go         # normalizeStatus — carrier raw → TrackingStatus mapping
+│   │   ├── postnord.go
+│   │   ├── bring.go
+│   │   ├── gls.go
+│   │   ├── dao.go
+│   │   ├── dhl.go
+│   │   ├── posti.go          # Demo — mock only
+│   │   ├── inpost.go         # Demo — mock only
+│   │   ├── mock_*.go
+│   │   └── *_test.go
 │   ├── handler/
-│   │   ├── handler.go            # Shared config and helpers
-│   │   ├── bookings.go           # POST /api/bookings
-│   │   ├── labels.go             # GET /api/labels/{trackingNumber}
-│   │   ├── trackings.go          # GET /api/trackings/{trackingNumber}
-│   │   └── health.go             # GET /api/health
+│   │   ├── handler.go
+│   │   ├── bookings.go       # POST /api/bookings — restricted items check,
+│   │   │                     # mandatory customs enforcement, VIES parallel calls
+│   │   ├── cancellations.go
+│   │   ├── updates.go
+│   │   ├── labels.go
+│   │   ├── trackings.go
+│   │   └── health.go
 │   ├── middleware/
-│   │   ├── request_id.go         # X-Request-ID propagation
-│   │   ├── idempotency.go        # Idempotency-Key handling
-│   │   └── logging.go            # Debug payload logging with scrubbing
+│   │   ├── request_id.go
+│   │   ├── idempotency.go
+│   │   └── logging.go
 │   ├── router/
-│   │   └── router.go             # Route definitions and middleware wiring
+│   │   └── router.go
 │   ├── logger/
-│   │   └── logger.go             # Zap logger constructor
+│   │   └── logger.go
 │   └── validation/
-│       ├── address.go            # Postal codes, house number, state/province rules
-│       ├── package.go            # Per-carrier weight, dimensions, girth limits
-│       ├── idempotency.go        # Idempotency key rules
-│       └── customs.go            # Cross-border and de minimis validation
+│       ├── address.go        # Postal codes, house number, state/province rules
+│       ├── package.go        # Per-carrier weight, dimension, girth limits
+│       ├── idempotency.go    # Idempotency key rules
+│       ├── customs.go        # Cross-border, de minimis, VAT format, VIES live lookup
+│       └── restricted.go     # Per-carrier prohibited and restricted goods list
 ├── Dockerfile
 ├── go.mod
 ├── go.sum
@@ -809,9 +633,11 @@ golangci-lint run
 2. Create `internal/adapter/mock_{carrier}.go`
 3. Create `internal/adapter/{carrier}_test.go`
 4. Add the carrier block to `InitAdapters` in `adapter.go`
-5. Add a limits entry in `internal/validation/package.go`
+5. Add status mappings in `status.go`
+6. Add restricted goods entries in `validation/restricted.go`
+7. Add a limits entry in `validation/package.go`
 
-The handler, router, and validation layer require no changes.
+The handler, router, and validation layer require no other changes.
 
 ---
 
