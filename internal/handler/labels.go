@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 )
 
 // validLabelFormats is the set of accepted label format strings.

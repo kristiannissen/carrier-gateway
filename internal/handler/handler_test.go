@@ -17,7 +17,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 )
 
 // newTestConfig returns a handler Config wired with mock adapters.

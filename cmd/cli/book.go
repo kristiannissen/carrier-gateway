@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 )
 
 func newBookCmd(registry *adapter.Registry) *cobra.Command {

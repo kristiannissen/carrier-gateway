@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 )
 
 func shipmentWithItems(items ...string) adapter.Shipment {

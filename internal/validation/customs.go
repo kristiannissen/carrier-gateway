@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 )
 
 // nonEUDestinations is the set of country codes that are not part of the EU

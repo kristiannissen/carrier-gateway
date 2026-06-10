@@ -8,7 +8,7 @@ import (
 	"mime"
 	"net/http"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 )
 
 // Parser converts a raw request body into a unified BookingRequest.

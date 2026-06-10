@@ -8,9 +8,9 @@ import (
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
-	"github.com/kristiannissen/logistics-gateway/internal/handler"
-	"github.com/kristiannissen/logistics-gateway/internal/middleware"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/handler"
+	"github.com/kristiannissen/carrier-gateway/internal/middleware"
 )
 
 // NewRouter creates and configures the HTTP router for the API.

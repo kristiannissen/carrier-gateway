@@ -246,7 +246,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 	req.Header.Set("X-MyBring-API-Key", a.APIKey)
-	req.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/logistics-gateway")
+	req.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/carrier-gateway")
 	req.Header.Set("X-Bring-Test-Indicator", "false")
 
 	resp, err := a.HTTPClient.Do(req)
@@ -328,7 +328,7 @@ func (a *BringAdapter) CancelShipment(ctx context.Context, trackingNumber string
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 	req.Header.Set("X-MyBring-API-Key", a.APIKey)
-	req.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/logistics-gateway")
+	req.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/carrier-gateway")
 	req.Header.Set("X-Bring-Test-Indicator", "false")
 
 	resp, err := a.HTTPClient.Do(req)

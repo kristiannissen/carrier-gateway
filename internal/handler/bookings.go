@@ -12,9 +12,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
-	"github.com/kristiannissen/logistics-gateway/internal/parser"
-	"github.com/kristiannissen/logistics-gateway/internal/validation"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/parser"
+	"github.com/kristiannissen/carrier-gateway/internal/validation"
 )
 
 // BookShipment handles POST /bookings.

@@ -1,4 +1,4 @@
-module github.com/kristiannissen/logistics-gateway
+module github.com/kristiannissen/carrier-gateway
 
 go 1.26
 

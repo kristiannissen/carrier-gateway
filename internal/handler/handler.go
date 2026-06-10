@@ -8,8 +8,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
-	"github.com/kristiannissen/logistics-gateway/internal/middleware"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/middleware"
 )
 
 // Config holds shared configuration for HTTP handlers.

@@ -13,9 +13,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
-	"github.com/kristiannissen/logistics-gateway/internal/logger"
-	"github.com/kristiannissen/logistics-gateway/internal/router"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/logger"
+	"github.com/kristiannissen/carrier-gateway/internal/router"
 )
 
 func main() {

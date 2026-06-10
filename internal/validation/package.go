@@ -6,7 +6,7 @@ package validation
 import (
 	"fmt"
 
-	"github.com/kristiannissen/logistics-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 )
 
 // carrierLimits defines the physical constraints for a carrier's parcels.
