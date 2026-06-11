@@ -181,7 +181,7 @@ type carrierCapabilities struct {
 var capabilities = map[string]carrierCapabilities{
 	"postnord": {NativeIdempotency: true, SupportsCancellation: true, SupportsUpdate: true},
 	"bring":    {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
-	"gls":      {NativeIdempotency: false, SupportsCancellation: false, SupportsUpdate: false},
+	"gls":      {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
 	"dao":      {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: true},
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	"posti":  {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},

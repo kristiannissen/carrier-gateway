@@ -106,9 +106,13 @@ func (m *MockGLSAdapter) FetchLabel(_ context.Context, req LabelRequest) (*Label
 	}, nil
 }
 
-// CancelShipment returns unsupported for GLS.
-func (m *MockGLSAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
-	return nil, notSupported("GLS", "cancellation", "contact GLS directly")
+// CancelShipment returns a mock cancellation response.
+func (m *MockGLSAdapter) CancelShipment(_ context.Context, trackingNumber string) (*CancelResponse, error) {
+	return &CancelResponse{
+		TrackingNumber: trackingNumber,
+		Carrier:        "gls",
+		Status:         "cancelled",
+	}, nil
 }
 
 // UpdateShipment returns unsupported for GLS.

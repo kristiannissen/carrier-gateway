@@ -165,10 +165,11 @@ func glsShipmentUnit(c Colli) map[string]interface{} {
 }
 
 // glsLabelFormat maps our LabelFormat to GLS TemplateSet and LabelFormat values.
+// GLS uses "ZEBRA" (not "ZPL") for the LabelFormat field; see Document schema.
 func glsLabelFormat(f LabelFormat) (templateSet, labelFormat string) {
 	switch f {
 	case LabelFormatZPL, LabelFormatZPLGK:
-		return "ZPL_200", "ZPL"
+		return "ZPL_200", "ZEBRA"
 	default:
 		return "NONE", "PDF"
 	}
@@ -230,42 +231,20 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		})
 	}
 
-	wantSMS := hasAddOn(request.Shipment.AddOns, AddOnSMSNotification)
-	wantEmail := hasAddOn(request.Shipment.AddOns, AddOnEmailNotification)
-	if wantSMS || wantEmail {
-		notificationType := "EMAIL"
-		if wantSMS && wantEmail {
-			notificationType = "SMS_AND_EMAIL"
-		} else if wantSMS {
-			notificationType = "SMS"
-		}
-		services = append(services, map[string]interface{}{
-			"Service": map[string]interface{}{"ServiceName": "InfoService"},
-			"InfoService": map[string]interface{}{
-				"ServiceName":       "InfoService",
-				"Email":             request.Shipment.Receiver.Email,
-				"MobilePhoneNumber": request.Shipment.Receiver.Phone,
-				"NotificationType":  notificationType,
-			},
-		})
+	// InfoService, FlexDelivery, and DirectSignature are not part of the GLS
+	// ShipIT API v1 ShipmentService schema and are rejected by the API.
+	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) ||
+		hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
+		return nil, notSupported("GLS", "SMS/email notification add-on",
+			"not available in ShipIT API v1 ShipmentService schema")
 	}
-
-	if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
-		flexDetail := map[string]interface{}{"ServiceName": "FlexDelivery"}
-		if flex.Instructions != "" {
-			flexDetail["DeliveryInstructions"] = flex.Instructions
-		}
-		services = append(services, map[string]interface{}{
-			"Service":      map[string]interface{}{"ServiceName": "FlexDelivery"},
-			"FlexDelivery": flexDetail,
-		})
+	if _, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
+		return nil, notSupported("GLS", "flex delivery add-on",
+			"not available in ShipIT API v1 ShipmentService schema")
 	}
-
 	if hasAddOn(request.Shipment.AddOns, AddOnSignatureRequired) {
-		services = append(services, map[string]interface{}{
-			"Service":         map[string]interface{}{"ServiceName": "DirectSignature"},
-			"DirectSignature": map[string]interface{}{"ServiceName": "DirectSignature"},
-		})
+		return nil, notSupported("GLS", "signature required add-on",
+			"not available in ShipIT API v1 ShipmentService schema")
 	}
 
 	if hasAddOn(request.Shipment.AddOns, AddOnCashOnDelivery) {
@@ -352,11 +331,49 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	}, nil
 }
 
-// CancelShipment is not yet supported for GLS.
-// GLS cancellation API documentation is not yet available.
-// Contact GLS directly to cancel a shipment.
-func (a *GLSAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
-	return nil, notSupported("GLS", "cancellation", "contact GLS directly")
+// CancelShipment cancels a GLS parcel via POST /rs/shipments/cancel/{trackID}.
+func (a *GLSAdapter) CancelShipment(ctx context.Context, trackingNumber string) (*CancelResponse, error) {
+	if trackingNumber == "" {
+		return nil, fmt.Errorf("tracking number must not be empty")
+	}
+
+	token, err := a.bearerToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to obtain GLS access token: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/rs/shipments/cancel/%s", a.BaseURL, trackingNumber), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GLS cancel request: %w", err)
+	}
+	req.Header.Set("Accept", "application/glsVersion1+json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GLS cancel API call failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		return nil, fmt.Errorf("GLS cancel API returned status %d: %s", resp.StatusCode, string(b))
+	}
+
+	var glsResp struct {
+		TrackID string `json:"TrackID"`
+		Result  string `json:"Result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&glsResp); err != nil {
+		return nil, fmt.Errorf("failed to decode GLS cancel response: %w", err)
+	}
+
+	return &CancelResponse{
+		TrackingNumber: glsResp.TrackID,
+		Carrier:        "gls",
+		Status:         "cancelled",
+	}, nil
 }
 
 // UpdateShipment is not yet supported for GLS.
@@ -365,7 +382,11 @@ func (a *GLSAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*Update
 	return nil, notSupported("GLS", "post-booking update", "")
 }
 
-// FetchLabel retrieves a GLS shipping label in the requested format.
+// FetchLabel retrieves a GLS shipping label via POST /rs/shipments/reprintparcel.
+//
+// Wire format notes:
+//   - Endpoint: POST /rs/shipments/reprintparcel (ReprintParcelRequestParameter body).
+//   - Label data is returned in CreatedShipment.PrintData[0].Data[0] as base64.
 func (a *GLSAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
 	switch req.Format {
 	case LabelFormatPDF, LabelFormatZPL, LabelFormatZPLGK:
@@ -381,16 +402,63 @@ func (a *GLSAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 		return nil, fmt.Errorf("failed to obtain GLS access token: %w", err)
 	}
 
-	_, labelFormat := glsLabelFormat(req.Format)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/rs/shipments/%s/labels?format=%s", a.BaseURL, req.TrackingNumber, labelFormat), nil)
+	templateSet, labelFormat := glsLabelFormat(req.Format)
+	body, err := json.Marshal(map[string]interface{}{
+		"TrackID": req.TrackingNumber,
+		"PrintingOptions": map[string]interface{}{
+			"ReturnLabels": map[string]interface{}{
+				"TemplateSet": templateSet,
+				"LabelFormat": labelFormat,
+			},
+		},
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create GLS label request: %w", err)
+		return nil, fmt.Errorf("failed to marshal GLS reprint request: %w", err)
 	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		a.BaseURL+"/rs/shipments/reprintparcel", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GLS reprint request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/glsVersion1+json")
 	httpReq.Header.Set("Accept", "application/glsVersion1+json")
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 
-	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "gls")
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("GLS reprint API call failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		return nil, fmt.Errorf("GLS reprint API returned status %d: %s", resp.StatusCode, string(b))
+	}
+
+	var glsResp struct {
+		CreatedShipment struct {
+			PrintData []struct {
+				Data        []string `json:"Data"`
+				LabelFormat string   `json:"LabelFormat"`
+			} `json:"PrintData"`
+		} `json:"CreatedShipment"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&glsResp); err != nil {
+		return nil, fmt.Errorf("failed to decode GLS reprint response: %w", err)
+	}
+	if len(glsResp.CreatedShipment.PrintData) == 0 ||
+		len(glsResp.CreatedShipment.PrintData[0].Data) == 0 {
+		return nil, fmt.Errorf("GLS reprint response contained no label data")
+	}
+
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "gls",
+		Format:         req.Format,
+		Data:           glsResp.CreatedShipment.PrintData[0].Data[0],
+		MimeType:       MimeTypeForFormat(req.Format),
+	}, nil
 }
 
 // TrackShipment retrieves GLS tracking via POST to /rs/tracking/parceldetails.
@@ -404,10 +472,10 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		return nil, fmt.Errorf("failed to obtain GLS access token: %w", err)
 	}
 
-	body, err := json.Marshal(map[string]interface{}{
-		"TrackID":  trackingNumber,
-		"DateFrom": "2000-01-01T00:00:00Z",
-		"DateTo":   "2099-12-31T23:59:59Z",
+	// DetailsReferenceData only accepts TrackID (and optional reference fields);
+	// DateFrom/DateTo belong to TULReferenceData on /rs/tracking/parcels.
+	body, err := json.Marshal(map[string]string{
+		"TrackID": trackingNumber,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal GLS tracking request: %w", err)
@@ -443,7 +511,7 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 				LocationCode string `json:"LocationCode"`
 				Country      string `json:"Country"`
 				StatusCode   string `json:"StatusCode"`
-				Description  string `json:"description"`
+				Description  string `json:"Description"`
 			} `json:"History"`
 		} `json:"UnitDetail"`
 	}

@@ -17,6 +17,16 @@ import (
 // Mock adapter tests
 // =========================================================================
 
+func TestMockGLSAdapter_CancelShipment(t *testing.T) {
+	t.Parallel()
+
+	resp, err := (&MockGLSAdapter{}).CancelShipment(t.Context(), "GLS123456789DK")
+	require.NoError(t, err)
+	assert.Equal(t, "GLS123456789DK", resp.TrackingNumber)
+	assert.Equal(t, "cancelled", resp.Status)
+	assert.Equal(t, "gls", resp.Carrier)
+}
+
 func TestMockGLSAdapter_BookShipment(t *testing.T) {
 	t.Parallel()
 
@@ -297,6 +307,130 @@ func TestGLSAdapter_BookShipment_APIError(t *testing.T) {
 	assert.Contains(t, err.Error(), "400")
 }
 
+func TestGLSAdapter_FetchLabel_UsesReprintParcel(t *testing.T) {
+	t.Parallel()
+
+	var capturedPath, capturedMethod string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600}`))
+			return
+		}
+		capturedPath = r.URL.Path
+		capturedMethod = r.Method
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"CreatedShipment":{"PrintData":[{"LabelFormat":"PDF","Data":["JVBERi0xLjQ="]}]}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	adapter := &GLSAdapter{
+		ClientID: "test", ClientSecret: "secret", ContactID: "cid",
+		BaseURL: srv.URL, AuthURL: srv.URL + "/oauth2/v2/token",
+		HTTPClient: srv.Client(),
+	}
+
+	resp, err := adapter.FetchLabel(t.Context(), LabelRequest{TrackingNumber: "GLS123", Format: LabelFormatPDF})
+	require.NoError(t, err)
+
+	assert.Equal(t, "/rs/shipments/reprintparcel", capturedPath)
+	assert.Equal(t, http.MethodPost, capturedMethod)
+	assert.Equal(t, "GLS123", resp.TrackingNumber)
+	assert.Equal(t, "JVBERi0xLjQ=", resp.Data)
+}
+
+func TestGLSAdapter_FetchLabel_ZPLUsesZEBRA(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600}`))
+			return
+		}
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &capturedBody)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"CreatedShipment":{"PrintData":[{"LabelFormat":"ZEBRA","Data":["Wg=="]}]}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	adapter := &GLSAdapter{
+		ClientID: "test", ClientSecret: "secret", ContactID: "cid",
+		BaseURL: srv.URL, AuthURL: srv.URL + "/oauth2/v2/token",
+		HTTPClient: srv.Client(),
+	}
+
+	_, err := adapter.FetchLabel(t.Context(), LabelRequest{TrackingNumber: "GLS123", Format: LabelFormatZPL})
+	require.NoError(t, err)
+
+	opts := glsRequireNested(t, capturedBody, "PrintingOptions")
+	labels := glsRequireNested(t, opts, "ReturnLabels")
+	assert.Equal(t, "ZEBRA", labels["LabelFormat"], "LabelFormat must be ZEBRA not ZPL")
+	assert.Equal(t, "ZPL_200", labels["TemplateSet"])
+}
+
+func TestGLSAdapter_CancelShipment(t *testing.T) {
+	t.Parallel()
+
+	var capturedPath, capturedMethod string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600}`))
+			return
+		}
+		capturedPath = r.URL.Path
+		capturedMethod = r.Method
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"TrackID":"GLS123","Result":"CANCELLED"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	adapter := &GLSAdapter{
+		ClientID: "test", ClientSecret: "secret", ContactID: "cid",
+		BaseURL: srv.URL, AuthURL: srv.URL + "/oauth2/v2/token",
+		HTTPClient: srv.Client(),
+	}
+
+	resp, err := adapter.CancelShipment(t.Context(), "GLS123")
+	require.NoError(t, err)
+
+	assert.Equal(t, "/rs/shipments/cancel/GLS123", capturedPath)
+	assert.Equal(t, http.MethodPost, capturedMethod)
+	assert.Equal(t, "cancelled", resp.Status)
+	assert.Equal(t, "GLS123", resp.TrackingNumber)
+}
+
+func TestGLSAdapter_BookShipment_UnsupportedAddOns(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		addOn  AddOn
+		errMsg string
+	}{
+		{"sms notification", AddOn{Type: AddOnSMSNotification}, "SMS/email notification add-on"},
+		{"email notification", AddOn{Type: AddOnEmailNotification}, "SMS/email notification add-on"},
+		{"flex delivery", AddOn{Type: AddOnFlexDelivery}, "flex delivery add-on"},
+		{"signature required", AddOn{Type: AddOnSignatureRequired}, "signature required add-on"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			adapter, _ := newGLSTestServer(t, http.StatusOK, glsMockBookingResponse())
+			req := glsMinimalRequest()
+			req.Shipment.AddOns = []AddOn{tc.addOn}
+			_, err := adapter.BookShipment(t.Context(), req)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.errMsg)
+		})
+	}
+}
+
 func TestGLSAdapter_TrackShipment_RequestShape(t *testing.T) {
 	t.Parallel()
 
@@ -329,10 +463,10 @@ func TestGLSAdapter_TrackShipment_RequestShape(t *testing.T) {
 	assert.Equal(t, "GLS123", resp.TrackingNumber)
 	assert.NotEmpty(t, resp.Events)
 
-	// Tracking uses POST with TrackID in body
+	// DetailsReferenceData only carries TrackID — no DateFrom/DateTo.
 	assert.Equal(t, "GLS123", capturedBody["TrackID"])
-	assert.NotEmpty(t, capturedBody["DateFrom"])
-	assert.NotEmpty(t, capturedBody["DateTo"])
+	assert.Empty(t, capturedBody["DateFrom"], "DateFrom must not be sent to /rs/tracking/parceldetails")
+	assert.Empty(t, capturedBody["DateTo"], "DateTo must not be sent to /rs/tracking/parceldetails")
 }
 
 // =========================================================================
@@ -401,7 +535,7 @@ func glsMockTrackingResponse() string {
 					"Location": "Kolding Hub",
 					"Country": "DK",
 					"StatusCode": "001",
-					"description": "Parcel arrived at sorting terminal."
+					"Description": "Parcel arrived at sorting terminal."
 				}
 			]
 		}
