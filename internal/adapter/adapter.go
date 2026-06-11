@@ -309,16 +309,17 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		)
 	}
 
-	postiAPIKey := os.Getenv("POSTI_API_KEY")
+	postiClientID := os.Getenv("POSTI_CLIENT_ID")
+	postiClientSecret := os.Getenv("POSTI_CLIENT_SECRET")
 	switch {
 	case mockMode:
 		adapters["posti"] = &MockPostiAdapter{}
 		log.Info("Posti adapter initialized in mock mode (MOCK_MODE=true)")
-	case postiAPIKey == "":
+	case postiClientID == "" || postiClientSecret == "":
 		adapters["posti"] = &MockPostiAdapter{}
-		log.Warn("Posti adapter falling back to mock mode (POSTI_API_KEY not set)")
+		log.Warn("Posti adapter falling back to mock mode (POSTI_CLIENT_ID or POSTI_CLIENT_SECRET not set)")
 	default:
-		adapters["posti"] = NewPostiAdapter(postiAPIKey, log)
+		adapters["posti"] = NewPostiAdapter(postiClientID, postiClientSecret, log)
 		log.Info("Posti adapter initialized in production mode")
 	}
 
