@@ -120,7 +120,7 @@ func TestValidateAddress_MunicipalityRequiredForFinland(t *testing.T) {
 		PostalCode: "00100",
 		Country:    "FI",
 	}
-	err := ValidateAddress(addr, "posti", "FI")
+	err := ValidateAddress(addr, "bring", "FI")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "municipality is required for Finnish addresses")
 }
@@ -225,14 +225,6 @@ func TestValidateAddress_ValidFullAddress(t *testing.T) {
 				City: "Warsaw", PostalCode: "00-001", Country: "PL",
 			},
 		},
-		{
-			name:    "posti FI",
-			carrier: "posti",
-			addr: adapter.Address{
-				Name: "Matti", Street: "Mannerheimintie", HouseNumber: "1",
-				City: "Helsinki", PostalCode: "00100", Country: "FI",
-			},
-		},
 	}
 
 	for _, tc := range cases {
@@ -286,7 +278,7 @@ func TestValidateAddress_ServicePoint(t *testing.T) {
 
 	t.Run("service point works for all carriers", func(t *testing.T) {
 		t.Parallel()
-		for _, carrier := range []string{"postnord", "bring", "posti", "gls", "dao", "inpost"} {
+		for _, carrier := range []string{"postnord", "bring", "gls", "dao", "inpost"} {
 			carrier := carrier
 			t.Run(carrier, func(t *testing.T) {
 				t.Parallel()

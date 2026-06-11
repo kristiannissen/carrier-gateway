@@ -172,7 +172,6 @@ func TestNormalizeStatus(t *testing.T) {
 
 		assert.Equal(t, StatusUnknown, normalizeStatus("fedex", "DELIVERED"))
 		assert.Equal(t, StatusUnknown, normalizeStatus("", "DELIVERED"))
-		assert.Equal(t, StatusUnknown, normalizeStatus("posti", "DELIVERED"))
 		assert.Equal(t, StatusUnknown, normalizeStatus("inpost", "DELIVERED"))
 	})
 }

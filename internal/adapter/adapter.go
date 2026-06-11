@@ -184,7 +184,6 @@ var capabilities = map[string]carrierCapabilities{
 	"gls":      {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
 	"dao":      {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: true},
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	"posti":  {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
 	"inpost": {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
 	// FedEx: cancellation is supported via PUT /ship/v1/shipments/cancel.
 	// Full capabilities will be confirmed once the Ship and Track API specs are available.
@@ -307,20 +306,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 			zap.String("bookingURL", a.BookingBaseURL),
 			zap.String("trackingURL", a.TrackingBaseURL),
 		)
-	}
-
-	postiClientID := os.Getenv("POSTI_CLIENT_ID")
-	postiClientSecret := os.Getenv("POSTI_CLIENT_SECRET")
-	switch {
-	case mockMode:
-		adapters["posti"] = &MockPostiAdapter{}
-		log.Info("Posti adapter initialized in mock mode (MOCK_MODE=true)")
-	case postiClientID == "" || postiClientSecret == "":
-		adapters["posti"] = &MockPostiAdapter{}
-		log.Warn("Posti adapter falling back to mock mode (POSTI_CLIENT_ID or POSTI_CLIENT_SECRET not set)")
-	default:
-		adapters["posti"] = NewPostiAdapter(postiClientID, postiClientSecret, log)
-		log.Info("Posti adapter initialized in production mode")
 	}
 
 	inpostAPIKey := os.Getenv("INPOST_API_KEY")
@@ -560,7 +545,7 @@ type Dimensions struct {
 // service point directly. Each carrier maps this to its own wire field name:
 //
 //	- PostNord: servicePointId
-//	- Bring/Posti: pickupPointId
+//	- Bring: pickupPointId
 //	- GLS: parcelShopId
 //	- DAO: lockerId
 //	- InPost: targetLocker (service block)

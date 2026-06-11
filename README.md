@@ -14,7 +14,6 @@ A stateless Go microservice for booking, tracking, and returning shipments acros
 | `dao` | DAO | DK | ✅ | ✅ | ✅ | PDF | Beta |
 | `dhl` | DHL eCommerce Europe | 28 European countries | ✅ | ✅ | ✅ | PDF | Beta |
 | `fedex` | FedEx | US, EU, and more | ✅ | ✅ | ❌ | — | Beta |
-| `posti` | Posti | FI | — | — | — | — | Demo |
 | `inpost` | InPost | PL | — | — | — | — | Demo |
 
 Demo carriers return mock data only and are not connected to any live API.
@@ -554,7 +553,6 @@ curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord&
     "dao": "beta",
     "dhl": "beta",
     "fedex": "beta",
-    "posti": "production",
     "inpost": "production"
   }
 }
@@ -777,7 +775,6 @@ carrier-gateway/
 │   │   ├── dao.go
 │   │   ├── dhl.go
 │   │   ├── fedex.go          # FedEx Ship/Track API — book, track, cancel
-│   │   ├── posti.go          # Demo — mock only
 │   │   ├── inpost.go         # Demo — mock only
 │   │   ├── mock_*.go
 │   │   └── *_test.go

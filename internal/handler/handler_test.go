@@ -33,7 +33,6 @@ func newTestConfig(t *testing.T) *Config {
 		"bring":    &adapter.MockBringAdapter{},
 		"gls":      &adapter.MockGLSAdapter{},
 		"dao":      &adapter.MockDAOAdapter{},
-		"posti":    &adapter.MockPostiAdapter{},
 		"inpost":   &adapter.MockInPostAdapter{},
 	}
 	return &Config{
@@ -179,7 +178,7 @@ func TestBookShipment_UnsupportedContentType(t *testing.T) {
 
 func TestBookShipment_AllCarriers(t *testing.T) {
 	t.Parallel()
-	for _, carrier := range []string{"postnord", "bring", "gls", "dao", "posti", "inpost"} {
+	for _, carrier := range []string{"postnord", "bring", "gls", "dao", "inpost"} {
 		carrier := carrier
 		t.Run(carrier, func(t *testing.T) {
 			t.Parallel()

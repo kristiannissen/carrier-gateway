@@ -143,7 +143,7 @@ func TestGetLabel_DAOReturnsPDF(t *testing.T) {
 func TestGetLabel_AllCarriers(t *testing.T) {
 	t.Parallel()
 	// All carriers including DAO now support PDF labels.
-	for _, carrier := range []string{"postnord", "bring", "gls", "dao", "posti", "inpost"} {
+	for _, carrier := range []string{"postnord", "bring", "gls", "dao", "inpost"} {
 		carrier := carrier
 		t.Run(carrier, func(t *testing.T) {
 			t.Parallel()

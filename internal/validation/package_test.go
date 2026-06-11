@@ -66,10 +66,6 @@ func TestValidateShipment_WeightLimits(t *testing.T) {
 		{carrier: "dao", weightKg: 35.0},
 		{carrier: "dao", weightKg: 35.1, wantErr: true, errContains: "exceeds DAO limit of 35 kg"},
 
-		// Posti — 30 kg
-		{carrier: "posti", weightKg: 30.0},
-		{carrier: "posti", weightKg: 30.1, wantErr: true, errContains: "exceeds Posti limit of 30 kg"},
-
 		// InPost — no limit
 		{carrier: "inpost", weightKg: 999.0},
 	}
@@ -121,11 +117,6 @@ func TestValidateShipment_DimensionLimits(t *testing.T) {
 		{name: "dao width exceeded", carrier: "dao", l: 100, w: 121, h: 100, wantErr: true, errContains: "width 121 cm exceeds DAO limit"},
 		{name: "dao height exceeded", carrier: "dao", l: 100, w: 100, h: 121, wantErr: true, errContains: "height 121 cm exceeds DAO limit"},
 
-		// Posti
-		{name: "posti length ok", carrier: "posti", l: 100, w: 40, h: 40},
-		{name: "posti length exceeded", carrier: "posti", l: 201, w: 20, h: 20, wantErr: true, errContains: "length 201 cm exceeds Posti limit"},
-		{name: "posti width exceeded", carrier: "posti", l: 100, w: 101, h: 20, wantErr: true, errContains: "width 101 cm exceeds Posti limit"},
-		{name: "posti height exceeded", carrier: "posti", l: 100, w: 20, h: 101, wantErr: true, errContains: "height 101 cm exceeds Posti limit"},
 	}
 
 	for _, tc := range cases {
@@ -190,11 +181,6 @@ func TestValidateShipment_GirthLimits(t *testing.T) {
 		{name: "gls girth exceeded", carrier: "gls", l: 100, w: 100, h: 100, wantErr: true, errContains: "girth 500 cm (2×(W+H)+L) exceeds GLS limit"},
 		// 2*(80+70)+100 = 400 — at limit
 		{name: "gls at girth limit", carrier: "gls", l: 100, w: 80, h: 70},
-
-		// Posti girth limit = 300: 2*(50+50)+100 = 300 — ok
-		{name: "posti at girth limit", carrier: "posti", l: 100, w: 50, h: 50},
-		// 2*(51+50)+100 = 302
-		{name: "posti girth exceeded", carrier: "posti", l: 100, w: 51, h: 50, wantErr: true, errContains: "girth 302 cm (2×(W+H)+L) exceeds Posti limit"},
 
 		// Bring has no girth limit
 		{name: "bring no girth limit", carrier: "bring", l: 100, w: 100, h: 100},

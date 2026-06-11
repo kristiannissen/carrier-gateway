@@ -63,13 +63,6 @@ var limits = map[string]carrierLimits{
 		maxWidth:    120,
 		maxHeight:   120,
 	},
-	"posti": {
-		maxWeightKg: 30,
-		maxLength:   200,
-		maxWidth:    100,
-		maxHeight:   100,
-		maxGirth:    300,
-	},
 	"inpost": {},
 }
 
@@ -80,7 +73,6 @@ func carrierName(carrier string) string {
 		"bring":    "Bring",
 		"gls":      "GLS",
 		"dao":      "DAO",
-		"posti":    "Posti",
 		"inpost":   "InPost",
 	}
 	if name, ok := names[carrier]; ok {
