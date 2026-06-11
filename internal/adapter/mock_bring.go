@@ -120,7 +120,7 @@ func (m *MockBringAdapter) CancelShipment(_ context.Context, trackingNumber stri
 
 // UpdateShipment returns unsupported for Bring.
 func (m *MockBringAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, fmt.Errorf("bring does not support post-booking updates")
+	return nil, notSupported("Bring", "post-booking update", "")
 }
 
 // NewMockBringAdapter returns a new MockBringAdapter with default behaviour.

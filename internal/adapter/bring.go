@@ -351,8 +351,8 @@ func (a *BringAdapter) CancelShipment(ctx context.Context, trackingNumber string
 
 // UpdateShipment is not supported for Bring.
 // Post-booking updates are not available via the Bring Booking API.
-func (a *BringAdapter) UpdateShipment(_ context.Context, req UpdateRequest) (*UpdateResponse, error) {
-	return nil, fmt.Errorf("bring does not support post-booking updates")
+func (a *BringAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
+	return nil, notSupported("Bring", "post-booking update", "")
 }
 
 // FetchLabel retrieves a shipping label from Bring.

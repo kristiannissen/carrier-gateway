@@ -356,13 +356,13 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 // GLS cancellation API documentation is not yet available.
 // Contact GLS directly to cancel a shipment.
 func (a *GLSAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
-	return nil, fmt.Errorf("GLS cancellation is not yet supported — contact GLS directly")
+	return nil, notSupported("GLS", "cancellation", "contact GLS directly")
 }
 
 // UpdateShipment is not yet supported for GLS.
 // GLS post-booking update API documentation is not yet available.
 func (a *GLSAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, fmt.Errorf("GLS post-booking updates are not yet supported")
+	return nil, notSupported("GLS", "post-booking update", "")
 }
 
 // FetchLabel retrieves a GLS shipping label in the requested format.

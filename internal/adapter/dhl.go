@@ -54,7 +54,8 @@ type DHLAdapter struct {
 	// Production: https://api.dhl.com
 	BookingBaseURL string
 	// TrackingBaseURL is the Unified Tracking API base URL.
-	// Production: https://api.dhl.com/track
+	// Production: https://api-eu.dhl.com/track
+	// Sandbox:    https://api-test.dhl.com/track
 	TrackingBaseURL string
 	HTTPClient      *http.Client
 	tokenCache      dhlTokenCache
@@ -72,7 +73,7 @@ func NewDHLAdapter(clientID, clientSecret, customerID, trackingAPIKey string, lo
 		CustomerID:      customerID,
 		TrackingAPIKey:  trackingAPIKey,
 		BookingBaseURL:  "https://api.dhl.com",
-		TrackingBaseURL: "https://api.dhl.com/track",
+		TrackingBaseURL: "https://api-eu.dhl.com/track",
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -147,7 +148,7 @@ func (a *DHLAdapter) bearerToken(ctx context.Context) (string, error) {
 
 // dhlProduct maps our DeliveryType to the DHL product code.
 // Returns are handled by the return.network product.
-// Service point delivery uses parcelconnect with a parcelshop recipient type.
+// Service point delivery uses parcelconnect with an accesspoint recipient type.
 func dhlProduct(deliveryType string) string {
 	switch strings.ToLower(deliveryType) {
 	case "return":
@@ -157,32 +158,20 @@ func dhlProduct(deliveryType string) string {
 	}
 }
 
-// dhlRecipientType maps our DeliveryType to the DHL recipient address type.
-func dhlRecipientType(deliveryType string, hasServicePoint bool) string {
-	if hasServicePoint || strings.EqualFold(deliveryType, "servicepoint") {
-		return "parcelshop"
-	}
-	return "doorstep"
-}
-
-// dhlStreet concatenates street and house number into a single string.
-func dhlStreet(a Address) string {
-	if a.HouseNumber != "" {
-		return a.Street + " " + a.HouseNumber
-	}
-	return a.Street
-}
-
 // dhlSenderBlock builds the cPAN sender address block.
+// street1 and street1Nr are sent as separate fields per DHL spec.
 func (a *DHLAdapter) dhlSenderBlock(addr Address) map[string]interface{} {
 	sender := map[string]interface{}{
 		"type":                   "default",
 		"name":                   addr.Name,
-		"street1":                dhlStreet(addr),
+		"street1":                addr.Street,
 		"postcode":               addr.PostalCode,
 		"city":                   addr.City,
 		"country":                addr.Country,
 		"customerIdentification": a.CustomerID,
+	}
+	if addr.HouseNumber != "" {
+		sender["street1Nr"] = addr.HouseNumber
 	}
 	if addr.Phone != "" {
 		sender["mobileNr"] = addr.Phone
@@ -197,14 +186,51 @@ func (a *DHLAdapter) dhlSenderBlock(addr Address) map[string]interface{} {
 }
 
 // dhlRecipientBlock builds the cPAN recipient address block.
-// Service point delivery uses an array with parcelshop + doorstep entries.
+// Service point delivery uses an array with accesspoint + doorstep entries.
+// The accesspoint entry requires the literal "accesspoint" as street1 and the
+// service point ID as street1Nr, per DHL eConnect spec.
 // Home/business delivery uses a single doorstep object.
 func dhlRecipientBlock(addr Address, deliveryType string) interface{} {
 	hasServicePoint := addr.ServicePointID != ""
-	recipientType := dhlRecipientType(deliveryType, hasServicePoint)
+
+	if hasServicePoint {
+		// Service point delivery: array with accesspoint entry followed by
+		// doorstep fallback. street1 must be the literal "accesspoint" keyword;
+		// street1Nr carries the service point ID.
+		accesspoint := map[string]interface{}{
+			"type":      "accesspoint",
+			"name":      addr.Name,
+			"street1":   "accesspoint",
+			"street1Nr": addr.ServicePointID,
+			"postcode":  addr.PostalCode,
+			"city":      addr.City,
+			"country":   addr.Country,
+		}
+		if addr.Email != "" {
+			accesspoint["email"] = addr.Email
+		}
+		doorstep := map[string]interface{}{
+			"type":     "doorstep",
+			"name":     addr.Name,
+			"street1":  addr.Street,
+			"postcode": addr.PostalCode,
+			"city":     addr.City,
+			"country":  addr.Country,
+		}
+		if addr.HouseNumber != "" {
+			doorstep["street1Nr"] = addr.HouseNumber
+		}
+		if addr.Phone != "" {
+			doorstep["mobileNr"] = addr.Phone
+		}
+		if addr.Email != "" {
+			doorstep["email"] = addr.Email
+		}
+		return []interface{}{accesspoint, doorstep}
+	}
 
 	base := map[string]interface{}{
-		"type":     recipientType,
+		"type":     "doorstep",
 		"name":     addr.Name,
 		"postcode": addr.PostalCode,
 		"city":     addr.City,
@@ -216,40 +242,11 @@ func dhlRecipientBlock(addr Address, deliveryType string) interface{} {
 	if addr.Email != "" {
 		base["email"] = addr.Email
 	}
-
-	if hasServicePoint {
-		// Service point delivery: array with parcelshop entry (identified by
-		// street1Nr = service point ID) followed by doorstep fallback.
-		parcelshop := map[string]interface{}{
-			"type":     "parcelshop",
-			"name":     addr.Name,
-			"street1Nr": addr.ServicePointID,
-			"postcode": addr.PostalCode,
-			"city":     addr.City,
-			"country":  addr.Country,
-		}
-		if addr.Email != "" {
-			parcelshop["email"] = addr.Email
-		}
-		doorstep := map[string]interface{}{
-			"type":    "doorstep",
-			"name":    addr.Name,
-			"street1": dhlStreet(addr),
-			"postcode": addr.PostalCode,
-			"city":    addr.City,
-			"country": addr.Country,
-		}
-		if addr.Phone != "" {
-			doorstep["mobileNr"] = addr.Phone
-		}
-		if addr.Email != "" {
-			doorstep["email"] = addr.Email
-		}
-		return []interface{}{parcelshop, doorstep}
-	}
-
 	if addr.Street != "" {
-		base["street1"] = dhlStreet(addr)
+		base["street1"] = addr.Street
+	}
+	if addr.HouseNumber != "" {
+		base["street1Nr"] = addr.HouseNumber
 	}
 	if addr.Supplement != "" {
 		base["street2"] = addr.Supplement
@@ -310,7 +307,10 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		"size":        "10x15",
 	}
 	if isLabelless {
-		labelDetails["label"] = false
+		// label:true is required — DHL eConnect allocates the shipmentId and
+		// returns both the traditional label and the QR code. label:false would
+		// require a pre-allocated parcelIdentifier which the gateway cannot provide.
+		labelDetails["label"] = true
 		labelDetails["qrCode"] = true
 		labelDetails["formatQrCode"] = "png"
 	}
@@ -338,7 +338,7 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 				"currency":          cod.CODCurrency,
 				"bankAccountHolder": request.Shipment.Receiver.Name,
 				"IBAN":              cod.CODAccountNumber,
-				"BIC":               "",
+				"BIC":               cod.CODBic,
 				"intendedPurpose":   request.IdempotencyKey,
 			},
 		}
@@ -591,7 +591,7 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 			Status:           e.StatusCode,
 			NormalizedStatus: normalizeStatus("dhl", e.StatusCode),
 			Location:         loc,
-			Details:          e.Description,
+			Details:          e.Status,
 		}
 	}
 
@@ -672,11 +672,11 @@ func (a *DHLAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 // CancelShipment is not supported for DHL eCommerce Europe via API.
 // Cancellations must be requested via DHL customer service.
 func (a *DHLAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
-	return nil, fmt.Errorf("DHL does not support cancellation via API — contact DHL customer service")
+	return nil, notSupported("DHL", "cancellation", "contact DHL customer service")
 }
 
 // UpdateShipment is not supported for DHL eCommerce Europe via API.
 // Modifications must be requested via DHL customer service.
 func (a *DHLAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, fmt.Errorf("DHL does not support post-booking updates via API — contact DHL customer service")
+	return nil, notSupported("DHL", "post-booking update", "contact DHL customer service")
 }

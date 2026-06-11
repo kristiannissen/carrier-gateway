@@ -4,10 +4,13 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
+
+	"github.com/kristiannissen/carrier-gateway/internal/adapter"
 )
 
 // CancelShipment handles DELETE /api/bookings/{trackingNumber}.
@@ -40,7 +43,11 @@ func (c *Config) CancelShipment(w http.ResponseWriter, r *http.Request) {
 			zap.String("carrier", carrier),
 			zap.String("trackingNumber", trackingNumber),
 		)
-		c.writeError(w, r, http.StatusInternalServerError, "cancellation failed", err.Error())
+		if errors.Is(err, adapter.ErrNotSupported) {
+			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
+		} else {
+			c.writeError(w, r, http.StatusInternalServerError, "cancellation failed", err.Error())
+		}
 		return
 	}
 

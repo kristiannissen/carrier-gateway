@@ -74,10 +74,10 @@ func (m *MockDHLAdapter) FetchLabel(_ context.Context, req LabelRequest) (*Label
 
 // CancelShipment returns unsupported for DHL.
 func (m *MockDHLAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
-	return nil, fmt.Errorf("DHL does not support cancellation via API — contact DHL customer service")
+	return nil, notSupported("DHL", "cancellation", "contact DHL customer service")
 }
 
 // UpdateShipment returns unsupported for DHL.
 func (m *MockDHLAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, fmt.Errorf("DHL does not support post-booking updates via API — contact DHL customer service")
+	return nil, notSupported("DHL", "post-booking update", "contact DHL customer service")
 }

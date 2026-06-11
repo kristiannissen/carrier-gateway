@@ -161,12 +161,12 @@ func (a *PostiAdapter) BookShipment(ctx context.Context, request BookingRequest)
 
 // CancelShipment is not supported for Posti.
 func (a *PostiAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
-	return nil, fmt.Errorf("posti does not support cancellation via this gateway")
+	return nil, notSupported("Posti", "cancellation", "")
 }
 
 // UpdateShipment is not supported for Posti.
 func (a *PostiAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, fmt.Errorf("posti does not support post-booking updates via this gateway")
+	return nil, notSupported("Posti", "post-booking update", "")
 }
 
 // FetchLabel retrieves a shipping label from Posti.

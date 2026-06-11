@@ -442,6 +442,9 @@ type AddOn struct {
 	// CODAccountNumber is the bank account number to transfer the collected amount to.
 	// Required for Bring COD (VAS 1000).
 	CODAccountNumber string `json:"codAccountNumber,omitempty"`
+	// CODBic is the BIC/SWIFT code for the COD bank account.
+	// Required for DHL eConnect SEPA COD.
+	CODBic string `json:"codBic,omitempty"`
 	// InsuranceValue is the declared value of the shipment for insurance purposes.
 	// Required for insurance add-on.
 	InsuranceValue float64 `json:"insuranceValue,omitempty"`
