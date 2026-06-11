@@ -184,6 +184,7 @@ var capabilities = map[string]carrierCapabilities{
 	"gls":      {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
 	"dao":      {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: true},
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	"hermes": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	"inpost": {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
 	// FedEx: cancellation is supported via PUT /ship/v1/shipments/cancel.
 	// Full capabilities will be confirmed once the Ship and Track API specs are available.
@@ -319,6 +320,20 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	default:
 		adapters["inpost"] = NewInPostAdapter(inpostAPIKey, log)
 		log.Info("InPost adapter initialized in production mode")
+	}
+
+	hermesClientID := os.Getenv("HERMES_CLIENT_ID")
+	hermesClientSecret := os.Getenv("HERMES_CLIENT_SECRET")
+	switch {
+	case mockMode:
+		adapters["hermes"] = &MockHermesAdapter{}
+		log.Info("Hermes adapter initialized in mock mode (MOCK_MODE=true)")
+	case hermesClientID == "" || hermesClientSecret == "":
+		adapters["hermes"] = &MockHermesAdapter{}
+		log.Warn("Hermes adapter falling back to mock mode (HERMES_CLIENT_ID or HERMES_CLIENT_SECRET not set)")
+	default:
+		adapters["hermes"] = NewHermesAdapter(hermesClientID, hermesClientSecret, log)
+		log.Info("Hermes adapter initialized in production mode (beta)")
 	}
 
 	fedexClientID := os.Getenv("FEDEX_CLIENT_ID")

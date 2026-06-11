@@ -97,6 +97,108 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"unknown":     StatusUnknown,
 	},
 
+	// hermes: 2x2 event codes from hermes_Germany_Eventcodes.csv.
+	// Codes are the 4-character second column (2x2 Code) returned in ShipmentStatus.code.
+	// TODO: Confirm the exact wire format of code from a live tracking response —
+	// the OpenAPI spec shows example "0-0-0" which may indicate a different format.
+	"hermes": {
+		"0000": StatusBooked,         // Shipment notified to Hermes electronically
+		"0600": StatusDelayed,        // Not arrived at depot (1st notice)
+		"0700": StatusDelayed,        // Not arrived at depot (2nd notice)
+		"0800": StatusDelayed,        // Not arrived at depot (3rd notice)
+		"0900": StatusDelayed,        // Not arrived at depot (4th notice)
+		"1000": StatusPickedUp,       // Left client warehouse
+		"1510": StatusInTransit,      // Sorted at Logistics Center
+		"1520": StatusReturned,       // Return sorted, on way back to client
+		"1610": StatusInTransit,      // International transit
+		"1710": StatusInTransit,      // Customs export created
+		"1720": StatusInTransit,      // Customs clearance completed
+		"1730": StatusFailed,         // Held by customs
+		"1751": StatusFailed,         // Rejected by customs
+		"1810": StatusInTransit,      // Handed to partner carrier
+		"1820": StatusInTransit,      // Handed to partner carrier (variant)
+		"1900": StatusPickedUp,       // Accepted after collection
+		"1901": StatusInTransit,      // Arrived at branch
+		"1910": StatusPickedUp,       // Collected from client
+		"2000": StatusInTransit,      // Arrived at depot
+		"2100": StatusInTransit,      // Arrived without advice data
+		"2300": StatusInTransit,      // Arrived (automatic)
+		"2400": StatusInTransit,      // Handed in at ParcelShop
+		"3000": StatusOutForDelivery, // Gone out on delivery route
+		"3010": StatusOutForDelivery, // Left distribution centre
+		"3300": StatusInTransit,      // Sorted at depot
+		"3410": StatusInTransit,      // Available at ParcelShop for collection
+		"3430": StatusInTransit,      // Handed to island carrier
+		"3500": StatusDelivered,      // Delivered
+		"3510": StatusDelivered,      // Delivered (variant)
+		"3511": StatusDelivered,      // Delivered to letterbox
+		"3520": StatusDelivered,      // Delivered (variant)
+		"3530": StatusDelivered,      // Collected by recipient from ParcelShop
+		"3710": StatusFailed,         // Not accepted, on way back
+		"3715": StatusFailed,         // COD delivery failed (no cash)
+		"3720": StatusFailed,         // Address not found
+		"3731": StatusFailed,         // Recipient not present (1st attempt)
+		"3732": StatusFailed,         // Recipient not present (2nd attempt)
+		"3733": StatusFailed,         // Recipient not present (3rd attempt)
+		"3734": StatusFailed,         // Recipient not present (4th attempt), return prep
+		"3740": StatusFailed,         // Stopped due to possible damage
+		"3745": StatusFailed,         // Forwarded to nearby parcel shop
+		"3750": StatusFailed,         // Route cancellation
+		"3751": StatusFailed,         // Missing/incorrect TAN (1st attempt)
+		"3752": StatusFailed,         // Missing/incorrect TAN (2nd attempt)
+		"3753": StatusFailed,         // Missing/incorrect TAN (3rd attempt)
+		"3754": StatusFailed,         // Missing/incorrect TAN (4th attempt), return prep
+		"3780": StatusFailed,         // Wrong route, redirected
+		"3782": StatusFailed,         // ID photo mismatch
+		"3783": StatusFailed,         // ID name mismatch
+		"3784": StatusFailed,         // ID date of birth mismatch
+		"3785": StatusFailed,         // ID number mismatch
+		"3786": StatusFailed,         // PIN code mismatch
+		"3787": StatusFailed,         // Age mismatch
+		"3795": StatusFailed,         // Delivery stopped
+		"4010": StatusReturned,       // On way back to depot
+		"4015": StatusReturned,       // Back at depot
+		"4020": StatusReturned,       // Back, address not found
+		"4024": StatusReturned,       // Back, too large for ParcelShop
+		"4025": StatusReturned,       // Sorted, forwarded to depot
+		"4031": StatusReturned,       // Back at depot
+		"4032": StatusReturned,       // Back at depot
+		"4033": StatusReturned,       // Back, contact customer
+		"4034": StatusReturned,       // Back, prepared for return to client
+		"4035": StatusReturned,       // Not collected from ParcelShop within 7 days
+		"4040": StatusReturned,       // Received with potential damage
+		"4050": StatusReturned,       // Back at depot
+		"4051": StatusReturned,       // Back at depot
+		"4052": StatusReturned,       // Back at depot
+		"4053": StatusReturned,       // Back, contact customer
+		"4054": StatusReturned,       // Back, prepared for return to client
+		"4060": StatusReturned,       // Return arrived at depot
+		"4061": StatusReturned,       // Return arrived at depot
+		"4080": StatusReturned,       // Redirected, delivery delayed
+		"4081": StatusReturned,       // Back at depot
+		"4082": StatusReturned,       // Back at depot
+		"6080": StatusReturned,       // Processed, being returned
+		"6081": StatusReturned,       // On way back to client
+		"6082": StatusReturned,       // On way back (label not legible)
+		"6083": StatusReturned,       // On way back to client
+		"6084": StatusReturned,       // On way back (recipient repeatedly absent)
+		"6085": StatusReturned,       // On way back (possible damage)
+		"6086": StatusFailed,         // Delivered to wrong location, redirected
+		"6087": StatusFailed,         // Delivered to wrong location
+		"6088": StatusInTransit,      // Redirected at recipient request
+		"6089": StatusInTransit,      // Sorted
+		"6090": StatusInTransit,      // Sorted
+		"6092": StatusReturned,       // On way back to client
+		"6093": StatusReturned,       // On way back (not collected from ParcelShop)
+		"6094": StatusReturned,       // Being returned to client
+		"6096": StatusReturned,       // On way back (too big for ParcelShop)
+		"6098": StatusReturned,       // On way back (missing/incorrect TAN)
+		"6099": StatusReturned,       // On way back (delivery stopped)
+		"7500": StatusDelivered,      // Return arrived at client
+		"9340": StatusFailed,         // Shipment cancelled
+		"9341": StatusFailed,         // Shipment cancelled by client
+	},
+
 	"fedex": {
 		// Sourced from FedEx Track API v1 spec (fedex_track.json).
 		// Keys are derivedStatusCode / eventType values from ScanEvent.
