@@ -371,6 +371,7 @@ func TestBringAdapter_BookShipment_ProductCodes(t *testing.T) {
 		{"service point via DeliveryType", "servicepoint", false, "PICKUP_PARCEL"},
 		{"service point via ServicePointID", "", true, "PICKUP_PARCEL"},
 		{"return", "return", false, "PICKUP_PARCEL"},
+		{"cargo international", "cargo_international", false, "CARGO_INTERNATIONAL"},
 	}
 
 	for _, tc := range cases {
@@ -480,6 +481,246 @@ func TestBringAdapter_BookShipment_IdempotencyKey(t *testing.T) {
 	consignments := bringRequireArray(t, *captured, "consignments", 1)
 	consignment := consignments[0].(map[string]interface{})
 	assert.Equal(t, "order-98765", consignment["clientReference"])
+}
+
+func TestBringAdapter_BookShipment_Incoterms(t *testing.T) {
+	t.Parallel()
+
+	t.Run("incotermRule set on product when Customs.Incoterms is present", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.Customs = Customs{Incoterms: "DDP"}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		consignment := consignments[0].(map[string]interface{})
+		product := bringRequireNested(t, consignment, "product")
+		assert.Equal(t, "DDP", product["incotermRule"])
+	})
+
+	t.Run("all accepted Bring incoterms pass through", func(t *testing.T) {
+		t.Parallel()
+		for _, term := range []string{"DDP", "DAP", "FCA", "EXW"} {
+			term := term
+			t.Run(term, func(t *testing.T) {
+				t.Parallel()
+				adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+				req := bringMinimalRequest()
+				req.Shipment.Customs = Customs{Incoterms: term}
+
+				_, err := adapter.BookShipment(t.Context(), req)
+				require.NoError(t, err)
+
+				consignments := bringRequireArray(t, *captured, "consignments", 1)
+				product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+				assert.Equal(t, term, product["incotermRule"])
+			})
+		}
+	})
+
+	t.Run("no incotermRule when Customs.Incoterms is empty", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		_, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		_, hasIncoterm := product["incotermRule"]
+		assert.False(t, hasIncoterm, "incotermRule must be absent when Customs.Incoterms is empty")
+	})
+}
+
+func TestBringAdapter_BookShipment_CargoInternational(t *testing.T) {
+	t.Parallel()
+
+	t.Run("CARGO_INTERNATIONAL requires incotermRule", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.DeliveryType = "cargo_international"
+		// Customs.Incoterms intentionally omitted
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "incotermRule")
+	})
+
+	t.Run("CARGO_INTERNATIONAL with DDP books successfully", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.DeliveryType = "cargo_international"
+		req.Shipment.Customs = Customs{Incoterms: "DDP"}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		assert.Equal(t, "CARGO_INTERNATIONAL", product["id"])
+		assert.Equal(t, "DDP", product["incotermRule"])
+	})
+}
+
+func TestBringAdapter_BookShipment_CustomsInformation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("customsInformation absent when Customs is empty", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		_, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		_, hasCustoms := product["customsInformation"]
+		assert.False(t, hasCustoms, "customsInformation must be absent when no customs data is provided")
+	})
+
+	t.Run("customsInformation embedded with full item list", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.Customs = Customs{
+			NatureOfCargo:     "SALE_OF_GOODS",
+			CustomsCurrency:   "NOK",
+			ExporterVATNumber: "NO123456789",
+			ImporterVATNumber: "SE987654321",
+			Items: []CustomsItem{
+				{
+					Description:     "Cotton T-shirts",
+					HSCode:          "610910",
+					CountryOfOrigin: "PL",
+					Quantity:        5,
+					NetWeight:       2.5,
+					Value:           1000,
+					Currency:        "NOK",
+				},
+				{
+					Description:     "Wool jacket",
+					HSCode:          "610431",
+					CountryOfOrigin: "DE",
+					Quantity:        1,
+					NetWeight:       2.0,
+					Value:           750,
+					Currency:        "NOK",
+				},
+			},
+		}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		info := bringRequireNested(t, product, "customsInformation")
+
+		// consent must always be true
+		assert.Equal(t, true, info["consent"])
+		assert.Equal(t, "SALE_OF_GOODS", info["natureOfCargo"])
+
+		exporter := bringRequireNested(t, info, "exporter")
+		assert.Equal(t, "NO123456789", exporter["vatNumber"])
+
+		importer := bringRequireNested(t, info, "importer")
+		assert.Equal(t, "SE987654321", importer["vatNumber"])
+
+		articles, ok := info["articles"].([]interface{})
+		require.True(t, ok, "articles must be []interface{}")
+		require.Len(t, articles, 2)
+
+		a0 := articles[0].(map[string]interface{})
+		assert.Equal(t, "Cotton T-shirts", a0["description"])
+		assert.Equal(t, "610910", a0["customsTariffCode"])
+		assert.Equal(t, float64(5), a0["quantity"])
+		assert.Equal(t, "PL", a0["countryOfOrigin"])
+
+		a1 := articles[1].(map[string]interface{})
+		assert.Equal(t, "Wool jacket", a1["description"])
+		assert.Equal(t, "DE", a1["countryOfOrigin"])
+	})
+
+	t.Run("natureOfCargo derived from ShipmentType when NatureOfCargo empty", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.Customs = Customs{
+			ShipmentType: "B2B",
+			Items: []CustomsItem{
+				{Description: "Sports goods", HSCode: "950691", Quantity: 1, Value: 100, Currency: "NOK"},
+			},
+		}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		info := bringRequireNested(t, product, "customsInformation")
+		assert.Equal(t, "SALE_OF_GOODS", info["natureOfCargo"])
+	})
+
+	t.Run("top-level HSCode fallback when no Items", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.Customs = Customs{
+			HSCode:          "610910",
+			CountryOfOrigin: "CN",
+			CustomsValue:    500,
+			CustomsCurrency: "NOK",
+		}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		info := bringRequireNested(t, product, "customsInformation")
+		articles, ok := info["articles"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, articles, 1)
+		a0 := articles[0].(map[string]interface{})
+		assert.Equal(t, "610910", a0["customsTariffCode"])
+		assert.Equal(t, 500.0, a0["totalValue"])
+	})
+
+	t.Run("item currency falls back to Customs.CustomsCurrency", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newBringTestServer(t, http.StatusOK, bringMockBookingResponse())
+
+		req := bringMinimalRequest()
+		req.Shipment.Customs = Customs{
+			CustomsCurrency: "DKK",
+			Items: []CustomsItem{
+				{Description: "Shoes", HSCode: "640299", Quantity: 2, Value: 600},
+				// no Currency on item — should fall back to CustomsCurrency
+			},
+		}
+
+		_, err := adapter.BookShipment(t.Context(), req)
+		require.NoError(t, err)
+
+		consignments := bringRequireArray(t, *captured, "consignments", 1)
+		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		info := bringRequireNested(t, product, "customsInformation")
+		articles, ok := info["articles"].([]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "DKK", articles[0].(map[string]interface{})["currency"])
+	})
 }
 
 func TestBringAdapter_BookShipment_MultiColli(t *testing.T) {

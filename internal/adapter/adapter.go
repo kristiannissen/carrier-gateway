@@ -384,6 +384,12 @@ type Customs struct {
 	// ShipmentType is either "B2B" or "B2C". Affects VAT and de minimis rules.
 	ShipmentType string `json:"shipmentType,omitempty"`
 
+	// NatureOfCargo describes the commercial nature of the goods.
+	// Required by Bring for international shipments.
+	// Accepted values: "SALE_OF_GOODS", "GIFT", "RETURNED_GOODS", "COMMERCIAL_SAMPLE", "DOCUMENTS", "OTHER".
+	// When empty and ShipmentType is "B2B" or "B2C", Bring defaults to "SALE_OF_GOODS".
+	NatureOfCargo string `json:"natureOfCargo,omitempty"`
+
 	// Items holds the line-item breakdown required for full customs declarations.
 	// Required for non-EU destinations; each item maps to one commodity in the
 	// carrier's customs API (DHL cCustoms item, GLS lineItem, PostNord item, etc.).

@@ -56,6 +56,21 @@ type CustomsResponse struct {
 	Warnings []string `json:"warnings,omitempty"`
 }
 
+// ─── Bring ───────────────────────────────────────────────────────────────────
+
+// SubmitCustoms is not available as a standalone API call for Bring.
+// Bring embeds customs data directly in the booking request payload under
+// product.customsInformation. Pass customs data via BookingRequest.Shipment.Customs
+// when calling BookShipment — the adapter will embed it automatically.
+//
+// Callers should NOT add BringAdapter to any CustomsSubmitter dispatch loop.
+// This method exists solely to surface a clear error if it is called accidentally.
+func (a *BringAdapter) SubmitCustoms(_ context.Context, _ CustomsRequest) (*CustomsResponse, error) {
+	return nil, fmt.Errorf("bring: customs must be provided at booking time via Shipment.Customs " +
+		"— Bring has no separate customs submission endpoint; " +
+		"pass customs data to BookShipment instead")
+}
+
 // ─── DHL ─────────────────────────────────────────────────────────────────────
 
 // SubmitCustoms submits a customs declaration to the DHL eConnect cCustoms API

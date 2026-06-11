@@ -54,11 +54,107 @@ func bringProductID(deliveryType string, hasServicePoint bool) string {
 		return "PICKUP_PARCEL"
 	case "home":
 		return "HOME_DELIVERY_PARCEL"
+	case "cargo_international":
+		return "CARGO_INTERNATIONAL"
 	default:
 		if hasServicePoint {
 			return "PICKUP_PARCEL"
 		}
 		return "HOME_DELIVERY_PARCEL"
+	}
+}
+
+// bringNatureOfCargo resolves the Bring natureOfCargo value from Customs.
+// When NatureOfCargo is set it is used directly; otherwise falls back to
+// deriving from ShipmentType. Defaults to "OTHER".
+func bringNatureOfCargo(c Customs) string {
+	if c.NatureOfCargo != "" {
+		return c.NatureOfCargo
+	}
+	switch c.ShipmentType {
+	case "B2B", "B2C":
+		return "SALE_OF_GOODS"
+	default:
+		return "OTHER"
+	}
+}
+
+// bringCustomsParty builds the party block used in customsInformation.
+// It mirrors the shape of bringParty but omits contact nesting — the
+// customs party schema only needs address fields and an optional vatNumber.
+func bringCustomsParty(a Address, vatNumber string) map[string]interface{} {
+	street := a.Street
+	if a.HouseNumber != "" {
+		street = a.Street + " " + a.HouseNumber
+	}
+	p := map[string]interface{}{
+		"name":        a.Name,
+		"addressLine": street,
+		"postalCode":  a.PostalCode,
+		"city":        a.City,
+		"countryCode": a.Country,
+	}
+	if vatNumber != "" {
+		p["vatNumber"] = vatNumber
+	}
+	return p
+}
+
+// buildBringCustomsInformation constructs the customsInformation product block
+// required by Bring for international shipments (Business Parcel 0330, PickUp
+// Parcel 0340, Letter Packet 3639). Returns nil when no customs data is present.
+//
+// Wire format (new structure from March 2025):
+//
+//	{
+//	  "consent": true,
+//	  "exporter": { "name", "addressLine", "postalCode", "city", "countryCode", "vatNumber"? },
+//	  "importer": { same },
+//	  "natureOfCargo": "SALE_OF_GOODS",
+//	  "articles": [{ "quantity", "description", "customsTariffCode", "grossWeight", "totalValue", "currency", "countryOfOrigin" }]
+//	}
+func buildBringCustomsInformation(s Shipment) map[string]interface{} {
+	c := s.Customs
+	if len(c.Items) == 0 && c.HSCode == "" {
+		return nil
+	}
+
+	articles := make([]map[string]interface{}, 0, len(c.Items))
+	for _, item := range c.Items {
+		cur := item.Currency
+		if cur == "" {
+			cur = c.CustomsCurrency
+		}
+		articles = append(articles, map[string]interface{}{
+			"quantity":          item.Quantity,
+			"description":       item.Description,
+			"customsTariffCode": item.HSCode,
+			"grossWeight":       item.NetWeight * float64(item.Quantity),
+			"totalValue":        item.Value,
+			"currency":          cur,
+			"countryOfOrigin":   item.CountryOfOrigin,
+		})
+	}
+
+	// Top-level fallback when no line items but a top-level HS code is set.
+	if len(articles) == 0 {
+		articles = append(articles, map[string]interface{}{
+			"quantity":          1,
+			"description":       "Goods",
+			"customsTariffCode": c.HSCode,
+			"grossWeight":       0.5,
+			"totalValue":        c.CustomsValue,
+			"currency":          c.CustomsCurrency,
+			"countryOfOrigin":   c.CountryOfOrigin,
+		})
+	}
+
+	return map[string]interface{}{
+		"consent":       true,
+		"exporter":      bringCustomsParty(s.Sender, c.ExporterVATNumber),
+		"importer":      bringCustomsParty(s.Receiver, c.ImporterVATNumber),
+		"natureOfCargo": bringNatureOfCargo(c),
+		"articles":      articles,
 	}
 }
 
@@ -159,6 +255,21 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	product := map[string]interface{}{
 		"id":             productID,
 		"customerNumber": a.CustomerNumber,
+	}
+
+	// Incoterms — mandatory for CARGO_INTERNATIONAL; optional for other
+	// international services. Bring accepts: DDP, DAP, FCA, EXW.
+	if request.Shipment.Customs.Incoterms != "" {
+		product["incotermRule"] = request.Shipment.Customs.Incoterms
+	} else if productID == "CARGO_INTERNATIONAL" {
+		return nil, fmt.Errorf("bring: incotermRule is mandatory for CARGO_INTERNATIONAL (error BOOK-INPUT-065)")
+	}
+
+	// Customs information — embedded in the product block for services that
+	// require cross-border declarations (Business Parcel, PickUp Parcel,
+	// Letter Packet). Replaces the legacy ediCustomsInformation field.
+	if customsInfo := buildBringCustomsInformation(request.Shipment); customsInfo != nil {
+		product["customsInformation"] = customsInfo
 	}
 
 	// Build additionalServices from AddOns.
