@@ -467,6 +467,7 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	}
 
 	result := &BookingResponse{
+		ShipmentID:     dhlResp.Response.Shipment.ShipmentID,
 		TrackingNumber: dhlResp.Response.Shipment.ShipmentID,
 		Carrier:        "dhl",
 		Status:         "booked",
@@ -596,6 +597,7 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 	}
 
 	return &TrackingResponse{
+		ShipmentID:        s.ID,
 		TrackingNumber:    s.ID,
 		Carrier:           "dhl",
 		Status:            s.Status.StatusCode,

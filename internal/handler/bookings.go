@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -104,8 +105,11 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	if request.Notifications != nil && c.NotificationService != nil {
 		prefs := notificationPrefsFrom(request.Notifications)
 		payload := notification.Payload{
+			ShipmentID:     response.ShipmentID,
 			TrackingNumber: response.TrackingNumber,
 			Carrier:        response.Carrier,
+			Status:         "booked",
+			Timestamp:      time.Now().UTC(),
 		}
 		sent, failed := c.NotificationService.Dispatch(r.Context(), notification.EventBooked, prefs, payload)
 		response.NotificationsSent = notificationRecordsFrom(sent)

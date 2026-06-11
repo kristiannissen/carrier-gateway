@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -71,6 +72,8 @@ func (c *Config) SendNotification(w http.ResponseWriter, r *http.Request) {
 	payload := notification.Payload{
 		TrackingNumber:    req.TrackingNumber,
 		Carrier:           req.Carrier,
+		Status:            string(req.Event),
+		Timestamp:         time.Now().UTC(),
 		EstimatedDelivery: req.EstimatedDelivery,
 		DelayReason:       req.DelayReason,
 	}

@@ -377,6 +377,7 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	}
 
 	result := &BookingResponse{
+		ShipmentID:     trackingNumber,
 		TrackingNumber: trackingNumber,
 		Carrier:        "postnord",
 		Status:         "booked",
@@ -731,6 +732,7 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	}
 
 	return &TrackingResponse{
+		ShipmentID:        s.ShipmentID,
 		TrackingNumber:    s.ShipmentID,
 		Carrier:           "postnord",
 		Status:            s.Status,

@@ -66,10 +66,19 @@ type Record struct {
 type Payload struct {
 	// Event is the shipment lifecycle event.
 	Event Event `json:"event"`
+	// ShipmentID is the carrier-level shipment identifier, if available.
+	// For PostNord this is the shipmentId; for Bring it is the consignment number.
+	ShipmentID string `json:"shipmentId,omitempty"`
 	// TrackingNumber identifies the shipment.
 	TrackingNumber string `json:"trackingNumber"`
 	// Carrier is the carrier key (e.g. "postnord", "bring").
 	Carrier string `json:"carrier"`
+	// Status is the current normalised shipment status (e.g. "delivered").
+	Status string `json:"status"`
+	// PreviousStatus is the normalised status before this event, if known.
+	PreviousStatus string `json:"previousStatus,omitempty"`
+	// Timestamp is when the status change was detected.
+	Timestamp time.Time `json:"timestamp"`
 	// EstimatedDelivery is the carrier-provided ETA, if available.
 	EstimatedDelivery string `json:"estimatedDelivery,omitempty"`
 	// DelayReason is set when Event is EventDelayed.

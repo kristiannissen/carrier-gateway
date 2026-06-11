@@ -304,6 +304,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	confirmation := bringResp.Consignments[0].Confirmation
 
 	result := &BookingResponse{
+		ShipmentID:     confirmation.ConsignmentNumber,
 		TrackingNumber: confirmation.ConsignmentNumber,
 		LabelURL:       confirmation.Links.Labels,
 		Carrier:        "bring",

@@ -656,6 +656,11 @@ type TrackingResponse struct {
 	Events            []TrackingEvent `json:"events"`
 	EstimatedDelivery string          `json:"estimatedDelivery,omitempty"`
 	Colli             []ColliTracking `json:"colli,omitempty"`
+	// NotificationsSent lists notifications successfully dispatched during this tracking call.
+	NotificationsSent []NotificationRecord `json:"notificationsSent,omitempty"`
+	// NotificationsFailed lists notifications that failed during this tracking call.
+	// Callers should retry via POST /api/notifications.
+	NotificationsFailed []NotificationRecord `json:"notificationsFailed,omitempty"`
 }
 
 // ColliTracking represents the tracking status of an individual colli.

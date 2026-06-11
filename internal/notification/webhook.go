@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -37,6 +38,10 @@ func NewHTTPSender() *HTTPSender {
 
 // Send implements Sender.
 func (s *HTTPSender) Send(ctx context.Context, url, hmacSecret string, payload Payload) error {
+	if !strings.HasPrefix(url, "https://") {
+		return fmt.Errorf("webhook url must use https: %s", url)
+	}
+
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
@@ -48,6 +53,7 @@ func (s *HTTPSender) Send(ctx context.Context, url, hmacSecret string, payload P
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Event-Type", string(payload.Event))
 
 	if hmacSecret != "" {
 		req.Header.Set("X-Signature", "sha256="+sign(body, hmacSecret))
