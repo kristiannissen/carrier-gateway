@@ -792,3 +792,230 @@ func TestValidateVATNumber(t *testing.T) {
 		})
 	}
 }
+
+// =========================================================================
+// Extended EU VAT format validation (all 27 member states + non-EU European)
+// =========================================================================
+
+func TestValidateVATNumber_EUFormats(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		number  string
+		country string
+		valid   bool
+	}{
+		// Austria: ATU + 8 digits
+		{"ATU12345678", "AT", true},
+		{"AT12345678", "AT", false},
+		{"ATU1234567", "AT", false},
+		// Belgium: BE + 10 digits
+		{"BE0123456789", "BE", true},
+		{"BE123456789", "BE", false},
+		// Bulgaria: BG + 9-10 digits
+		{"BG123456789", "BG", true},
+		{"BG1234567890", "BG", true},
+		{"BG12345678", "BG", false},
+		// Cyprus: CY + 8 digits + 1 letter
+		{"CY12345678A", "CY", true},
+		{"CY1234567A", "CY", false},
+		{"CY123456789", "CY", false},
+		// Czech Republic: CZ + 8-10 digits
+		{"CZ12345678", "CZ", true},
+		{"CZ1234567", "CZ", false},
+		// Estonia: EE + 9 digits
+		{"EE123456789", "EE", true},
+		{"EE12345678", "EE", false},
+		// Greece: EL prefix required (VIES uses EL not GR)
+		{"EL123456789", "GR", true},
+		{"EL123456789", "EL", true},
+		{"GR123456789", "GR", false},
+		// Spain: ES + letter/digit + 7 digits + letter/digit
+		{"ESA1234567B", "ES", true},
+		{"ES12345678A", "ES", true},
+		{"ES1234567B", "ES", false},
+		// Croatia: HR + 11 digits
+		{"HR12345678901", "HR", true},
+		{"HR1234567890", "HR", false},
+		// Hungary: HU + 8 digits
+		{"HU12345678", "HU", true},
+		{"HU1234567", "HU", false},
+		// Ireland: IE + 7 digits + 1-2 letters
+		{"IE1234567A", "IE", true},
+		{"IE1234567AB", "IE", true},
+		{"IE123456A", "IE", false},
+		// Italy: IT + 11 digits
+		{"IT12345678901", "IT", true},
+		{"IT1234567890", "IT", false},
+		// Lithuania: LT + 9 or 12 digits
+		{"LT123456789", "LT", true},
+		{"LT123456789012", "LT", true},
+		{"LT12345678", "LT", false},
+		// Luxembourg: LU + 8 digits
+		{"LU12345678", "LU", true},
+		{"LU1234567", "LU", false},
+		// Latvia: LV + 11 digits
+		{"LV12345678901", "LV", true},
+		{"LV1234567890", "LV", false},
+		// Malta: MT + 8 digits
+		{"MT12345678", "MT", true},
+		{"MT1234567", "MT", false},
+		// Portugal: PT + 9 digits
+		{"PT123456789", "PT", true},
+		{"PT12345678", "PT", false},
+		// Romania: RO + 2-10 digits
+		{"RO12", "RO", true},
+		{"RO1234567890", "RO", true},
+		{"RO1", "RO", false},
+		// Slovenia: SI + 8 digits
+		{"SI12345678", "SI", true},
+		{"SI1234567", "SI", false},
+		// Slovakia: SK + 10 digits
+		{"SK1234567890", "SK", true},
+		{"SK123456789", "SK", false},
+		// Non-EU European
+		{"GB123456789", "GB", true},
+		{"GB12345678", "GB", false},
+		{"IS1234567890", "IS", true},
+		{"IS123456789", "IS", false},
+		{"CHE123456789", "CH", true},
+		{"CHE12345678", "CH", false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.country+"_"+tc.number, func(t *testing.T) {
+			t.Parallel()
+			err := validateVATNumber(tc.number, tc.country)
+			if tc.valid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+// =========================================================================
+// RouteType-based EU→NonEU, NonEU→EU, NonEU→NonEU scenarios
+// =========================================================================
+
+func TestValidateCustoms_EUToNonEU_Various(t *testing.T) {
+	t.Parallel()
+
+	validDEtoGB := func() adapter.Customs {
+		return adapter.Customs{
+			Incoterms:         "DAP",
+			HSCode:            "61091000",
+			CustomsValue:      300.0,
+			CustomsCurrency:   "GBP",
+			ImporterOfRecord:  "GB123456789",
+			ExporterVATNumber: "DE123456789",
+			ShipmentType:      "B2B",
+		}
+	}
+
+	t.Run("DE to GB valid B2B", func(t *testing.T) {
+		t.Parallel()
+		assert.NoError(t, ValidateCustoms(validDEtoGB(), "DE", "GB", "B2B"))
+	})
+
+	t.Run("DE to GB missing HS code", func(t *testing.T) {
+		t.Parallel()
+		c := validDEtoGB()
+		c.HSCode = ""
+		require.Error(t, ValidateCustoms(c, "DE", "GB", "B2B"))
+	})
+
+	t.Run("NL to CH valid B2B with CHE VAT", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			Incoterms:         "DDP",
+			HSCode:            "84713000",
+			CustomsValue:      500.0,
+			CustomsCurrency:   "CHF",
+			ImporterOfRecord:  "CHE123456789",
+			ExporterVATNumber: "NL123456789B01",
+			ShipmentType:      "B2B",
+		}
+		assert.NoError(t, ValidateCustoms(c, "NL", "CH", "B2B"))
+	})
+}
+
+func TestValidateCustoms_NonEUToEU_InboundFromGB(t *testing.T) {
+	t.Parallel()
+
+	t.Run("GB to DE B2B valid", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			CustomsValue:      200.0,
+			CustomsCurrency:   "EUR",
+			HSCode:            "61091000",
+			ImporterVATNumber: "DE123456789",
+			ShipmentType:      "B2B",
+		}
+		assert.NoError(t, ValidateCustoms(c, "GB", "DE", "B2B"))
+	})
+
+	t.Run("GB to DE B2B missing importer VAT", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			CustomsValue:    200.0,
+			CustomsCurrency: "EUR",
+			HSCode:          "61091000",
+			ShipmentType:    "B2B",
+		}
+		require.Error(t, ValidateCustoms(c, "GB", "DE", "B2B"))
+	})
+
+	t.Run("CH to FR B2C below de minimis", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{CustomsValue: 100.0, CustomsCurrency: "EUR", ShipmentType: "B2C"}
+		assert.NoError(t, ValidateCustoms(c, "CH", "FR", "B2C"))
+	})
+}
+
+func TestValidateCustoms_NonEUToNonEU_FieldLevel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("NO to CH valid B2B", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			Incoterms:         "DAP",
+			HSCode:            "61091000",
+			CustomsValue:      400.0,
+			CustomsCurrency:   "CHF",
+			ImporterOfRecord:  "CHE123456789",
+			ExporterVATNumber: "123456789",
+			ShipmentType:      "B2B",
+		}
+		assert.NoError(t, ValidateCustoms(c, "NO", "CH", "B2B"))
+	})
+
+	t.Run("GB to US valid B2B", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			Incoterms:         "DDP",
+			HSCode:            "84713000",
+			CustomsValue:      1000.0,
+			CustomsCurrency:   "USD",
+			ImporterOfRecord:  "US-EIN-12-3456789",
+			ExporterVATNumber: "GB123456789",
+			ShipmentType:      "B2B",
+		}
+		assert.NoError(t, ValidateCustoms(c, "GB", "US", "B2B"))
+	})
+
+	t.Run("TR to UA missing incoterms", func(t *testing.T) {
+		t.Parallel()
+		c := adapter.Customs{
+			HSCode:            "61091000",
+			CustomsValue:      200.0,
+			CustomsCurrency:   "EUR",
+			ImporterOfRecord:  "1234567890",
+			ExporterVATNumber: "1234567890",
+			ShipmentType:      "B2B",
+		}
+		require.Error(t, ValidateCustoms(c, "TR", "UA", "B2B"))
+	})
+}

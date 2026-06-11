@@ -261,6 +261,24 @@ func countryName(code string) string {
 		"TR": "Turkish",
 		"UA": "Ukrainian",
 		"XK": "Kosovan",
+		// EU members missing from the original map
+		"BG": "Bulgarian",
+		"CY": "Cypriot",
+		"CZ": "Czech",
+		"EE": "Estonian",
+		"GR": "Greek",
+		"EL": "Greek",
+		"HR": "Croatian",
+		"HU": "Hungarian",
+		"IE": "Irish",
+		"IS": "Icelandic",
+		"LT": "Lithuanian",
+		"LU": "Luxembourgish",
+		"LV": "Latvian",
+		"MT": "Maltese",
+		"RO": "Romanian",
+		"SI": "Slovenian",
+		"SK": "Slovak",
 	}
 	if name, ok := names[code]; ok {
 		return name

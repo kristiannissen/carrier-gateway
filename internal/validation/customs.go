@@ -98,18 +98,49 @@ var validISO4217 = map[string]bool{
 }
 
 // vatFormats maps country codes to a regex that validates the VAT number format.
+// Sources: EU Commission VAT number formats document; non-EU formats from
+// respective national tax administrations.
+//
+// Note: Greece uses "EL" as the VIES member-state code, not "GR".
+// ValidateVATNumber accepts both "GR" and "EL" as the country argument and
+// normalises to "EL" before matching.
 var vatFormats = map[string]*regexp.Regexp{
-	// Nordic
+	// Nordic EU members
+	// DK and FI store numeric-only (no country prefix) per existing gateway convention.
+	// SE stores SE + 10 digits per VIES convention (12-char total).
 	"DK": regexp.MustCompile(`^\d{8}$`),
 	"SE": regexp.MustCompile(`^SE\d{10}$`),
 	"FI": regexp.MustCompile(`^\d{8}$`),
-	"NO": regexp.MustCompile(`^\d{9}$`),
-	// EU
+	// Other EU members (27 total, alphabetical)
+	"AT": regexp.MustCompile(`^ATU\d{8}$`),
+	"BE": regexp.MustCompile(`^BE\d{10}$`),
+	"BG": regexp.MustCompile(`^BG\d{9,10}$`),
+	"CY": regexp.MustCompile(`^CY\d{8}[A-Z]$`),
+	"CZ": regexp.MustCompile(`^CZ\d{8,10}$`),
 	"DE": regexp.MustCompile(`^DE\d{9}$`),
+	"EE": regexp.MustCompile(`^EE\d{9}$`),
+	"EL": regexp.MustCompile(`^EL\d{9}$`), // Greece — VIES uses EL, not GR
+	"ES": regexp.MustCompile(`^ES[A-Z0-9]\d{7}[A-Z0-9]$`),
 	"FR": regexp.MustCompile(`^FR[A-Z0-9]{2}\d{9}$`),
+	"HR": regexp.MustCompile(`^HR\d{11}$`),
+	"HU": regexp.MustCompile(`^HU\d{8}$`),
+	"IE": regexp.MustCompile(`^IE\d{7}[A-Z]{1,2}$`),
+	"IT": regexp.MustCompile(`^IT\d{11}$`),
+	"LT": regexp.MustCompile(`^LT(\d{9}|\d{12})$`),
+	"LU": regexp.MustCompile(`^LU\d{8}$`),
+	"LV": regexp.MustCompile(`^LV\d{11}$`),
+	"MT": regexp.MustCompile(`^MT\d{8}$`),
 	"NL": regexp.MustCompile(`^NL\d{9}B\d{2}$`),
-	"PL": regexp.MustCompile(`^\d{10}$`),
+	"PL": regexp.MustCompile(`^PL\d{10}$`),
+	"PT": regexp.MustCompile(`^PT\d{9}$`),
+	"RO": regexp.MustCompile(`^RO\d{2,10}$`),
+	"SI": regexp.MustCompile(`^SI\d{8}$`),
+	"SK": regexp.MustCompile(`^SK\d{10}$`),
 	// Non-EU European
+	"GB": regexp.MustCompile(`^GB\d{9}$`),
+	"IS": regexp.MustCompile(`^IS\d{10}$`),
+	"CH": regexp.MustCompile(`^CHE\d{9}$`),
+	"NO": regexp.MustCompile(`^\d{9}$`),
 	"ME": regexp.MustCompile(`^\d{9}$`),
 	"MK": regexp.MustCompile(`^MK\d{11}$`),
 	"RS": regexp.MustCompile(`^\d{10}$`),
@@ -309,10 +340,17 @@ func validateHSCode(code string) error {
 	return nil
 }
 
-// validateVATNumber validates a VAT number against the known format for
-// the given country code. Returns nil if no format rule exists for the country.
+// validateVATNumber validates a VAT number against the known format for the
+// given country code. Returns nil if no format rule exists for the country.
+//
+// Greece: VIES uses the member-state code "EL" rather than the ISO "GR".
+// Both are accepted here; the number prefix must use "EL" per VIES convention.
 func validateVATNumber(number, country string) error {
-	rule, ok := vatFormats[country]
+	key := country
+	if key == "GR" {
+		key = "EL"
+	}
+	rule, ok := vatFormats[key]
 	if !ok {
 		return nil
 	}

@@ -52,6 +52,40 @@ var nonEUEuropeanCountries = map[string]bool{
 	"XK": true, // Kosovo
 }
 
+// RouteType classifies the customs handling category for a shipment.
+type RouteType int
+
+const (
+	// RouteIntraEU covers shipments where both origin and destination are EU
+	// member states. Simplified customs apply; VAT validation for B2B.
+	RouteIntraEU RouteType = iota
+	// RouteEUToNonEU covers shipments from an EU member state to a non-EU
+	// country. Full customs declarations are required.
+	RouteEUToNonEU
+	// RouteNonEUToEU covers shipments from a non-EU country into the EU.
+	// Full customs declarations are required.
+	RouteNonEUToEU
+	// RouteNonEUToNonEU covers shipments between two non-EU countries.
+	// Field-level validation applies; bilateral agreement logic is delegated
+	// to the carrier API.
+	RouteNonEUToNonEU
+)
+
+// ClassifyRoute returns the RouteType for a shipment from origin to dest.
+// Both codes must be ISO 3166-1 alpha-2. Kosovo uses the provisional "XK" code.
+func ClassifyRoute(origin, dest string) RouteType {
+	switch {
+	case IsEU(origin) && IsEU(dest):
+		return RouteIntraEU
+	case IsEU(origin) && !IsEU(dest):
+		return RouteEUToNonEU
+	case !IsEU(origin) && IsEU(dest):
+		return RouteNonEUToEU
+	default:
+		return RouteNonEUToNonEU
+	}
+}
+
 // IsEU reports whether code is an EU member state.
 func IsEU(code string) bool {
 	return euMemberStates[code]

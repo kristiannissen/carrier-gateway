@@ -397,6 +397,32 @@ type Customs struct {
 
 	// ShipmentType is either "B2B" or "B2C". Affects VAT and de minimis rules.
 	ShipmentType string `json:"shipmentType,omitempty"`
+
+	// Items holds the line-item breakdown required for full customs declarations.
+	// Required for non-EU destinations; each item maps to one commodity in the
+	// carrier's customs API (DHL cCustoms item, GLS lineItem, PostNord item, etc.).
+	Items []CustomsItem `json:"items,omitempty"`
+}
+
+// CustomsItem describes a single line item within a customs declaration.
+// It maps to the commodity/item level of carrier customs APIs.
+type CustomsItem struct {
+	// Description is a plain-language description of the goods (required).
+	Description string `json:"description"`
+	// HSCode is the 6-10 digit Harmonized System commodity code (required for
+	// non-EU destinations).
+	HSCode string `json:"hsCode,omitempty"`
+	// CountryOfOrigin is the ISO 3166-1 alpha-2 code where the goods were
+	// manufactured or substantially transformed.
+	CountryOfOrigin string `json:"countryOfOrigin,omitempty"`
+	// Quantity is the number of units of this line item.
+	Quantity int `json:"quantity"`
+	// NetWeight is the net weight in kg for this line item (excluding packaging).
+	NetWeight float64 `json:"netWeight,omitempty"`
+	// Value is the declared customs value for this line item.
+	Value float64 `json:"value"`
+	// Currency is the ISO 4217 currency code for Value (e.g. "EUR", "DKK").
+	Currency string `json:"currency,omitempty"`
 }
 
 // NotificationPreferences holds the integrator-supplied webhook configuration

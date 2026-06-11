@@ -191,6 +191,73 @@ func TestValidateRestrictedItems_DAO_Alcohol_Warned(t *testing.T) {
 	assert.Equal(t, "alcohol", warned[0].Keyword)
 }
 
+func TestCheckDestinationProhibited_Universal(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		desc string
+		key  string
+	}{
+		{"military explosive device", "explosive"},
+		{"12-gauge ammunition", "ammunition"},
+		{"hunting weapon", "weapon"},
+		{"counterfeit handbag", "counterfeit"},
+		{"radioactive isotope sample", "radioactive"},
+		{"human remains urn", "human remains"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.key, func(t *testing.T) {
+			t.Parallel()
+			// Universal rules apply regardless of destination.
+			blocked, warned := CheckDestinationProhibited("SE", shipmentWithItems(tc.desc))
+			require.Len(t, blocked, 1, "expected block for %q", tc.desc)
+			assert.Empty(t, warned)
+			assert.Equal(t, tc.key, blocked[0].Keyword)
+		})
+	}
+}
+
+func TestCheckDestinationProhibited_AlcoholToUAE_Blocked(t *testing.T) {
+	t.Parallel()
+	blocked, warned := CheckDestinationProhibited("AE", shipmentWithItems("bottle of red wine"))
+	require.Len(t, blocked, 1)
+	assert.Equal(t, "wine", blocked[0].Keyword)
+	assert.Empty(t, warned)
+}
+
+func TestCheckDestinationProhibited_AlcoholToNorway_Warned(t *testing.T) {
+	t.Parallel()
+	blocked, warned := CheckDestinationProhibited("NO", shipmentWithItems("bottle of red wine"))
+	assert.Empty(t, blocked)
+	require.Len(t, warned, 1)
+	assert.Equal(t, "wine", warned[0].Keyword)
+}
+
+func TestCheckDestinationProhibited_AlcoholToSweden_NoRule(t *testing.T) {
+	t.Parallel()
+	// Sweden (EU, intra-EU) has no destination-specific alcohol rule.
+	blocked, warned := CheckDestinationProhibited("SE", shipmentWithItems("bottle of wine"))
+	assert.Empty(t, blocked)
+	assert.Empty(t, warned)
+}
+
+func TestCheckDestinationProhibited_GBTobacco_Warned(t *testing.T) {
+	t.Parallel()
+	blocked, warned := CheckDestinationProhibited("GB", shipmentWithItems("tobacco cigarettes"))
+	assert.Empty(t, blocked)
+	require.Len(t, warned, 1)
+	assert.Equal(t, "tobacco", warned[0].Keyword)
+}
+
+func TestCheckDestinationProhibited_NoItems(t *testing.T) {
+	t.Parallel()
+	blocked, warned := CheckDestinationProhibited("NO", adapter.Shipment{})
+	assert.Empty(t, blocked)
+	assert.Empty(t, warned)
+}
+
 func TestRequiresCustomsBlock(t *testing.T) {
 	t.Parallel()
 

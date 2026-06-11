@@ -98,6 +98,139 @@ var carrierRestrictedItems = map[string][]restrictedItem{
 	},
 }
 
+// destinationProhibited maps destination country codes to a list of keywords
+// that are always blocked for import into that country. These supplement the
+// carrier-level checks in carrierRestrictedItems and are checked regardless of
+// the carrier used.
+//
+// The universal "all countries" prohibitions (explosives, drugs, weapons, etc.)
+// are encoded under the special key "*".
+var destinationProhibited = map[string][]restrictedItem{
+	// Universal — applies to every destination.
+	"*": {
+		{keyword: "explosive", severity: severityBlock, reason: "explosives are prohibited universally"},
+		{keyword: "ammunition", severity: severityBlock, reason: "ammunition is prohibited universally"},
+		{keyword: "weapon", severity: severityBlock, reason: "weapons are prohibited universally"},
+		{keyword: "firearm", severity: severityBlock, reason: "firearms are prohibited universally"},
+		{keyword: "replica firearm", severity: severityBlock, reason: "replica firearms are prohibited universally"},
+		{keyword: "narcotic", severity: severityBlock, reason: "narcotics are prohibited universally"},
+		{keyword: "cannabis", severity: severityBlock, reason: "cannabis-derived products are prohibited universally"},
+		{keyword: "cbd", severity: severityBlock, reason: "CBD/cannabis-derived products are prohibited universally"},
+		{keyword: "counterfeit", severity: severityBlock, reason: "counterfeit goods are prohibited universally"},
+		{keyword: "radioactive", severity: severityBlock, reason: "radioactive materials are prohibited universally"},
+		{keyword: "infectious substance", severity: severityBlock, reason: "infectious substances are prohibited universally"},
+		{keyword: "human remains", severity: severityBlock, reason: "human remains are prohibited universally (use specialised carrier)"},
+		{keyword: "animal ashes", severity: severityBlock, reason: "animal ashes are prohibited universally (use specialised carrier)"},
+		{keyword: "pornography", severity: severityBlock, reason: "obscene publications are prohibited universally"},
+	},
+	// Middle East / Gulf — alcohol prohibited outright.
+	"AE": {
+		{keyword: "alcohol", severity: severityBlock, reason: "alcohol is prohibited for import into the UAE"},
+		{keyword: "wine", severity: severityBlock, reason: "alcohol is prohibited for import into the UAE"},
+		{keyword: "beer", severity: severityBlock, reason: "alcohol is prohibited for import into the UAE"},
+		{keyword: "spirits", severity: severityBlock, reason: "alcohol is prohibited for import into the UAE"},
+		{keyword: "drone", severity: severityBlock, reason: "drones require prior approval for import into the UAE"},
+	},
+	"BH": {
+		{keyword: "alcohol", severity: severityBlock, reason: "alcohol is prohibited for import into Bahrain"},
+	},
+	"KW": {
+		{keyword: "alcohol", severity: severityBlock, reason: "alcohol is prohibited for import into Kuwait"},
+		{keyword: "military good", severity: severityBlock, reason: "military goods require authorisation for import into Kuwait"},
+	},
+	"QA": {
+		{keyword: "alcohol", severity: severityBlock, reason: "alcohol is prohibited for import into Qatar"},
+	},
+	"SA": {
+		{keyword: "alcohol", severity: severityBlock, reason: "alcohol is prohibited for import into Saudi Arabia"},
+	},
+	// Non-EU European — alcohol/tobacco trigger duty warning; restricted items follow EU/national rules.
+	"NO": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to Norwegian import duties and quantity limits"},
+		{keyword: "wine", severity: severityWarn, reason: "alcohol is subject to Norwegian import duties and quantity limits"},
+		{keyword: "beer", severity: severityWarn, reason: "alcohol is subject to Norwegian import duties and quantity limits"},
+		{keyword: "spirits", severity: severityWarn, reason: "alcohol is subject to Norwegian import duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to Norwegian import duties and quantity limits"},
+	},
+	"CH": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to Swiss customs duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to Swiss customs duties and quantity limits"},
+	},
+	"GB": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to UK import duty and excise"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to UK import duty and excise"},
+		{keyword: "human remains", severity: severityBlock, reason: "human remains require prior permission from UK Border Force"},
+	},
+	"IS": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to Icelandic import duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to Icelandic import duties and quantity limits"},
+	},
+	"TR": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to Turkish import duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to Turkish import duties and quantity limits"},
+	},
+	"UA": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to Ukrainian import duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to Ukrainian import duties and quantity limits"},
+	},
+	"RS": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to Serbian import duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to Serbian import duties and quantity limits"},
+	},
+	"ME": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to Montenegrin import duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to Montenegrin import duties and quantity limits"},
+	},
+	"MK": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to North Macedonian import duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to North Macedonian import duties and quantity limits"},
+	},
+	"XK": {
+		{keyword: "alcohol", severity: severityWarn, reason: "alcohol is subject to Kosovo import duties and quantity limits"},
+		{keyword: "tobacco", severity: severityWarn, reason: "tobacco is subject to Kosovo import duties and quantity limits"},
+	},
+}
+
+// CheckDestinationProhibited checks all item descriptions in the shipment
+// against the destination country's prohibited and restricted goods lists.
+//
+// It checks both the universal "*" rules and any destination-specific rules.
+// Results follow the same semantics as ValidateRestrictedItems:
+//   - blocked: must prevent the booking from proceeding.
+//   - warned: restricted but do not block; surface in BookingResponse.CustomsWarnings.
+func CheckDestinationProhibited(destination string, shipment adapter.Shipment) (blocked, warned []RestrictedItemResult) {
+	keys := []string{"*", destination}
+
+	for _, key := range keys {
+		rules, ok := destinationProhibited[key]
+		if !ok {
+			continue
+		}
+		for _, colli := range shipment.Colli {
+			for _, item := range colli.Items {
+				lower := strings.ToLower(item.Description)
+				for _, rule := range rules {
+					if strings.Contains(lower, rule.keyword) {
+						match := RestrictedItemResult{
+							ItemDescription: item.Description,
+							Keyword:         rule.keyword,
+							Reason:          rule.reason,
+							Block:           rule.severity == severityBlock,
+						}
+						if rule.severity == severityBlock {
+							blocked = append(blocked, match)
+						} else {
+							warned = append(warned, match)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return blocked, warned
+}
+
 // RestrictedItemResult holds a single match from ValidateRestrictedItems.
 type RestrictedItemResult struct {
 	// ItemDescription is the item description that matched.

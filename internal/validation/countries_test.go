@@ -110,3 +110,45 @@ func TestEUAndNonEUAreDisjoint(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifyRoute(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		origin string
+		dest   string
+		want   RouteType
+	}{
+		// IntraEU — both EU members
+		{"DK", "DE", RouteIntraEU},
+		{"FR", "SE", RouteIntraEU},
+		{"PL", "IT", RouteIntraEU},
+		// EU → Non-EU
+		{"DK", "NO", RouteEUToNonEU},
+		{"DE", "GB", RouteEUToNonEU},
+		{"FR", "CH", RouteEUToNonEU},
+		{"SE", "US", RouteEUToNonEU},
+		{"NL", "TR", RouteEUToNonEU},
+		// Non-EU → EU
+		{"NO", "DK", RouteNonEUToEU},
+		{"GB", "DE", RouteNonEUToEU},
+		{"US", "FR", RouteNonEUToEU},
+		{"CH", "IT", RouteNonEUToEU},
+		// Non-EU → Non-EU
+		{"NO", "CH", RouteNonEUToNonEU},
+		{"GB", "US", RouteNonEUToNonEU},
+		{"US", "CA", RouteNonEUToNonEU},
+		{"TR", "UA", RouteNonEUToNonEU},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.origin+"→"+tc.dest, func(t *testing.T) {
+			t.Parallel()
+			got := ClassifyRoute(tc.origin, tc.dest)
+			if got != tc.want {
+				t.Errorf("ClassifyRoute(%q, %q) = %d, want %d", tc.origin, tc.dest, got, tc.want)
+			}
+		})
+	}
+}
