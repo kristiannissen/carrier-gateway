@@ -17,28 +17,28 @@ import (
 )
 
 // nonEUDestinations is the set of country codes that are not part of the EU
-// customs union and therefore require full customs declarations.
+// customs union and therefore require full customs declarations. It covers all
+// non-EU European countries plus known non-European destinations.
+// EU membership checks use IsEU from countries.go — do not add EU members here.
 var nonEUDestinations = map[string]bool{
-	"NO": true, // Norway — EEA but not EU customs union
+	// European — non-EU
 	"CH": true, // Switzerland
 	"GB": true, // United Kingdom
 	"IS": true, // Iceland
 	"LI": true, // Liechtenstein
-	"US": true, // United States
-	"CA": true, // Canada
+	"ME": true, // Montenegro
+	"MK": true, // North Macedonia
+	"NO": true, // Norway — EEA but not EU customs union
+	"RS": true, // Serbia
+	"TR": true, // Turkey
+	"UA": true, // Ukraine
+	"XK": true, // Kosovo
+	// Non-European
 	"AU": true, // Australia
-	"JP": true, // Japan
+	"CA": true, // Canada
 	"CN": true, // China
-}
-
-// euCountries is the set of EU member state country codes.
-var euCountries = map[string]bool{
-	"AT": true, "BE": true, "BG": true, "CY": true, "CZ": true,
-	"DE": true, "DK": true, "EE": true, "ES": true, "FI": true,
-	"FR": true, "GR": true, "HR": true, "HU": true, "IE": true,
-	"IT": true, "LT": true, "LU": true, "LV": true, "MT": true,
-	"NL": true, "PL": true, "PT": true, "RO": true, "SE": true,
-	"SI": true, "SK": true,
+	"JP": true, // Japan
+	"US": true, // United States
 }
 
 // validIncoterms is the set of accepted Incoterms 2020 trade terms.
@@ -80,6 +80,13 @@ var deMinimisThresholds = map[string]deMinimisThreshold{
 	"GB": {value: 135.0, currency: "GBP"},
 	"CH": {value: 65.0, currency: "CHF"},
 	"JP": {value: 10000.0, currency: "JPY"},
+	// Western Balkans and Eastern Europe — all aligned to the EU €150 threshold.
+	"ME": {value: 150.0, currency: "EUR"},
+	"MK": {value: 150.0, currency: "EUR"},
+	"RS": {value: 150.0, currency: "EUR"},
+	"TR": {value: 150.0, currency: "EUR"},
+	"UA": {value: 150.0, currency: "EUR"},
+	"XK": {value: 150.0, currency: "EUR"},
 }
 
 // validISO4217 is a representative set of ISO 4217 currency codes.
@@ -92,14 +99,23 @@ var validISO4217 = map[string]bool{
 
 // vatFormats maps country codes to a regex that validates the VAT number format.
 var vatFormats = map[string]*regexp.Regexp{
+	// Nordic
 	"DK": regexp.MustCompile(`^\d{8}$`),
 	"SE": regexp.MustCompile(`^SE\d{10}$`),
 	"FI": regexp.MustCompile(`^\d{8}$`),
 	"NO": regexp.MustCompile(`^\d{9}$`),
+	// EU
 	"DE": regexp.MustCompile(`^DE\d{9}$`),
 	"FR": regexp.MustCompile(`^FR[A-Z0-9]{2}\d{9}$`),
 	"NL": regexp.MustCompile(`^NL\d{9}B\d{2}$`),
 	"PL": regexp.MustCompile(`^\d{10}$`),
+	// Non-EU European
+	"ME": regexp.MustCompile(`^\d{9}$`),
+	"MK": regexp.MustCompile(`^MK\d{11}$`),
+	"RS": regexp.MustCompile(`^\d{10}$`),
+	"TR": regexp.MustCompile(`^\d{10}$`),
+	"UA": regexp.MustCompile(`^\d{10}$`),
+	"XK": regexp.MustCompile(`^\d{10}$`),
 }
 
 // prohibitedHSPrefixes lists HS chapter prefixes that require special
@@ -116,17 +132,6 @@ var iso3166Alpha2 = regexp.MustCompile(`^[A-Z]{2}$`)
 // euDeMinimisEUR is the de minimis threshold for EU B2C shipments.
 const euDeMinimisEUR = 150.0
 
-// viesEUCountries is the set of EU member states whose VAT numbers can be
-// verified via the VIES REST API. Non-EU countries (NO, GB, CH, US etc.) are
-// not registered on VIES and must never be looked up.
-var viesEUCountries = map[string]bool{
-	"AT": true, "BE": true, "BG": true, "CY": true, "CZ": true,
-	"DE": true, "DK": true, "EE": true, "ES": true, "FI": true,
-	"FR": true, "GR": true, "HR": true, "HU": true, "IE": true,
-	"IT": true, "LT": true, "LU": true, "LV": true, "MT": true,
-	"NL": true, "PL": true, "PT": true, "RO": true, "SE": true,
-	"SI": true, "SK": true,
-}
 
 // viesBaseURL is the VIES REST API base URL. Overridable in tests via package-level
 // assignment so tests can point at an httptest.Server without DNS tricks.
@@ -165,7 +170,7 @@ func ValidateCustoms(c adapter.Customs, origin, destination, shipmentType string
 		return validateNonEUCustoms(c, origin, destination, shipmentType)
 	}
 
-	if euCountries[destination] {
+	if IsEU(destination) {
 		return validateEUCustoms(c, destination, shipmentType)
 	}
 
@@ -374,7 +379,7 @@ func RequiresCustomsBlock(origin, destination string) bool {
 //	(false, false, err)  — VIES confirmed the number is invalid or not found
 //	(false, true,  nil)  — VIES was unreachable or timed out; degrade gracefully
 func ValidateVATNumberLive(ctx context.Context, number, country string) (valid, unavailable bool, err error) {
-	if !viesEUCountries[country] {
+	if !IsEU(country) {
 		// Non-EU country — VIES does not cover it; pass through immediately.
 		return true, false, nil
 	}

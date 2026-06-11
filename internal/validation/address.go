@@ -38,6 +38,14 @@ var postalCodeRules = map[string]*regexp.Regexp{
 	"AT": regexp.MustCompile(`^\d{4}$`),
 	"CH": regexp.MustCompile(`^\d{4}$`),
 
+	// Non-EU European
+	"ME": regexp.MustCompile(`^\d{5}$`), // Montenegro
+	"MK": regexp.MustCompile(`^\d{4}$`), // North Macedonia
+	"RS": regexp.MustCompile(`^\d{5}$`), // Serbia
+	"TR": regexp.MustCompile(`^\d{5}$`), // Turkey
+	"UA": regexp.MustCompile(`^\d{5}$`), // Ukraine
+	"XK": regexp.MustCompile(`^\d{5}$`), // Kosovo
+
 	// British Isles
 	// Royal Mail format: 1-2 letters + 1-2 digits (+ optional letter) + space +
 	// 1 digit + 2 letters. Spaces are normalised before matching.
@@ -247,6 +255,12 @@ func countryName(code string) string {
 		"IT": "Italian",
 		"PT": "Portuguese",
 		"AT": "Austrian",
+		"ME": "Montenegrin",
+		"MK": "North Macedonian",
+		"RS": "Serbian",
+		"TR": "Turkish",
+		"UA": "Ukrainian",
+		"XK": "Kosovan",
 	}
 	if name, ok := names[code]; ok {
 		return name
