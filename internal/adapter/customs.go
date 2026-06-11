@@ -245,59 +245,137 @@ func (a *DHLAdapter) buildCCustomsRequest(req CustomsRequest) dhlCustomsPayload 
 // glsCustomsBaseURL is the GLS Customs API v3 production base URL.
 const glsCustomsBaseURL = "https://api.gls-group.net/customs-management/export/public/v3"
 
-// glsIncotermCode maps standard Incoterms 2020 codes to GLS-specific integer codes.
-// GLS Customs API codes: 10=DDP, 20=DAP, 21=DAP-direct, 25=DAP-secure,
-// 30=DDP-duties, 33=DDP-indirect, 40=DAP-cleared, 50=DDP-low-value.
-// Unmapped terms default to 20 (DAP).
-func glsIncotermCode(incoterms string) int {
+// glsIncotermCode maps standard Incoterms 2020 codes to GLS-specific string codes.
+// GLS Customs API v3 uses string values: "10"=DDP, "20"=DAP.
+// Unmapped terms default to "20" (DAP).
+func glsIncotermCode(incoterms string) string {
 	switch incoterms {
 	case "DDP":
-		return 10
+		return "10"
 	case "DAP":
-		return 20
+		return "20"
 	default:
-		return 20
+		return "20"
 	}
+}
+
+// glsCustomsWeight is the Weight schema in GLS Customs API v3.
+// Unit is always "KGM".
+type glsCustomsWeight struct {
+	Amount float64 `json:"amount"`
+	Unit   string  `json:"unit"`
+}
+
+// glsCustomsAmountOfMoney holds a monetary amount with ISO 4217 currency.
+type glsCustomsAmountOfMoney struct {
+	Amount   float64 `json:"amount"`
+	Currency string  `json:"currency"`
+}
+
+// glsCustomsContactPerson is the ContactPerson schema in GLS Customs API v3.
+type glsCustomsContactPerson struct {
+	Name  string `json:"name,omitempty"`
+	Email string `json:"emailAddress,omitempty"`
+	Phone string `json:"phoneNumber,omitempty"`
+}
+
+// glsCustomsAddress is the CustomsAddress schema in GLS Customs API v3.
+// Field names differ from the ShipIT Address schema.
+type glsCustomsAddress struct {
+	Name1       string `json:"name1"`
+	Street1     string `json:"street1"`
+	HouseNumber string `json:"houseNumber,omitempty"`
+	City1       string `json:"city1"`
+	Postcode    string `json:"postcode"`
+	CountryCode string `json:"countryCode"`
+}
+
+// glsCustomsPartyBody holds the address, contact, and identifiers for an
+// exporter or importer in GLS Customs API v3.
+type glsCustomsPartyBody struct {
+	Address               glsCustomsAddress       `json:"address"`
+	ContactPerson         glsCustomsContactPerson `json:"contactPerson"`
+	IsCommercial          bool                    `json:"isCommercial"`
+	VATRegistrationNumber string                  `json:"vatRegistrationNumber,omitempty"`
+	EORINumber            string                  `json:"eoriNumber,omitempty"`
+}
+
+// glsCustomsQuantity is the Quantity schema in GLS Customs API v3.
+// Unit is always "PCE" (pieces).
+type glsCustomsQuantity struct {
+	Amount float64 `json:"amount"`
+	Unit   string  `json:"unit"`
+}
+
+// glsCustomsLineItem maps one CustomsItem to the GLS Customs API v3 lineItem schema.
+type glsCustomsLineItem struct {
+	Quantity               glsCustomsQuantity `json:"quantity"`
+	CommodityCode          string             `json:"commodityCode"`
+	GoodsDescription       string             `json:"goodsDescription"`
+	CountryOfOrigin        string             `json:"countryOfOrigin"`
+	ValueInInvoiceCurrency float64            `json:"valueInInvoiceCurrency"`
+	GrossWeight            glsCustomsWeight   `json:"grossWeight"`
+	NetWeight              glsCustomsWeight   `json:"netWeight"`
+}
+
+// glsCustomsInvoice is the invoice block required by GLS Customs API v3.
+type glsCustomsInvoice struct {
+	InvoiceNumber   string                  `json:"invoiceNumber"`
+	InvoiceDate     string                  `json:"invoiceDate"` // format: "2006-01-02"
+	TotalGoodsValue glsCustomsAmountOfMoney `json:"totalGoodsValue"`
 }
 
 // glsCustomsConsignment is the GLS Customs API v3 POST /customs-consignments body.
 type glsCustomsConsignment struct {
 	ParcelNumbers                []string            `json:"parcelNumbers"`
 	CustomerReference            string              `json:"customerReference,omitempty"`
-	GLSIncotermCode              int                 `json:"glsIncotermCode"`
+	GLSIncotermCode              string              `json:"glsIncotermCode"`
 	IsExportDeclarationRequested bool                `json:"isExportDeclarationRequested"`
+	TotalGrossWeight             glsCustomsWeight    `json:"totalGrossWeight"`
 	SaveAsDraft                  bool                `json:"saveAsDraft,omitempty"`
 	ExportDeclarationNumbers     []string            `json:"exportDeclarationNumbers,omitempty"`
 	Exporter                     glsCustomsPartyBody `json:"exporter"`
 	Importer                     glsCustomsPartyBody `json:"importer"`
+	Invoice                      glsCustomsInvoice   `json:"invoice"`
 	LineItems                    []glsCustomsLineItem `json:"lineItems"`
 }
 
-// glsCustomsPartyBody holds the address and tax ID for an exporter or importer.
-type glsCustomsPartyBody struct {
-	VATRegistrationNumber string            `json:"vatRegistrationNumber,omitempty"`
-	EORI                  string            `json:"eori,omitempty"`
-	Address               glsCustomsAddress `json:"address"`
+// glsCustomsParty builds a glsCustomsPartyBody from an Address and optional VAT/EORI numbers.
+// isCommercial is true for B2B shipments or when a VAT number is present.
+func glsCustomsParty(addr Address, vatNumber, eori string, isCommercial bool) glsCustomsPartyBody {
+	return glsCustomsPartyBody{
+		Address: glsCustomsAddress{
+			Name1:       addr.Name,
+			Street1:     addr.Street,
+			HouseNumber: addr.HouseNumber,
+			City1:       addr.City,
+			Postcode:    addr.PostalCode,
+			CountryCode: addr.Country,
+		},
+		ContactPerson: glsCustomsContactPerson{
+			Name:  addr.Name,
+			Email: addr.Email,
+			Phone: addr.Phone,
+		},
+		IsCommercial:          isCommercial,
+		VATRegistrationNumber: vatNumber,
+		EORINumber:            eori,
+	}
 }
 
-// glsCustomsAddress is the address sub-object in GLS customs parties.
-type glsCustomsAddress struct {
-	Name        string `json:"name"`
-	Street      string `json:"street"`
-	HouseNumber string `json:"houseNumber,omitempty"`
-	City        string `json:"city"`
-	PostalCode  string `json:"postalCode"`
-	CountryCode string `json:"countryCode"`
-}
-
-// glsCustomsLineItem maps one CustomsItem to the GLS lineItem schema.
-type glsCustomsLineItem struct {
-	CommodityCode          string  `json:"commodityCode"`
-	CountryOfOrigin        string  `json:"countryOfOrigin"`
-	ValueInInvoiceCurrency float64 `json:"valueInInvoiceCurrency"`
-	InvoiceCurrency        string  `json:"invoiceCurrency"`
-	Quantity               int     `json:"quantity"`
-	Description            string  `json:"description,omitempty"`
+// glsTotalGrossWeight sums the net weights of all items as a gross weight approximation.
+// If items is empty, falls back to the top-level customs value weight estimate.
+func glsTotalGrossWeight(c Customs) glsCustomsWeight {
+	var total float64
+	for _, ci := range c.Items {
+		total += ci.NetWeight * float64(ci.Quantity)
+	}
+	if total == 0 {
+		// No item weights available — use a nominal 0.5 kg placeholder so the
+		// required field is not zero. The caller should supply item weights.
+		total = 0.5
+	}
+	return glsCustomsWeight{Amount: total, Unit: "KGM"}
 }
 
 // SubmitCustoms submits a customs consignment to the GLS Customs API v3
@@ -308,31 +386,26 @@ func (a *GLSAdapter) SubmitCustoms(ctx context.Context, req CustomsRequest) (*Cu
 		return nil, fmt.Errorf("gls customs: obtain bearer token: %w", err)
 	}
 
+	isB2B := req.Customs.ShipmentType == "B2B"
+	invoiceRef := req.EDIItemID
+	if invoiceRef == "" {
+		invoiceRef = req.TrackingNumber
+	}
+
 	consignment := glsCustomsConsignment{
 		ParcelNumbers:                []string{req.TrackingNumber},
 		CustomerReference:            req.EDIItemID,
 		GLSIncotermCode:              glsIncotermCode(req.Customs.Incoterms),
 		IsExportDeclarationRequested: false,
-		Exporter: glsCustomsPartyBody{
-			VATRegistrationNumber: req.Customs.ExporterVATNumber,
-			Address: glsCustomsAddress{
-				Name:        req.Sender.Name,
-				Street:      req.Sender.Street,
-				HouseNumber: req.Sender.HouseNumber,
-				City:        req.Sender.City,
-				PostalCode:  req.Sender.PostalCode,
-				CountryCode: req.Sender.Country,
-			},
-		},
-		Importer: glsCustomsPartyBody{
-			VATRegistrationNumber: req.Customs.ImporterVATNumber,
-			Address: glsCustomsAddress{
-				Name:        req.Receiver.Name,
-				Street:      req.Receiver.Street,
-				HouseNumber: req.Receiver.HouseNumber,
-				City:        req.Receiver.City,
-				PostalCode:  req.Receiver.PostalCode,
-				CountryCode: req.Receiver.Country,
+		TotalGrossWeight:             glsTotalGrossWeight(req.Customs),
+		Exporter:                     glsCustomsParty(req.Sender, req.Customs.ExporterVATNumber, "", isB2B || req.Customs.ExporterVATNumber != ""),
+		Importer:                     glsCustomsParty(req.Receiver, req.Customs.ImporterVATNumber, "", isB2B),
+		Invoice: glsCustomsInvoice{
+			InvoiceNumber: invoiceRef,
+			InvoiceDate:   time.Now().UTC().Format("2006-01-02"),
+			TotalGoodsValue: glsCustomsAmountOfMoney{
+				Amount:   req.Customs.CustomsValue,
+				Currency: req.Customs.CustomsCurrency,
 			},
 		},
 		LineItems: buildGLSLineItems(req.Customs),
@@ -368,43 +441,39 @@ func (a *GLSAdapter) SubmitCustoms(ctx context.Context, req CustomsRequest) (*Cu
 	}
 
 	var glsResp struct {
-		ConsignmentID string `json:"consignmentId"`
-		Status        string `json:"status"`
+		Key string `json:"key"` // unique key returned on 201 Created
 	}
 	if jsonErr := json.Unmarshal(respBody, &glsResp); jsonErr != nil {
-		// Response is not JSON-parseable but status was 2xx — treat as success.
+		// Not JSON-parseable but status was 2xx — treat as success.
 		a.log.Warn("gls customs: could not parse response body", zap.Error(jsonErr))
 	}
 
 	a.log.Info("gls customs declaration submitted",
 		zap.String("trackingNumber", req.TrackingNumber),
-		zap.String("consignmentID", glsResp.ConsignmentID),
+		zap.String("consignmentKey", glsResp.Key),
 	)
 
 	return &CustomsResponse{
 		Carrier:       "gls",
-		DeclarationID: glsResp.ConsignmentID,
+		DeclarationID: glsResp.Key,
 		Status:        "submitted",
 	}, nil
 }
 
-// buildGLSLineItems converts Customs.Items to GLS customs line items.
+// buildGLSLineItems converts Customs.Items to GLS Customs API v3 line items.
 // Falls back to a single line item from top-level Customs fields when Items is empty.
 func buildGLSLineItems(c Customs) []glsCustomsLineItem {
 	if len(c.Items) > 0 {
 		items := make([]glsCustomsLineItem, 0, len(c.Items))
 		for _, ci := range c.Items {
-			currency := ci.Currency
-			if currency == "" {
-				currency = c.CustomsCurrency
-			}
 			items = append(items, glsCustomsLineItem{
+				Quantity:               glsCustomsQuantity{Amount: float64(ci.Quantity), Unit: "PCE"},
 				CommodityCode:          ci.HSCode,
+				GoodsDescription:       ci.Description,
 				CountryOfOrigin:        ci.CountryOfOrigin,
 				ValueInInvoiceCurrency: ci.Value,
-				InvoiceCurrency:        currency,
-				Quantity:               ci.Quantity,
-				Description:            ci.Description,
+				GrossWeight:            glsCustomsWeight{Amount: ci.NetWeight, Unit: "KGM"},
+				NetWeight:              glsCustomsWeight{Amount: ci.NetWeight, Unit: "KGM"},
 			})
 		}
 		return items
@@ -413,11 +482,13 @@ func buildGLSLineItems(c Customs) []glsCustomsLineItem {
 	// Single top-level fallback.
 	return []glsCustomsLineItem{
 		{
+			Quantity:               glsCustomsQuantity{Amount: 1, Unit: "PCE"},
 			CommodityCode:          c.HSCode,
+			GoodsDescription:       c.HSCode, // no top-level description available
 			CountryOfOrigin:        c.CountryOfOrigin,
 			ValueInInvoiceCurrency: c.CustomsValue,
-			InvoiceCurrency:        c.CustomsCurrency,
-			Quantity:               1,
+			GrossWeight:            glsCustomsWeight{Amount: 0.5, Unit: "KGM"},
+			NetWeight:              glsCustomsWeight{Amount: 0.5, Unit: "KGM"},
 		},
 	}
 }

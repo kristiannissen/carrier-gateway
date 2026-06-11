@@ -1,4 +1,4 @@
-# logistics-gateway
+# carrier-gateway
 
 A stateless Go microservice for booking, tracking, and returning shipments across multiple Nordic and European carriers through a single consistent API. Change the `carrier` field in your request and the rest of your integration stays the same.
 
@@ -13,6 +13,7 @@ A stateless Go microservice for booking, tracking, and returning shipments acros
 | `gls` | GLS | DK, SE, DE, NL, and more | ✅ | ✅ | ❌ | PDF, ZPL, ZPLGK | Production |
 | `dao` | DAO | DK | ✅ | ✅ | ✅ | PDF | Beta |
 | `dhl` | DHL eCommerce Europe | 28 European countries | ✅ | ✅ | ✅ | PDF | Beta |
+| `fedex` | FedEx | US, EU, and more | ✅ | ✅ | ❌ | — | Beta |
 | `posti` | Posti | FI | — | — | — | — | Demo |
 | `inpost` | InPost | PL | — | — | — | — | Demo |
 
@@ -23,8 +24,8 @@ Demo carriers return mock data only and are not connected to any live API.
 ## Quick start
 
 ```bash
-git clone https://github.com/kristiannissen/logistics-gateway.git
-cd logistics-gateway
+git clone https://github.com/kristiannissen/carrier-gateway.git
+cd carrier-gateway
 go mod download
 
 # Run in mock mode — no carrier credentials needed
@@ -57,6 +58,9 @@ The server starts on `http://localhost:8080`.
 | `DHL_CLIENT_SECRET` | DHL eConnect OAuth2 client secret (for booking) | No | — |
 | `DHL_CUSTOMER_ID` | DHL customerIdentification (sent in sender block) | No | — |
 | `DHL_TRACKING_API_KEY` | DHL Unified Tracking API subscription key — from [developer.dhl.com](https://developer.dhl.com) | No | — |
+| `FEDEX_CLIENT_ID` | FedEx OAuth2 client ID | No | — |
+| `FEDEX_CLIENT_SECRET` | FedEx OAuth2 client secret | No | — |
+| `FEDEX_ACCOUNT_NUMBER` | FedEx account number (sent in shipment payload) | No | — |
 
 DHL uses `https://api.dhl.com` for both booking and tracking. Booking uses OAuth2 (client_id/client_secret); tracking uses a subscription key in the `DHL-API-Key` header. Use `MOCK_MODE=true` for testing without credentials.
 
@@ -83,6 +87,9 @@ DHL_CLIENT_ID=your-dhl-client-id
 DHL_CLIENT_SECRET=your-dhl-client-secret
 DHL_CUSTOMER_ID=your-dhl-customer-id
 DHL_TRACKING_API_KEY=your-dhl-tracking-key
+FEDEX_CLIENT_ID=your-fedex-client-id
+FEDEX_CLIENT_SECRET=your-fedex-client-secret
+FEDEX_ACCOUNT_NUMBER=your-fedex-account-number
 ```
 
 ---
@@ -112,6 +119,8 @@ docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development logistics-gatew
 | `DELETE` | `/api/bookings/{trackingNumber}` | Cancel a shipment |
 | `PATCH` | `/api/bookings/{trackingNumber}` | Update a shipment |
 | `GET` | `/api/trackings/{trackingNumber}` | Track a shipment |
+| `POST` | `/api/trackings/{trackingNumber}` | Track and dispatch webhook on status change |
+| `POST` | `/api/notifications` | Dispatch a webhook notification directly |
 | `GET` | `/api/labels/{trackingNumber}` | Fetch a shipping label |
 | `GET` | `/api/health` | Health check |
 
@@ -137,6 +146,7 @@ Books a shipment with the specified carrier.
 | `shipment.addOns` | array | Optional service add-ons — see [Add-ons](#add-ons) | No |
 | `shipment.customs` | object | Customs declaration — see [Cross-border shipments](#cross-border-shipments-and-customs) | No |
 | `idempotencyKey` | string | Deduplication key, max 64 characters | No |
+| `notifications` | object | Webhook configuration — see [Webhook notifications](#webhook-notifications) | No |
 
 #### Address fields
 
@@ -170,6 +180,7 @@ Books a shipment with the specified carrier.
 
 ```json
 {
+  "shipmentId": "1234567890",
   "trackingNumber": "00073215400599388772",
   "carrier": "postnord",
   "status": "booked",
@@ -182,13 +193,19 @@ Books a shipment with the specified carrier.
     }
   ],
   "addOnWarnings": [],
-  "customsWarnings": []
+  "customsWarnings": [],
+  "notificationsSent": [],
+  "notificationsFailed": []
 }
 ```
+
+`shipmentId` is the carrier-level shipment identifier where available (PostNord `shipmentId`, Bring consignment number). Distinct from `trackingNumber` on some carriers.
 
 `addOnWarnings` is populated when an add-on was requested but could not be fully applied after a successful booking (e.g. DAO contact update failure). The booking is not rolled back — the tracking number is valid.
 
 `customsWarnings` is populated when customs data was validated but could not be forwarded to the carrier's wire format (carrier documentation pending), or when a VIES VAT lookup was unavailable and format-only validation was used instead.
+
+`notificationsSent` and `notificationsFailed` are populated when a `notifications` block was provided in the request. Failed records should be retried via `POST /api/notifications`.
 
 For PostNord and GLS the label is returned inline as base64 in `colli[0].labelUrl`. For Bring a URL is returned. For DAO labels are fetched separately via `GET /api/labels`.
 
@@ -297,6 +314,7 @@ Optional services in the `addOns` array.
 | GLS | ❌ | Contact GLS directly |
 | DAO | ✅ | Before first terminal scan |
 | DHL | ❌ | eConnect portal or customer service |
+| FedEx | ✅ | Cancels all packages in the shipment |
 
 ```bash
 curl -X DELETE "http://localhost:8080/api/bookings/00073215400599388772?carrier=postnord"
@@ -326,6 +344,7 @@ Response: `{"trackingNumber":"...","carrier":"postnord","status":"cancelled"}`
 | GLS | ❌ | ❌ | ❌ | Not supported |
 | DAO | ✅ | ✅ | ✅ | Before first terminal scan |
 | DHL | ❌ | ❌ | ❌ | Not supported |
+| FedEx | ❌ | ❌ | ❌ | Cancel and rebook required |
 
 ```bash
 curl -X PATCH "http://localhost:8080/api/bookings/00057126960000003016?carrier=dao" \
@@ -345,6 +364,7 @@ curl "http://localhost:8080/api/trackings/00073215400599388772?carrier=postnord"
 
 ```json
 {
+  "shipmentId": "1234567890",
   "trackingNumber": "00073215400599388772",
   "carrier": "postnord",
   "status": "INFORMED",
@@ -359,11 +379,15 @@ curl "http://localhost:8080/api/trackings/00073215400599388772?carrier=postnord"
       "location": "Copenhagen, DK",
       "details": "Shipment registered"
     }
-  ]
+  ],
+  "notificationsSent": [],
+  "notificationsFailed": []
 }
 ```
 
 `status` is the raw carrier-specific string preserved for backward compatibility. `normalizedStatus` is a consistent value across all carriers.
+
+`notificationsSent` and `notificationsFailed` are only present when the request was made via `POST /api/trackings/{trackingNumber}` with a `notifications` block and a status change was detected.
 
 #### Normalized status values
 
@@ -388,6 +412,94 @@ curl "http://localhost:8080/api/trackings/00073215400599388772?carrier=postnord"
 | GLS | `History[0].StatusCode` | All map to `unknown` — enum not publicly documented. Pending GLS support. |
 | DAO | `haendelse` numeric code | Codes 10–70 mapped. Full list at `GET /TrackNTraceKoder.php`. |
 | DHL | `status.statusCode` | Fully documented: `delivered`, `failure`, `pre-transit`, `transit`, `unknown`. |
+| FedEx | `latestStatusDetail.code` | Mapped from FedEx Track API v1. |
+
+---
+
+### POST /api/trackings/{trackingNumber}
+
+Tracks the shipment and dispatches a webhook when the normalised status has changed since the last poll. Returns the full tracking result plus notification outcome.
+
+#### Request body
+
+| Field | Type | Description | Required |
+|---|---|---|---|
+| `carrier` | string | Carrier key | Yes |
+| `previousStatus` | string | The normalised status last observed by the caller. A notification is only sent when the current status differs. | No |
+| `notifications` | object | Webhook configuration. When omitted, the endpoint behaves like `GET /api/trackings/{trackingNumber}`. | No |
+| `notifications.webhookUrl` | string | HTTPS endpoint that receives the payload | Yes (if notifications set) |
+| `notifications.webhookSecret` | string | HMAC-SHA256 signing secret — sent in `X-Signature: sha256=...` | No |
+| `notifications.events` | array | Filter which events trigger dispatch. Empty means all events. | No |
+
+`booked` and `unknown` statuses never trigger a webhook dispatch.
+
+```bash
+curl -X POST "http://localhost:8080/api/trackings/00073215400599388772" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "carrier": "postnord",
+    "previousStatus": "booked",
+    "notifications": {
+      "webhookUrl": "https://your-service.example.com/hooks/shipments",
+      "webhookSecret": "my-secret",
+      "events": ["delivered", "failed", "out_for_delivery"]
+    }
+  }'
+```
+
+---
+
+### POST /api/notifications
+
+Stateless webhook dispatch. The caller provides the shipment event and webhook configuration; the gateway dispatches and returns the full outcome. Nothing is stored server-side.
+
+Always returns `200 OK` — check `notificationsFailed` to detect delivery failures.
+
+#### Request body
+
+| Field | Type | Description | Required |
+|---|---|---|---|
+| `trackingNumber` | string | Shipment tracking number | Yes |
+| `carrier` | string | Carrier key | Yes |
+| `event` | string | Lifecycle event (`booked`, `picked_up`, `in_transit`, `out_for_delivery`, `delivered`, `failed`, `returned`, `delayed`) | Yes |
+| `estimatedDelivery` | string | Carrier ETA forwarded to the integrator | No |
+| `delayReason` | string | Set when `event` is `delayed` | No |
+| `notifications.webhook.url` | string | HTTPS endpoint | Yes |
+| `notifications.webhook.secret` | string | HMAC-SHA256 signing secret | No |
+| `notifications.webhook.events` | array | Event filter — empty means all | No |
+
+```bash
+curl -X POST http://localhost:8080/api/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trackingNumber": "00073215400599388772",
+    "carrier": "postnord",
+    "event": "delivered",
+    "notifications": {
+      "webhook": {
+        "url": "https://your-service.example.com/hooks/shipments",
+        "secret": "my-secret"
+      }
+    }
+  }'
+```
+
+Response:
+
+```json
+{
+  "notificationsSent": [
+    {
+      "event": "delivered",
+      "channel": "webhook",
+      "url": "https://your-service.example.com/hooks/shipments",
+      "status": "sent",
+      "timestamp": "2026-06-11T17:00:00Z"
+    }
+  ],
+  "notificationsFailed": []
+}
+```
 
 ---
 
@@ -405,6 +517,7 @@ curl "http://localhost:8080/api/trackings/00073215400599388772?carrier=postnord"
 | GLS | ✅ | ✅ | ✅ |
 | DAO | ✅ | — | — |
 | DHL | ✅ | — | — |
+| FedEx | ❌ | — | — |
 
 ```bash
 # Decode and save as PDF
@@ -439,6 +552,47 @@ curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord&
 
 ---
 
+## Webhook notifications
+
+The gateway supports event-driven webhook dispatch at three points:
+
+1. **At booking** — add a `notifications` block to the booking request; a `booked` event is dispatched after a successful booking.
+2. **At tracking** — use `POST /api/trackings/{trackingNumber}` with a `notifications` block; a notification is dispatched when `normalizedStatus` differs from `previousStatus`.
+3. **On demand** — `POST /api/notifications` dispatches a webhook for any event without requiring a booking or tracking call.
+
+#### Webhook payload
+
+The gateway POSTs JSON to your endpoint:
+
+```json
+{
+  "event": "delivered",
+  "shipmentId": "1234567890",
+  "trackingNumber": "00073215400599388772",
+  "carrier": "postnord",
+  "status": "delivered",
+  "previousStatus": "out_for_delivery",
+  "timestamp": "2026-06-11T17:00:00Z",
+  "estimatedDelivery": "2026-06-11"
+}
+```
+
+#### Security
+
+- Webhooks are only sent to `https://` endpoints — plain HTTP URLs are rejected.
+- When `webhookSecret` is set the payload is signed with HMAC-SHA256 and the signature is sent in the `X-Signature: sha256=<hex>` header.
+- The event name is also sent in `X-Event-Type` for quick routing without parsing the body.
+
+#### Event filter
+
+Set `events` to a non-empty array to receive only specific events. Supported values: `booked`, `picked_up`, `in_transit`, `out_for_delivery`, `delivered`, `failed`, `returned`, `delayed`. An empty array means all events are dispatched.
+
+#### Retry strategy
+
+`notificationsFailed` records in booking and tracking responses contain the full error. Retry them via `POST /api/notifications`. The gateway does not retry internally.
+
+---
+
 ## Idempotency
 
 Pass `idempotencyKey` in the request body (max 64 characters) to deduplicate bookings.
@@ -450,6 +604,7 @@ Pass `idempotencyKey` in the request body (max 64 characters) to deduplicate boo
 | GLS | No | Key logged; deduplication is your responsibility |
 | DAO | No | Key logged; deduplication is your responsibility |
 | DHL | No | Key logged as `sender.referenceNr`; deduplication is your responsibility |
+| FedEx | No | Key logged; deduplication is your responsibility |
 
 ---
 
@@ -561,7 +716,7 @@ In development (`LOG_ENV=development`), full request and response bodies are log
 ### Project structure
 
 ```
-logistics-gateway/
+carrier-gateway/
 ├── cmd/
 │   └── api/
 │       └── main.go
@@ -571,11 +726,13 @@ logistics-gateway/
 │   │   │                     # TrackingStatus constants, BookingResponse fields
 │   │   ├── addon.go          # hasAddOn / getAddOn helpers
 │   │   ├── status.go         # normalizeStatus — carrier raw → TrackingStatus mapping
+│   │   ├── customs.go        # Customs wire-format helpers
 │   │   ├── postnord.go
 │   │   ├── bring.go
 │   │   ├── gls.go
 │   │   ├── dao.go
 │   │   ├── dhl.go
+│   │   ├── fedex.go          # FedEx Ship/Track API — book, track, cancel
 │   │   ├── posti.go          # Demo — mock only
 │   │   ├── inpost.go         # Demo — mock only
 │   │   ├── mock_*.go
@@ -587,12 +744,17 @@ logistics-gateway/
 │   │   ├── cancellations.go
 │   │   ├── updates.go
 │   │   ├── labels.go
-│   │   ├── trackings.go
+│   │   ├── trackings.go      # GET + POST /api/trackings — track and notify
+│   │   ├── notifications.go  # POST /api/notifications — stateless webhook dispatch
 │   │   └── health.go
 │   ├── middleware/
 │   │   ├── request_id.go
 │   │   ├── idempotency.go
 │   │   └── logging.go
+│   ├── notification/
+│   │   ├── notification.go   # Event types, Payload, Preferences, Record
+│   │   ├── service.go        # Dispatch — fan-out to configured channels
+│   │   └── webhook.go        # HTTPSender — HTTPS enforcement, HMAC signing, X-Event-Type
 │   ├── router/
 │   │   └── router.go
 │   ├── logger/
@@ -602,6 +764,7 @@ logistics-gateway/
 │       ├── package.go        # Per-carrier weight, dimension, girth limits
 │       ├── idempotency.go    # Idempotency key rules
 │       ├── customs.go        # Cross-border, de minimis, VAT format, VIES live lookup
+│       ├── countries.go      # EU / European country sets
 │       └── restricted.go     # Per-carrier prohibited and restricted goods list
 ├── Dockerfile
 ├── go.mod
@@ -632,10 +795,11 @@ golangci-lint run
 1. Create `internal/adapter/{carrier}.go` implementing `CarrierAdapter`
 2. Create `internal/adapter/mock_{carrier}.go`
 3. Create `internal/adapter/{carrier}_test.go`
-4. Add the carrier block to `InitAdapters` in `adapter.go`
+4. Add the carrier block to `InitAdapters` in `adapter.go` (env vars + fallback to mock)
 5. Add status mappings in `status.go`
 6. Add restricted goods entries in `validation/restricted.go`
 7. Add a limits entry in `validation/package.go`
+8. Wire customs fields in `adapter/customs.go` if the carrier supports cross-border
 
 The handler, router, and validation layer require no other changes.
 

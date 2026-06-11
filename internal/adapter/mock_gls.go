@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -44,6 +45,24 @@ func (m *MockGLSAdapter) BookShipment(ctx context.Context, request BookingReques
 	}
 
 	zap.L().Info("MockGLSAdapter: returning mock booking response")
+
+	// Return shipments use the Shop Returns Customer Plus API v3.
+	// Mock a returnOrderId as ShipmentID and a trackId as TrackingNumber.
+	if strings.EqualFold(request.Shipment.DeliveryType, "return") {
+		trackID := fmt.Sprintf("GLS-RET-%09d", rand.Intn(1000000000)) //nolint:gosec // mock data
+		orderID := fmt.Sprintf("RO-%09d", rand.Intn(1000000000))       //nolint:gosec // mock data
+		colli := make([]ColliResponse, len(request.Shipment.Colli))
+		for i, c := range request.Shipment.Colli {
+			colli[i] = ColliResponse{ID: c.ID, TrackingNumber: trackID, Status: "booked"}
+		}
+		return &BookingResponse{
+			TrackingNumber: trackID,
+			ShipmentID:     orderID,
+			Carrier:        "gls",
+			Status:         "booked",
+			Colli:          colli,
+		}, nil
+	}
 
 	colliResponses := make([]ColliResponse, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {

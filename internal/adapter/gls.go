@@ -30,7 +30,8 @@ func (c *glsTokenCache) valid() bool {
 	return c.accessToken != "" && time.Now().Before(c.expiresAt.Add(-30*time.Second))
 }
 
-// GLSAdapter implements CarrierAdapter for GLS using the ShipIT Farm API v1.
+// GLSAdapter implements CarrierAdapter for GLS using the ShipIT Farm API v1
+// for outbound shipments and the Shop Returns Customer Plus API v3 for returns.
 // Authentication uses the OAuth2 client credentials flow.
 type GLSAdapter struct {
 	// ClientID is the GLS OAuth2 client ID (mapped from GLS_API_KEY env var).
@@ -38,22 +39,26 @@ type GLSAdapter struct {
 	// ClientSecret is the GLS OAuth2 client secret.
 	ClientSecret string
 	// ContactID is the GLS-assigned shipper contact ID sent on every booking.
-	ContactID  string
-	BaseURL    string
-	AuthURL    string
-	HTTPClient *http.Client
-	tokenCache glsTokenCache
-	log        *zap.Logger
+	ContactID string
+	// ReturnAppID is the GLS app-id path parameter for the Shop Returns API.
+	ReturnAppID    string
+	BaseURL        string
+	ReturnBaseURL  string
+	AuthURL        string
+	HTTPClient     *http.Client
+	tokenCache     glsTokenCache
+	log            *zap.Logger
 }
 
 // NewGLSAdapter creates a new GLSAdapter with the given credentials.
 func NewGLSAdapter(clientID, clientSecret, contactID string, log *zap.Logger) *GLSAdapter {
 	return &GLSAdapter{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		ContactID:    contactID,
-		BaseURL:      "https://api.gls-group.net/shipit-farm/v1/backend",
-		AuthURL:      "https://api.gls-group.net/oauth2/v2/token",
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
+		ContactID:     contactID,
+		BaseURL:       "https://api.gls-group.net/shipit-farm/v1/backend",
+		ReturnBaseURL: "https://api.gls-group.net/order-management/shop-returns/plus/v3",
+		AuthURL:       "https://api.gls-group.net/oauth2/v2/token",
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -177,7 +182,11 @@ func glsLabelFormat(f LabelFormat) (templateSet, labelFormat string) {
 
 // BookShipment books a shipment with GLS.
 //
-// Wire format notes:
+// When DeliveryType is "return", the request is routed to the GLS Shop Returns
+// Customer Plus API v3 via bookReturnShipment. All other delivery types use
+// the ShipIT Farm API v1.
+//
+// Wire format notes (outbound):
 //   - OAuth2 Bearer token fetched and cached before each request.
 //   - Content-Type: application/glsVersion1+json.
 //   - Endpoint: POST /rs/shipments.
@@ -186,6 +195,10 @@ func glsLabelFormat(f LabelFormat) (templateSet, labelFormat string) {
 func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
+	}
+
+	if strings.EqualFold(request.Shipment.DeliveryType, "return") {
+		return a.bookReturnShipment(ctx, request)
 	}
 
 	token, err := a.bearerToken(ctx)
@@ -233,10 +246,14 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 	// InfoService, FlexDelivery, and DirectSignature are not part of the GLS
 	// ShipIT API v1 ShipmentService schema and are rejected by the API.
-	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) ||
-		hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
-		return nil, notSupported("GLS", "SMS/email notification add-on",
+	// Note: email notification IS supported for return shipments via bookReturnShipment.
+	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) {
+		return nil, notSupported("GLS", "SMS notification add-on",
 			"not available in ShipIT API v1 ShipmentService schema")
+	}
+	if hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
+		return nil, notSupported("GLS", "email notification add-on",
+			"not available in ShipIT API v1 ShipmentService schema; use DeliveryType=return for return shipments with email")
 	}
 	if _, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
 		return nil, notSupported("GLS", "flex delivery add-on",
@@ -328,6 +345,166 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		Carrier:        "gls",
 		Status:         "booked",
 		Colli:          colliResponses,
+	}, nil
+}
+
+// glsReturnAddress is the address sub-object for GLS Shop Returns API v3.
+type glsReturnAddress struct {
+	Street      string `json:"street"`
+	ZipCode     string `json:"zipCode"`
+	City        string `json:"city"`
+	CountryCode string `json:"countryCode"`
+}
+
+// glsReturnSender is the sender (customer returning the parcel) for GLS Shop Returns API v3.
+type glsReturnSender struct {
+	PersonName string           `json:"personName"`
+	Email      string           `json:"email,omitempty"`
+	Address    glsReturnAddress `json:"address"`
+}
+
+// glsReturnReceiver is the receiver (merchant) for GLS Shop Returns API v3.
+type glsReturnReceiver struct {
+	CompanyName string           `json:"companyName"`
+	Address     glsReturnAddress `json:"address"`
+}
+
+// glsReturnConfirmationMail is the optional email notification for GLS Shop Returns API v3.
+type glsReturnConfirmationMail struct {
+	SendTo string `json:"sendTo"`
+}
+
+// glsReturnOptions holds optional settings for a GLS return order.
+type glsReturnOptions struct {
+	ConfirmationMail *glsReturnConfirmationMail `json:"confirmationMail,omitempty"`
+}
+
+// glsCreateReturnOrder is the POST body for GLS Shop Returns Customer Plus API v3.
+type glsCreateReturnOrder struct {
+	OriginalOrderReference string           `json:"originalOrderReference"`
+	ReturnReason           string           `json:"returnReason"`
+	Sender                 glsReturnSender  `json:"sender"`
+	Receiver               glsReturnReceiver `json:"receiver"`
+	LabelFormat            string           `json:"labelFormat,omitempty"`
+	Options                *glsReturnOptions `json:"options,omitempty"`
+}
+
+// bookReturnShipment calls the GLS Shop Returns Customer Plus API v3
+// (POST /{app-id}/return-orders/label). The sender/receiver roles are inverted
+// compared to outbound: the customer (our Receiver) returns to the merchant (our Sender).
+func (a *GLSAdapter) bookReturnShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
+	if a.ReturnAppID == "" {
+		return nil, fmt.Errorf("gls return: ReturnAppID must be configured")
+	}
+
+	token, err := a.bearerToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gls return: obtain bearer token: %w", err)
+	}
+
+	orderRef := ""
+	if len(request.Shipment.Colli) > 0 {
+		orderRef = request.Shipment.Colli[0].ID
+	}
+
+	_, labelFmt := glsLabelFormat(LabelFormatPDF)
+
+	body := glsCreateReturnOrder{
+		OriginalOrderReference: orderRef,
+		ReturnReason:           "OTHER",
+		Sender: glsReturnSender{
+			PersonName: request.Shipment.Receiver.Name,
+			Email:      request.Shipment.Receiver.Email,
+			Address: glsReturnAddress{
+				Street:      request.Shipment.Receiver.Street,
+				ZipCode:     request.Shipment.Receiver.PostalCode,
+				City:        request.Shipment.Receiver.City,
+				CountryCode: request.Shipment.Receiver.Country,
+			},
+		},
+		Receiver: glsReturnReceiver{
+			CompanyName: request.Shipment.Sender.Name,
+			Address: glsReturnAddress{
+				Street:      request.Shipment.Sender.Street,
+				ZipCode:     request.Shipment.Sender.PostalCode,
+				City:        request.Shipment.Sender.City,
+				CountryCode: request.Shipment.Sender.Country,
+			},
+		},
+		LabelFormat: strings.ToLower(labelFmt), // API expects lowercase: "pdf", "zpl"
+	}
+
+	// Map AddOnEmailNotification → options.confirmationMail.sendTo.
+	if hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
+		email := request.Shipment.Receiver.Email
+		if email != "" {
+			body.Options = &glsReturnOptions{
+				ConfirmationMail: &glsReturnConfirmationMail{SendTo: email},
+			}
+		}
+	}
+
+	payloadBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("gls return: marshal request: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/%s/return-orders/label", a.ReturnBaseURL, a.ReturnAppID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("gls return: create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := a.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("gls return: http request: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body) //nolint:errcheck
+		return nil, fmt.Errorf("gls return: carrier returned %d: %s", resp.StatusCode, string(b))
+	}
+
+	var glsResp struct {
+		ReturnOrderID string `json:"returnOrderId"`
+		References    struct {
+			TrackID  string `json:"trackId"`
+			ParcelID string `json:"parcelId"`
+		} `json:"references"`
+		Label struct {
+			ContentType string `json:"contentType"`
+			Content     string `json:"content"` // base64
+		} `json:"label"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&glsResp); err != nil {
+		return nil, fmt.Errorf("gls return: decode response: %w", err)
+	}
+
+	a.log.Info("gls return shipment booked",
+		zap.String("returnOrderID", glsResp.ReturnOrderID),
+		zap.String("trackID", glsResp.References.TrackID),
+		zap.Int("labelBytes", len(glsResp.Label.Content)),
+	)
+
+	colli := make([]ColliResponse, len(request.Shipment.Colli))
+	for i := range request.Shipment.Colli {
+		colli[i] = ColliResponse{
+			ID:             request.Shipment.Colli[i].ID,
+			TrackingNumber: glsResp.References.TrackID,
+			Status:         "booked",
+		}
+	}
+
+	return &BookingResponse{
+		TrackingNumber: glsResp.References.TrackID,
+		ShipmentID:     glsResp.ReturnOrderID,
+		Carrier:        "gls",
+		Status:         "booked",
+		Colli:          colli,
 	}, nil
 }
 

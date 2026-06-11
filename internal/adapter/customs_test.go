@@ -79,10 +79,11 @@ func TestBuildGLSLineItems_FromItems(t *testing.T) {
 	items := buildGLSLineItems(c)
 	require.Len(t, items, 2)
 	assert.Equal(t, "61091000", items[0].CommodityCode)
+	assert.Equal(t, "T-shirts", items[0].GoodsDescription)
 	assert.Equal(t, "CN", items[0].CountryOfOrigin)
 	assert.Equal(t, 100.0, items[0].ValueInInvoiceCurrency)
-	assert.Equal(t, "DKK", items[0].InvoiceCurrency)
-	assert.Equal(t, 2, items[0].Quantity)
+	assert.Equal(t, float64(2), items[0].Quantity.Amount)
+	assert.Equal(t, "PCE", items[0].Quantity.Unit)
 }
 
 func TestBuildGLSLineItems_FallbackToTopLevel(t *testing.T) {
@@ -103,7 +104,7 @@ func TestBuildGLSLineItems_FallbackToTopLevel(t *testing.T) {
 func TestBuildGLSLineItems_CurrencyFallback(t *testing.T) {
 	t.Parallel()
 
-	// Item has no Currency — should fall back to Customs.CustomsCurrency.
+	// Item has no Currency — ValueInInvoiceCurrency is still set from the item value.
 	c := Customs{
 		CustomsCurrency: "EUR",
 		Items: []CustomsItem{
@@ -112,7 +113,8 @@ func TestBuildGLSLineItems_CurrencyFallback(t *testing.T) {
 	}
 	items := buildGLSLineItems(c)
 	require.Len(t, items, 1)
-	assert.Equal(t, "EUR", items[0].InvoiceCurrency)
+	assert.Equal(t, 100.0, items[0].ValueInInvoiceCurrency)
+	assert.Equal(t, float64(1), items[0].Quantity.Amount)
 }
 
 // ─── buildPostNordItems ───────────────────────────────────────────────────────
@@ -186,11 +188,11 @@ func TestBuildPostNordItems_CurrencyFallback(t *testing.T) {
 func TestGLSIncotermCode(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, 10, glsIncotermCode("DDP"))
-	assert.Equal(t, 20, glsIncotermCode("DAP"))
-	assert.Equal(t, 20, glsIncotermCode("FOB"))  // unmapped → DAP
-	assert.Equal(t, 20, glsIncotermCode("EXW"))  // unmapped → DAP
-	assert.Equal(t, 20, glsIncotermCode(""))
+	assert.Equal(t, "10", glsIncotermCode("DDP"))
+	assert.Equal(t, "20", glsIncotermCode("DAP"))
+	assert.Equal(t, "20", glsIncotermCode("FOB")) // unmapped → DAP
+	assert.Equal(t, "20", glsIncotermCode("EXW")) // unmapped → DAP
+	assert.Equal(t, "20", glsIncotermCode(""))
 }
 
 // ─── dhlIncoterms ────────────────────────────────────────────────────────────
@@ -328,8 +330,7 @@ func TestGLSAdapter_SubmitCustoms_Success(t *testing.T) {
 		assert.Equal(t, "Bearer gls-token", r.Header.Get("Authorization"))
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"consignmentId": "GLS-CUSTOMS-001",
-			"status":        "created",
+			"key": "GLS-CUSTOMS-001",
 		})
 	}))
 	defer server.Close()

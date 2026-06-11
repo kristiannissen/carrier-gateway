@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // =========================================================================
@@ -411,8 +412,8 @@ func TestGLSAdapter_BookShipment_UnsupportedAddOns(t *testing.T) {
 		addOn  AddOn
 		errMsg string
 	}{
-		{"sms notification", AddOn{Type: AddOnSMSNotification}, "SMS/email notification add-on"},
-		{"email notification", AddOn{Type: AddOnEmailNotification}, "SMS/email notification add-on"},
+		{"sms notification", AddOn{Type: AddOnSMSNotification}, "SMS notification add-on"},
+		{"email notification outbound", AddOn{Type: AddOnEmailNotification}, "email notification add-on"},
 		{"flex delivery", AddOn{Type: AddOnFlexDelivery}, "flex delivery add-on"},
 		{"signature required", AddOn{Type: AddOnSignatureRequired}, "signature required add-on"},
 	}
@@ -602,4 +603,162 @@ func glsTestColli(id string, weightKg float64) Colli {
 		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
 		Items:      []Item{{Description: "Sports goods", Weight: weightKg, Quantity: 1}},
 	}
+}
+
+// =========================================================================
+// Return shipment tests
+// =========================================================================
+
+// newGLSReturnTestServer starts an httptest.Server for the GLS Shop Returns
+// Customer Plus API v3. Captures the return-order request body.
+func newGLSReturnTestServer(t *testing.T, appID string) (*GLSAdapter, *map[string]interface{}) {
+	t.Helper()
+
+	var captured map[string]interface{}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600}`))
+			return
+		}
+		raw, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(raw, &captured))
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{
+			"returnOrderId": "RO-12345",
+			"references": {"trackId": "GLS-RET-9999", "parcelId": "P-001"},
+			"label": {"contentType": "application/pdf", "content": "JVBERi0xLjQ="}
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	log, _ := zap.NewDevelopment()
+	adapter := &GLSAdapter{
+		ClientID:      "test-client",
+		ClientSecret:  "test-secret",
+		ContactID:     "test-contact-id",
+		ReturnAppID:   appID,
+		BaseURL:       srv.URL,
+		ReturnBaseURL: srv.URL,
+		AuthURL:       srv.URL + "/oauth2/v2/token",
+		HTTPClient:    srv.Client(),
+		log:           log,
+	}
+	return adapter, &captured
+}
+
+func TestGLSAdapter_BookShipment_Return_PayloadShape(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newGLSReturnTestServer(t, "APP-42")
+
+	req := BookingRequest{
+		Carrier: "gls",
+		Shipment: Shipment{
+			DeliveryType: "return",
+			Sender:       glsTestSender(),
+			Receiver: Address{
+				Name:       "Returning Customer",
+				Street:     "Storgatan",
+				HouseNumber: "1",
+				City:       "Stockholm",
+				PostalCode: "111 22",
+				Country:    "SE",
+				Email:      "customer@example.com",
+			},
+			TotalWeight: 2.0,
+			Colli:       []Colli{glsTestColli("order-ref-001", 2.0)},
+		},
+	}
+
+	resp, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+
+	// Response fields
+	assert.Equal(t, "GLS-RET-9999", resp.TrackingNumber)
+	assert.Equal(t, "RO-12345", resp.ShipmentID)
+	assert.Equal(t, "gls", resp.Carrier)
+	assert.Equal(t, "booked", resp.Status)
+
+	// Payload shape
+	payload := *captured
+
+	// originalOrderReference must come from the first colli ID
+	assert.Equal(t, "order-ref-001", payload["originalOrderReference"])
+	assert.Equal(t, "OTHER", payload["returnReason"])
+
+	// Sender is the customer (our Receiver) returning the parcel
+	sender := payload["sender"].(map[string]interface{})
+	assert.Equal(t, "Returning Customer", sender["personName"])
+	addr := sender["address"].(map[string]interface{})
+	assert.Equal(t, "Storgatan", addr["street"])
+	assert.Equal(t, "111 22", addr["zipCode"])
+	assert.Equal(t, "SE", addr["countryCode"])
+
+	// Receiver is the merchant (our Sender)
+	receiver := payload["receiver"].(map[string]interface{})
+	assert.Equal(t, "Unisport Group", receiver["companyName"])
+	recvAddr := receiver["address"].(map[string]interface{})
+	assert.Equal(t, "DK", recvAddr["countryCode"])
+
+	// Label format must be lowercase
+	assert.Equal(t, "pdf", payload["labelFormat"])
+}
+
+func TestGLSAdapter_BookShipment_Return_EmailNotification(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newGLSReturnTestServer(t, "APP-42")
+
+	req := BookingRequest{
+		Carrier: "gls",
+		Shipment: Shipment{
+			DeliveryType: "return",
+			Sender:       glsTestSender(),
+			Receiver: Address{
+				Name:       "Customer",
+				Street:     "Storgatan",
+				HouseNumber: "1",
+				City:       "Stockholm",
+				PostalCode: "111 22",
+				Country:    "SE",
+				Email:      "notify@example.com",
+			},
+			TotalWeight: 1.0,
+			Colli:       []Colli{glsTestColli("ref-002", 1.0)},
+			AddOns:      []AddOn{{Type: AddOnEmailNotification}},
+		},
+	}
+
+	_, err := adapter.BookShipment(t.Context(), req)
+	require.NoError(t, err)
+
+	payload := *captured
+	opts, ok := payload["options"].(map[string]interface{})
+	require.True(t, ok, "options must be present when AddOnEmailNotification is set")
+	mail := opts["confirmationMail"].(map[string]interface{})
+	assert.Equal(t, "notify@example.com", mail["sendTo"])
+}
+
+func TestGLSAdapter_BookShipment_Return_MissingAppID(t *testing.T) {
+	t.Parallel()
+
+	adapter, _ := newGLSReturnTestServer(t, "") // empty ReturnAppID
+
+	req := BookingRequest{
+		Carrier: "gls",
+		Shipment: Shipment{
+			DeliveryType: "return",
+			Sender:       glsTestSender(),
+			Receiver:     glsTestReceiver(),
+			TotalWeight:  1.0,
+			Colli:        []Colli{glsTestColli("ref-003", 1.0)},
+		},
+	}
+
+	_, err := adapter.BookShipment(t.Context(), req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "ReturnAppID must be configured")
 }
