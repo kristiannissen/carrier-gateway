@@ -124,6 +124,20 @@ func bringPackage(c Colli) map[string]interface{} {
 //   - Service point: pickupPointId placed directly on recipient block.
 //   - Response tracking number at consignments[0].confirmation.consignmentNumber.
 //   - Label URL at consignments[0].confirmation.links.labels.
+//
+// Push notifications:
+//
+// Bring supports push-based event delivery via the Event Cast API
+// (https://api.bring.com/event-cast/api-docs). Callers that want real-time
+// status updates without polling TrackShipment should register their own
+// Event Cast webhook directly with Bring after booking:
+//
+//	POST https://api.bring.com/event-cast/api/v1/webhooks
+//	{ "trackingId": "<consignmentNumber>", "event_groups": ["DELIVERED", ...],
+//	  "configuration": { "url": "<caller webhook URL>", ... } }
+//
+// Webhooks are active for 30 days or until delivery. The gateway does not
+// register or proxy Event Cast subscriptions — that is the caller's responsibility.
 func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error) {
 	if len(request.Shipment.Colli) == 0 {
 		return nil, fmt.Errorf("shipment must contain at least one colli")
@@ -382,7 +396,10 @@ func (a *BringAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*Label
 }
 
 // TrackShipment retrieves the tracking status for a Bring shipment.
-// Uses GET /tracking/api/v2/tracking.json?q={trackingNumber}.
+// Uses GET /tracking/api/v2/tracking.json?q={trackingNumber}&lang=en.
+//
+// The v2 response does not include a package-level statusId field. The
+// top-level status is derived from the most recent event in eventSet[0].
 func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -391,7 +408,7 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		fmt.Sprintf("%s/tracking/api/v2/tracking.json?q=%s", a.BaseURL, trackingNumber),
+		fmt.Sprintf("%s/tracking/api/v2/tracking.json?q=%s&lang=en", a.BaseURL, trackingNumber),
 		nil,
 	)
 	if err != nil {
@@ -400,6 +417,7 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-MyBring-API-Uid", a.CustomerID)
 	req.Header.Set("X-MyBring-API-Key", a.APIKey)
+	req.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/carrier-gateway")
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
@@ -420,7 +438,6 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 		ConsignmentSet []struct {
 			ConsignmentID string `json:"consignmentId"`
 			PackageSet    []struct {
-				StatusID          string `json:"statusId"`
 				StatusDescription string `json:"statusDescription"`
 				EventSet          []struct {
 					Description string `json:"description"`
@@ -446,11 +463,6 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 
 	if len(consignment.PackageSet) > 0 {
 		pkg := consignment.PackageSet[0]
-		statusID := pkg.StatusID
-		status = pkg.StatusDescription
-		if status == "" {
-			status = statusID
-		}
 		for _, e := range pkg.EventSet {
 			location := e.City
 			if e.CountryCode != "" {
@@ -464,14 +476,23 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 				Details:          e.Description,
 			})
 		}
+		// Status is the human-readable description for backward compatibility.
+		// The v2 API does not include a package-level statusId; the event code
+		// from the most recent event is the authoritative value for normalization.
+		if pkg.StatusDescription != "" {
+			status = pkg.StatusDescription
+		} else if len(events) > 0 {
+			status = events[0].Status
+		}
 	}
 
-	normalizedStatus := StatusUnknown
-	originalStatus := ""
-	if len(consignment.PackageSet) > 0 {
-		originalStatus = consignment.PackageSet[0].StatusID
-		normalizedStatus = normalizeStatus("bring", originalStatus)
+	// originalStatus is the event code from the most recent event — used for
+	// normalization. Falls back to status when there are no events.
+	originalStatus := status
+	if len(events) > 0 {
+		originalStatus = events[0].Status
 	}
+	normalizedStatus := normalizeStatus("bring", originalStatus)
 
 	return &TrackingResponse{
 		TrackingNumber:   consignment.ConsignmentID,

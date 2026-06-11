@@ -522,6 +522,7 @@ func TestBringAdapter_TrackShipment_RequestShape(t *testing.T) {
 		capturedURL = r.URL.String()
 		assert.Equal(t, "test@example.com", r.Header.Get("X-MyBring-API-Uid"))
 		assert.Equal(t, "test-key", r.Header.Get("X-MyBring-API-Key"))
+		assert.NotEmpty(t, r.Header.Get("X-Bring-Client-URL"))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(bringMockTrackingResponse()))
 	}))
@@ -538,9 +539,10 @@ func TestBringAdapter_TrackShipment_RequestShape(t *testing.T) {
 	resp, err := adapter.TrackShipment(t.Context(), "BREG00012345678DK")
 	require.NoError(t, err)
 
-	// Correct endpoint
+	// Correct endpoint with version and language pinned
 	assert.Contains(t, capturedURL, "/tracking/api/v2/tracking.json")
 	assert.Contains(t, capturedURL, "q=BREG00012345678DK")
+	assert.Contains(t, capturedURL, "lang=en")
 
 	assert.Equal(t, "BREG00012345678DK", resp.TrackingNumber)
 	assert.Equal(t, "The package is in transit", resp.Status)
