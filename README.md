@@ -10,7 +10,7 @@ A stateless Go microservice for booking, tracking, and returning shipments acros
 |---|---|---|---|---|---|---|---|
 | `postnord` | PostNord | DK, SE, NO, FI | ✅ | ✅ | ✅ | PDF, ZPL, ZPLGK | Production |
 | `bring` | Bring | NO, SE, DK, FI | ✅ | ✅ | ✅ | PDF | Production |
-| `gls` | GLS | DK, SE, DE, NL, and more | ✅ | ✅ | ❌ | PDF, ZPL, ZPLGK | Production |
+| `gls` | GLS | DK, SE, DE, NL, and more | ✅ | ✅ | ✅ | PDF, ZPL, ZPLGK | Production |
 | `dao` | DAO | DK | ✅ | ✅ | ✅ | PDF | Beta |
 | `dhl` | DHL eCommerce Europe | 28 European countries | ✅ | ✅ | ✅ | PDF | Beta |
 | `fedex` | FedEx | US, EU, and more | ✅ | ✅ | ❌ | — | Beta |
@@ -191,11 +191,20 @@ Books a shipment with the specified carrier.
       "labelUrl": "JVBERi0xLj...",
       "status": "booked"
     }
-  ],
-  "addOnWarnings": [],
-  "customsWarnings": [],
-  "notificationsSent": [],
-  "notificationsFailed": []
+  ]
+}
+```
+
+All optional fields are omitted when empty. A cross-border shipment with warnings and notifications would additionally include:
+
+```json
+{
+  "addOnWarnings": ["sms_notification could not be applied — DAO contact update failed"],
+  "customsWarnings": ["PostNord: incoterms not forwarded — wire format pending"],
+  "notificationsSent": [{ "event": "booked", "channel": "webhook", "url": "https://...", "status": "sent", "timestamp": "2026-06-11T17:00:00Z" }],
+  "notificationsFailed": [],
+  "cnFormType": "CN23",
+  "cnDocument": "Q1VTVE9NUy..."
 }
 ```
 
@@ -206,6 +215,8 @@ Books a shipment with the specified carrier.
 `customsWarnings` is populated when customs data was validated but could not be forwarded to the carrier's wire format (carrier documentation pending), or when a VIES VAT lookup was unavailable and format-only validation was used instead.
 
 `notificationsSent` and `notificationsFailed` are populated when a `notifications` block was provided in the request. Failed records should be retried via `POST /api/notifications`.
+
+`cnFormType` is `"CN22"` or `"CN23"` when a customs declaration was auto-generated. `cnDocument` is the base64-encoded plain-text form ready for printing. Both fields are only present for cross-border non-EU shipments with a customs block.
 
 For PostNord and GLS the label is returned inline as base64 in `colli[0].labelUrl`. For Bring a URL is returned. For DAO labels are fetched separately via `GET /api/labels`.
 
@@ -278,7 +289,7 @@ Set `deliveryType: "return"`. Provide `sender` as the customer returning the par
 |---|---|---|
 | PostNord | Separate endpoint `/rest/shipment/v3/returns/edi/labels/pdf` | Yes — `returnFunctionality: "labelless"`, QR code sent via SMS/email add-on |
 | Bring | `returnProduct.id: "9350"` added to standard booking | No |
-| GLS | ❌ Not supported | — |
+| GLS | GLS Shop Returns Customer Plus API v3 — `/{app-id}/return-orders/label` | No |
 | DAO | Separate endpoint `/DAOPakkeshop/returordre.php` | Yes — `returnFunctionality: "labelless"` (default), code returned in `colli[0].labelUrl` |
 | DHL | `product: "ParcelEurope.return.network"` | Yes — `returnFunctionality: "labelless"`, QR code as base64 PNG (BE, BG, DE, ES, LU, PL, PT, SE only) |
 
@@ -379,15 +390,13 @@ curl "http://localhost:8080/api/trackings/00073215400599388772?carrier=postnord"
       "location": "Copenhagen, DK",
       "details": "Shipment registered"
     }
-  ],
-  "notificationsSent": [],
-  "notificationsFailed": []
+  ]
 }
 ```
 
 `status` is the raw carrier-specific string preserved for backward compatibility. `normalizedStatus` is a consistent value across all carriers.
 
-`notificationsSent` and `notificationsFailed` are only present when the request was made via `POST /api/trackings/{trackingNumber}` with a `notifications` block and a status change was detected.
+`notificationsSent` and `notificationsFailed` are only present when using `POST /api/trackings/{trackingNumber}` with a `notifications` block and a status change was detected.
 
 #### Normalized status values
 
@@ -541,14 +550,17 @@ curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord&
   "carriers": {
     "postnord": "production",
     "bring": "production",
-    "gls": "mock",
-    "dao": "mock",
-    "dhl": "mock",
-    "posti": "mock",
-    "inpost": "mock"
+    "gls": "production",
+    "dao": "beta",
+    "dhl": "beta",
+    "fedex": "beta",
+    "posti": "production",
+    "inpost": "production"
   }
 }
 ```
+
+When `MOCK_MODE=true` all carriers report `"mock"` regardless of their beta status.
 
 ---
 
@@ -669,6 +681,36 @@ VAT numbers are validated against known format rules for DK, SE, FI, NO, DE, FR,
 
 VIES lookups are non-blocking: if VIES is unavailable or times out (2 second hard limit), the booking proceeds with format-only validation and a `customsWarnings` entry is added to the response. Both importer and exporter VAT numbers are checked in parallel so the total overhead is one round trip, not two. Non-EU VAT numbers (NO, GB, CH etc.) are never sent to VIES.
 
+#### Carrier-specific customs rules
+
+Pre-flight validation enforces per-carrier constraints before the booking reaches the carrier API:
+
+| Carrier | Max line items | EORI/VAT required for non-EU |
+|---|---|---|
+| DHL | 99 | Yes — `exporterVatNumber` required |
+| PostNord | 5 | No |
+| GLS | No limit (server-side validation) | No |
+| Others | No limit enforced pre-flight | No |
+
+Exceeding the item limit returns a `400` with an error message asking you to split the shipment.
+
+#### CN22/CN23 customs declaration forms
+
+For cross-border non-EU shipments with a customs block, the gateway auto-generates a CN22 or CN23 form after a successful booking:
+
+- **CN22** — for shipments with a total declared value ≤ €22 and `customsCurrency: "EUR"`
+- **CN23** — for all other cross-border non-EU shipments
+
+The form is returned as `cnDocument` (base64-encoded plain text) and `cnFormType` in the booking response. Print it and attach it to the outside of the parcel alongside the shipping label.
+
+```bash
+# Decode and save the CN23 form
+curl -s -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{ ... }' \
+  | jq -r '.cnDocument' | base64 -d > customs-declaration.txt
+```
+
 #### Customs wire format support per carrier
 
 DHL forwards `incoterms`, `hsCode`, `countryOfOrigin`, `customsValue`, and `customsCurrency` into the cPAN booking payload. PostNord, Bring, and GLS customs wire format fields are pending carrier documentation — validated customs data is accepted and logged but not forwarded; a `customsWarnings` entry describes which fields were not sent.
@@ -702,6 +744,8 @@ The gateway validates item descriptions against a per-carrier prohibited and res
 | DAO | Alcohol (age verification compliance required) |
 
 Item matching is case-insensitive substring matching against `colli[].items[].description`.
+
+In addition to carrier rules, the gateway also checks **destination country restrictions**. Certain goods are blocked or warned based on the receiver country regardless of carrier — for example, some countries prohibit specific categories of goods by import law. Destination-level blocks return a `400`; destination-level warnings populate `customsWarnings` in the response.
 
 ---
 
@@ -751,6 +795,8 @@ carrier-gateway/
 │   │   ├── request_id.go
 │   │   ├── idempotency.go
 │   │   └── logging.go
+│   ├── customs/
+│   │   └── cn_forms.go       # Stateless CN22/CN23 form generation
 │   ├── notification/
 │   │   ├── notification.go   # Event types, Payload, Preferences, Record
 │   │   ├── service.go        # Dispatch — fan-out to configured channels
@@ -763,9 +809,10 @@ carrier-gateway/
 │       ├── address.go        # Postal codes, house number, state/province rules
 │       ├── package.go        # Per-carrier weight, dimension, girth limits
 │       ├── idempotency.go    # Idempotency key rules
-│       ├── customs.go        # Cross-border, de minimis, VAT format, VIES live lookup
-│       ├── countries.go      # EU / European country sets
-│       └── restricted.go     # Per-carrier prohibited and restricted goods list
+│       ├── customs.go          # Cross-border, de minimis, VAT format, VIES live lookup
+│       ├── carrier_customs.go  # Per-carrier item limits and EORI requirements
+│       ├── countries.go        # EU / European country sets
+│       └── restricted.go       # Per-carrier and per-destination prohibited goods
 ├── Dockerfile
 ├── go.mod
 ├── go.sum
@@ -800,6 +847,7 @@ golangci-lint run
 6. Add restricted goods entries in `validation/restricted.go`
 7. Add a limits entry in `validation/package.go`
 8. Wire customs fields in `adapter/customs.go` if the carrier supports cross-border
+9. Add a `carrierCustomsRules` entry in `validation/carrier_customs.go` with item limits and EORI requirements
 
 The handler, router, and validation layer require no other changes.
 
