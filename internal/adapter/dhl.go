@@ -186,11 +186,12 @@ func (a *DHLAdapter) dhlSenderBlock(addr Address) map[string]interface{} {
 }
 
 // dhlRecipientBlock builds the cPAN recipient address block.
+// The DHL eConnect spec defines recipient as an array (maxItems: 2).
 // Service point delivery uses an array with accesspoint + doorstep entries.
 // The accesspoint entry requires the literal "accesspoint" as street1 and the
 // service point ID as street1Nr, per DHL eConnect spec.
-// Home/business delivery uses a single doorstep object.
-func dhlRecipientBlock(addr Address, deliveryType string) interface{} {
+// Home/business delivery uses a single-element array containing a doorstep object.
+func dhlRecipientBlock(addr Address, deliveryType string) []interface{} {
 	hasServicePoint := addr.ServicePointID != ""
 
 	if hasServicePoint {
@@ -251,7 +252,7 @@ func dhlRecipientBlock(addr Address, deliveryType string) interface{} {
 	if addr.Supplement != "" {
 		base["street2"] = addr.Supplement
 	}
-	return base
+	return []interface{}{base}
 }
 
 // dhlPhysicalFeatures builds the features.physical block.
@@ -364,18 +365,19 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		}
 	}
 
+	// DHL eConnect spec defines cPAN.addresses.sender and .recipient as arrays.
+	senderBlock := a.dhlSenderBlock(request.Shipment.Sender)
+	// Customer reference number goes on the sender entry.
+	if request.IdempotencyKey != "" {
+		senderBlock["referenceNr"] = request.IdempotencyKey
+	}
+
 	cPAN := map[string]interface{}{
 		"addresses": map[string]interface{}{
-			"sender":    a.dhlSenderBlock(request.Shipment.Sender),
+			"sender":    []interface{}{senderBlock},
 			"recipient": dhlRecipientBlock(request.Shipment.Receiver, request.Shipment.DeliveryType),
 		},
 		"features": features,
-	}
-
-	// Customer reference number.
-	if request.IdempotencyKey != "" {
-		sender := cPAN["addresses"].(map[string]interface{})["sender"].(map[string]interface{})
-		sender["referenceNr"] = request.IdempotencyKey
 	}
 
 	general := map[string]interface{}{

@@ -250,7 +250,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		a.BaseURL+"/booking/api/create",
+		a.BaseURL+"/booking/api/shipment",
 		bytes.NewBuffer(payloadBytes),
 	)
 	if err != nil {
@@ -328,7 +328,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	return result, nil
 }
 
-// CancelShipment cancels a Bring shipment via DELETE /booking/api/create/{consignmentNumber}.
+// CancelShipment cancels a Bring shipment via DELETE /booking/api/shipment/{consignmentNumber}.
 // The shipment must not yet have been collected by Bring.
 func (a *BringAdapter) CancelShipment(ctx context.Context, trackingNumber string) (*CancelResponse, error) {
 	if trackingNumber == "" {
@@ -336,7 +336,7 @@ func (a *BringAdapter) CancelShipment(ctx context.Context, trackingNumber string
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
-		fmt.Sprintf("%s/booking/api/create/%s", a.BaseURL, trackingNumber), nil)
+		fmt.Sprintf("%s/booking/api/shipment/%s", a.BaseURL, trackingNumber), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Bring cancel request: %w", err)
 	}

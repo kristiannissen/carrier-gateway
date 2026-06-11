@@ -428,7 +428,7 @@ func TestBringAdapter_BookShipment_Endpoint(t *testing.T) {
 	}
 	_, err := adapter.BookShipment(t.Context(), bringMinimalRequest())
 	require.NoError(t, err)
-	assert.Equal(t, "/booking/api/create", capturedPath)
+	assert.Equal(t, "/booking/api/shipment", capturedPath)
 }
 
 func TestBringAdapter_BookShipment_ServicePoint(t *testing.T) {
