@@ -184,8 +184,11 @@ var capabilities = map[string]carrierCapabilities{
 	"gls":      {NativeIdempotency: false, SupportsCancellation: false, SupportsUpdate: false},
 	"dao":      {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: true},
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	"posti":    {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
-	"inpost":   {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
+	"posti":  {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
+	"inpost": {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
+	// FedEx: cancellation is supported via PUT /ship/v1/shipments/cancel.
+	// Full capabilities will be confirmed once the Ship and Track API specs are available.
+	"fedex": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -330,6 +333,24 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	default:
 		adapters["inpost"] = NewInPostAdapter(inpostAPIKey, log)
 		log.Info("InPost adapter initialized in production mode")
+	}
+
+	fedexClientID := os.Getenv("FEDEX_CLIENT_ID")
+	fedexClientSecret := os.Getenv("FEDEX_CLIENT_SECRET")
+	fedexAccountNumber := os.Getenv("FEDEX_ACCOUNT_NUMBER")
+	switch {
+	case mockMode:
+		adapters["fedex"] = &MockFedExAdapter{}
+		log.Info("FedEx adapter initialized in mock mode (MOCK_MODE=true)")
+	case fedexClientID == "" || fedexClientSecret == "":
+		adapters["fedex"] = &MockFedExAdapter{}
+		log.Warn("FedEx adapter falling back to mock mode (FEDEX_CLIENT_ID or FEDEX_CLIENT_SECRET not set)")
+	default:
+		a := NewFedExAdapter(fedexClientID, fedexClientSecret, fedexAccountNumber, log)
+		adapters["fedex"] = a
+		log.Info("FedEx adapter initialized (beta — Ship/Track/Cancel API integration pending)",
+			zap.String("baseURL", a.BaseURL),
+		)
 	}
 
 	return adapters

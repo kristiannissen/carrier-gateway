@@ -96,6 +96,25 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"transit":     StatusInTransit,
 		"unknown":     StatusUnknown,
 	},
+
+	"fedex": {
+		// Sourced from FedEx Track API v1 spec (fedex_track.json).
+		// Keys are derivedStatusCode / eventType values from ScanEvent.
+		// FedEx does not publish a complete public enum; these codes are
+		// confirmed in the spec examples and field descriptions.
+		"OC": StatusBooked,         // Shipment information sent to FedEx
+		"PU": StatusPickedUp,       // Picked up
+		"AR": StatusInTransit,      // Arrived at FedEx location
+		"DP": StatusInTransit,      // Departed FedEx location
+		"IT": StatusInTransit,      // In transit
+		"OD": StatusOutForDelivery, // On FedEx vehicle for delivery
+		"DE": StatusDelivered,      // Delivered
+		"DL": StatusFailed,         // Delivery exception
+		"SE": StatusFailed,         // Shipment exception
+		"CA": StatusFailed,         // Cancelled
+		"RS": StatusReturned,       // Return to sender/shipper
+		"HL": StatusInTransit,      // At FedEx facility (hold)
+	},
 }
 
 // normalizeStatus maps a carrier-specific raw status string to a TrackingStatus.
