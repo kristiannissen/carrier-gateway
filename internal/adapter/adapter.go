@@ -615,6 +615,14 @@ type BookingResponse struct {
 	// yet support them. The shipment is booked; customs data must be submitted
 	// manually or via the carrier's own portal.
 	CustomsWarnings []string `json:"customsWarnings,omitempty"`
+	// CNFormType is "CN22" or "CN23" indicating the type of customs declaration
+	// form generated for this shipment. Empty when no form was generated (e.g.
+	// intra-EU shipments below de minimis).
+	CNFormType string `json:"cnFormType,omitempty"`
+	// CNDocument is the base64-encoded plain-text CN22 or CN23 customs
+	// declaration form generated on-demand at booking time. Decode and print
+	// for physical attachment to the parcel, or submit via the carrier portal.
+	CNDocument string `json:"cnDocument,omitempty"`
 	// NotificationsSent lists notifications that were successfully dispatched
 	// at booking time. Callers may store this for auditing.
 	NotificationsSent []NotificationRecord `json:"notificationsSent,omitempty"`

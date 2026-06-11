@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/kristiannissen/carrier-gateway/internal/adapter"
+	"github.com/kristiannissen/carrier-gateway/internal/customs"
 	"github.com/kristiannissen/carrier-gateway/internal/notification"
 	"github.com/kristiannissen/carrier-gateway/internal/parser"
 	"github.com/kristiannissen/carrier-gateway/internal/validation"
@@ -61,8 +63,23 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		)
 	}
 
-	// Restricted items check — block hard-prohibited goods before hitting the carrier.
+	// Carrier-specific customs rules (item count limits, required identifiers).
+	if !isCustomsBlockEmpty(request.Shipment.Customs) {
+		if err := validation.ValidateCarrierCustomsRules(request.Carrier, request.Shipment.Customs); err != nil {
+			c.writeError(w, r, http.StatusBadRequest, "validation failed", err.Error())
+			return
+		}
+	}
+
+	// Restricted items check — carrier-level prohibited/restricted goods.
 	blocked, warned := validation.ValidateRestrictedItems(request.Carrier, request.Shipment)
+
+	// Destination-level prohibited/restricted goods (supplements carrier rules).
+	destBlocked, destWarned := validation.CheckDestinationProhibited(
+		request.Shipment.Receiver.Country, request.Shipment)
+	blocked = append(blocked, destBlocked...)
+	warned = append(warned, destWarned...)
+
 	if err := validation.RestrictedItemsError(blocked); err != nil {
 		c.writeError(w, r, http.StatusBadRequest, "shipment contains prohibited items", err.Error())
 		return
@@ -70,10 +87,8 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 
 	// VIES live VAT validation — only for EU VAT numbers, parallel, non-blocking on outage.
 	var customsWarnings []string
-	if len(warned) > 0 {
-		for _, w := range warned {
-			customsWarnings = append(customsWarnings, w.Reason)
-		}
+	for _, w := range warned {
+		customsWarnings = append(customsWarnings, w.Reason)
 	}
 	customsWarnings = append(customsWarnings, validateVATNumbersLive(r, request)...)
 
@@ -100,6 +115,23 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(customsWarnings) > 0 {
 		response.CustomsWarnings = append(response.CustomsWarnings, customsWarnings...)
+	}
+
+	// Generate CN22/CN23 form for cross-border non-EU shipments.
+	if validation.RequiresCustomsBlock(
+		request.Shipment.Sender.Country,
+		request.Shipment.Receiver.Country,
+	) && !isCustomsBlockEmpty(request.Shipment.Customs) {
+		formReq := cnFormRequestFrom(response.TrackingNumber, request)
+		if form, formErr := customs.Generate(formReq); formErr == nil {
+			response.CNFormType = string(form.Type)
+			response.CNDocument = base64.StdEncoding.EncodeToString(form.Text)
+		} else {
+			log.Warn("could not generate CN form",
+				zap.String("trackingNumber", response.TrackingNumber),
+				zap.Error(formErr),
+			)
+		}
 	}
 
 	if request.Notifications != nil && c.NotificationService != nil {
@@ -284,6 +316,71 @@ func validateBookingRequest(request *adapter.BookingRequest) (flagged bool, err 
 	}
 
 	return flagged, nil
+}
+
+// isCustomsBlockEmpty reports whether c contains no meaningful customs data.
+func isCustomsBlockEmpty(c adapter.Customs) bool {
+	return c.Incoterms == "" && c.HSCode == "" && c.CustomsValue == 0 &&
+		c.ImporterOfRecord == "" && c.ImporterVATNumber == "" && c.ExporterVATNumber == ""
+}
+
+// cnFormRequestFrom builds a customs.FormRequest from the booking request and
+// tracking number returned by the carrier.
+func cnFormRequestFrom(trackingNumber string, req *adapter.BookingRequest) customs.FormRequest {
+	s := req.Shipment.Sender
+	r := req.Shipment.Receiver
+	c := req.Shipment.Customs
+
+	senderAddr := fmt.Sprintf("%s %s, %s %s", s.Street, s.HouseNumber, s.PostalCode, s.City)
+	receiverAddr := fmt.Sprintf("%s %s, %s %s", r.Street, r.HouseNumber, r.PostalCode, r.City)
+
+	// B2B and B2C are both commercial sales; returned goods and gifts are not
+	// currently modelled in adapter.Customs — default to sale of goods.
+	reason := customs.ReasonSaleOfGoods
+
+	items := make([]customs.FormItem, 0, len(c.Items))
+	for _, ci := range c.Items {
+		items = append(items, customs.FormItem{
+			Description:     ci.Description,
+			HSCode:          ci.HSCode,
+			CountryOfOrigin: ci.CountryOfOrigin,
+			Quantity:        ci.Quantity,
+			NetWeightKG:     ci.NetWeight,
+			Value:           ci.Value,
+			Currency:        ci.Currency,
+		})
+	}
+
+	// Fall back to a single top-level item when Items is empty.
+	if len(items) == 0 && c.HSCode != "" {
+		items = []customs.FormItem{
+			{
+				HSCode:          c.HSCode,
+				CountryOfOrigin: c.CountryOfOrigin,
+				Quantity:        1,
+				Value:           c.CustomsValue,
+				Currency:        c.CustomsCurrency,
+			},
+		}
+	}
+
+	return customs.FormRequest{
+		TrackingNumber:    trackingNumber,
+		SenderName:        s.Name,
+		SenderAddress:     senderAddr,
+		SenderCountry:     s.Country,
+		SenderVATNumber:   c.ExporterVATNumber,
+		ReceiverName:      r.Name,
+		ReceiverAddress:   receiverAddr,
+		ReceiverCountry:   r.Country,
+		ReceiverVATNumber: c.ImporterVATNumber,
+		Incoterms:         c.Incoterms,
+		TotalValue:        c.CustomsValue,
+		Currency:          c.CustomsCurrency,
+		TotalWeightKG:     req.Shipment.TotalWeight,
+		Reason:            reason,
+		Items:             items,
+	}
 }
 
 // notificationPrefsFrom converts adapter.NotificationPreferences into the
