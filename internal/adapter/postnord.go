@@ -563,7 +563,7 @@ func (a *PostNordAdapter) UpdateShipment(ctx context.Context, req UpdateRequest)
 }
 
 // FetchLabel retrieves a shipping label for a PostNord shipment.
-// Uses POST /rest/shipment/v3/edi/labels/pdf with the itemId as reference.
+// Uses POST /rest/shipment/v3/edi/labels/pdf (or /zpl) with itemIds in the request body.
 func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
 	if req.TrackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -587,7 +587,7 @@ func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*La
 		return nil, fmt.Errorf("failed to marshal PostNord label request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet,
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		endpoint, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create PostNord label request: %w", err)
