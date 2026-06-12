@@ -83,27 +83,27 @@ func postNordStreet(a Address) string {
 }
 
 // postNordGoodsItem converts a single Colli to the v3 goodsItem structure.
-func postNordGoodsItem(c Colli) map[string]interface{} {
-	item := map[string]interface{}{
-		"itemIdentification": map[string]interface{}{
+func postNordGoodsItem(c Colli) map[string]any {
+	item := map[string]any{
+		"itemIdentification": map[string]any{
 			"itemId":     "0",
 			"itemIdType": "SSCC",
 		},
-		"grossWeight": map[string]interface{}{
+		"grossWeight": map[string]any{
 			"value": c.Weight,
 			"unit":  "KGM",
 		},
 	}
 	if c.Dimensions.Length > 0 || c.Dimensions.Width > 0 || c.Dimensions.Height > 0 {
-		item["dimensions"] = map[string]interface{}{
-			"length": map[string]interface{}{"value": c.Dimensions.Length, "unit": "CMT"},
-			"width":  map[string]interface{}{"value": c.Dimensions.Width, "unit": "CMT"},
-			"height": map[string]interface{}{"value": c.Dimensions.Height, "unit": "CMT"},
+		item["dimensions"] = map[string]any{
+			"length": map[string]any{"value": c.Dimensions.Length, "unit": "CMT"},
+			"width":  map[string]any{"value": c.Dimensions.Width, "unit": "CMT"},
+			"height": map[string]any{"value": c.Dimensions.Height, "unit": "CMT"},
 		}
 	}
-	return map[string]interface{}{
+	return map[string]any{
 		"packageTypeCode": "PC",
-		"items":           []interface{}{item},
+		"items":           []any{item},
 	}
 }
 
@@ -128,7 +128,7 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	svcCode := basicServiceCode(request.Shipment.DeliveryType, hasServicePoint)
 
 	// Build goodsItem array from colli.
-	goodsItems := make([]interface{}, len(request.Shipment.Colli))
+	goodsItems := make([]any, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
 		goodsItems[i] = postNordGoodsItem(c)
 	}
@@ -140,7 +140,7 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	}
 
 	// Build consignee contact — populated from AddOns and receiver fields.
-	consigneeContact := map[string]interface{}{
+	consigneeContact := map[string]any{
 		"contactName": request.Shipment.Receiver.Name,
 	}
 	if request.Shipment.Receiver.Email != "" {
@@ -174,18 +174,18 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	}
 
 	// Build the parties block.
-	parties := map[string]interface{}{
-		"consignor": map[string]interface{}{
+	parties := map[string]any{
+		"consignor": map[string]any{
 			"issuerCode": issuerCode(request.Shipment.Sender.Country),
-			"partyIdentification": map[string]interface{}{
+			"partyIdentification": map[string]any{
 				"partyId":     a.CustomerNumber,
 				"partyIdType": "160",
 			},
-			"party": map[string]interface{}{
-				"nameIdentification": map[string]interface{}{
+			"party": map[string]any{
+				"nameIdentification": map[string]any{
 					"name": request.Shipment.Sender.Name,
 				},
-				"address": map[string]interface{}{
+				"address": map[string]any{
 					"streets":     []string{postNordStreet(request.Shipment.Sender)},
 					"postalCode":  request.Shipment.Sender.PostalCode,
 					"city":        request.Shipment.Sender.City,
@@ -193,12 +193,12 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 				},
 			},
 		},
-		"consignee": map[string]interface{}{
-			"party": map[string]interface{}{
-				"nameIdentification": map[string]interface{}{
+		"consignee": map[string]any{
+			"party": map[string]any{
+				"nameIdentification": map[string]any{
 					"name": request.Shipment.Receiver.Name,
 				},
-				"address": map[string]interface{}{
+				"address": map[string]any{
 					"streets":     []string{postNordStreet(request.Shipment.Receiver)},
 					"postalCode":  request.Shipment.Receiver.PostalCode,
 					"city":        request.Shipment.Receiver.City,
@@ -211,29 +211,29 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 
 	// Service point — add deliveryParty block.
 	if hasServicePoint {
-		parties["deliveryParty"] = map[string]interface{}{
-			"partyIdentification": map[string]interface{}{
+		parties["deliveryParty"] = map[string]any{
+			"partyIdentification": map[string]any{
 				"partyId":     request.Shipment.Receiver.ServicePointID,
 				"partyIdType": "156",
 			},
 		}
 	}
 
-	shipmentBlock := map[string]interface{}{
-		"shipmentIdentification": map[string]interface{}{
+	shipmentBlock := map[string]any{
+		"shipmentIdentification": map[string]any{
 			"shipmentId": "0",
 		},
-		"dateAndTimes": map[string]interface{}{
+		"dateAndTimes": map[string]any{
 			"loadingDate": time.Now().UTC().Format(time.RFC3339),
 		},
-		"service": map[string]interface{}{
+		"service": map[string]any{
 			"basicServiceCode": svcCode,
 		},
-		"freeText": []interface{}{},
-		"numberOfPackages": map[string]interface{}{
+		"freeText": []any{},
+		"numberOfPackages": map[string]any{
 			"value": len(request.Shipment.Colli),
 		},
-		"totalGrossWeight": map[string]interface{}{
+		"totalGrossWeight": map[string]any{
 			"value": totalWeight,
 			"unit":  "KGM",
 		},
@@ -242,26 +242,26 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	}
 
 	if len(additionalServiceCodes) > 0 {
-		shipmentBlock["service"].(map[string]interface{})["additionalServiceCode"] = additionalServiceCodes
+		shipmentBlock["service"].(map[string]any)["additionalServiceCode"] = additionalServiceCodes
 	}
 
 	if request.IdempotencyKey != "" {
-		shipmentBlock["references"] = []map[string]interface{}{
+		shipmentBlock["references"] = []map[string]any{
 			{"referenceNo": request.IdempotencyKey, "referenceType": "CU"},
 		}
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"messageDate":     time.Now().UTC().Format(time.RFC3339),
 		"messageFunction": "Instruction",
 		"messageId":       fmt.Sprintf("msg-%d", time.Now().UnixMilli()),
-		"application": map[string]interface{}{
+		"application": map[string]any{
 			"applicationId": a.ApplicationID,
 			"name":          "logistics-gateway",
 			"version":       "1.0",
 		},
 		"updateIndicator": "Original",
-		"shipment":        []interface{}{shipmentBlock},
+		"shipment":        []any{shipmentBlock},
 	}
 
 	isReturn := strings.EqualFold(request.Shipment.DeliveryType, "return")
@@ -411,19 +411,19 @@ func (a *PostNordAdapter) CancelShipment(ctx context.Context, trackingNumber str
 		return nil, fmt.Errorf("tracking number must not be empty")
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"messageDate":     time.Now().UTC().Format(time.RFC3339),
 		"messageFunction": "Cancellation",
 		"messageId":       fmt.Sprintf("cancel-%d", time.Now().UnixMilli()),
-		"application": map[string]interface{}{
+		"application": map[string]any{
 			"applicationId": a.ApplicationID,
 			"name":          "logistics-gateway",
 			"version":       "1.0",
 		},
 		"updateIndicator": "Delete",
-		"shipment": []interface{}{
-			map[string]interface{}{
-				"shipmentIdentification": map[string]interface{}{
+		"shipment": []any{
+			map[string]any{
+				"shipmentIdentification": map[string]any{
 					"shipmentId": trackingNumber,
 				},
 			},
@@ -484,7 +484,7 @@ func (a *PostNordAdapter) UpdateShipment(ctx context.Context, req UpdateRequest)
 		return nil, fmt.Errorf("PostNord does not support post-booking service point changes")
 	}
 
-	consigneeContact := map[string]interface{}{}
+	consigneeContact := map[string]any{}
 	if req.ReceiverPhone != "" {
 		consigneeContact["smsNo"] = req.ReceiverPhone
 	}
@@ -492,24 +492,24 @@ func (a *PostNordAdapter) UpdateShipment(ctx context.Context, req UpdateRequest)
 		consigneeContact["emailAddress"] = req.ReceiverEmail
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"messageDate":     time.Now().UTC().Format(time.RFC3339),
 		"messageFunction": "Instruction",
 		"messageId":       fmt.Sprintf("update-%d", time.Now().UnixMilli()),
-		"application": map[string]interface{}{
+		"application": map[string]any{
 			"applicationId": a.ApplicationID,
 			"name":          "logistics-gateway",
 			"version":       "1.0",
 		},
 		"updateIndicator": "Update",
-		"shipment": []interface{}{
-			map[string]interface{}{
-				"shipmentIdentification": map[string]interface{}{
+		"shipment": []any{
+			map[string]any{
+				"shipmentIdentification": map[string]any{
 					"shipmentId": req.TrackingNumber,
 				},
-				"parties": map[string]interface{}{
-					"consignee": map[string]interface{}{
-						"party": map[string]interface{}{
+				"parties": map[string]any{
+					"consignee": map[string]any{
+						"party": map[string]any{
 							"contact": consigneeContact,
 						},
 					},
@@ -580,7 +580,7 @@ func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*La
 
 	// Re-fetch label by resubmitting the itemId reference.
 	// PostNord label-only fetch uses the printId or itemId.
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"itemIds": []string{req.TrackingNumber},
 	}
 	payloadBytes, err := json.Marshal(payload)
@@ -680,9 +680,9 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 	var trackResp struct {
 		TrackingInformationResponse struct {
 			Shipments []struct {
-				ShipmentID   string `json:"shipmentId"`
-				Status       string `json:"status"`
-				StatusText   struct {
+				ShipmentID string `json:"shipmentId"`
+				Status     string `json:"status"`
+				StatusText struct {
 					Header string `json:"header"`
 					Body   string `json:"body"`
 				} `json:"statusText"`

@@ -129,10 +129,10 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 	assert.Equal(t, float64(adapter.ApplicationID), app["applicationId"])
 
 	// shipment array
-	shipments, ok := payload["shipment"].([]interface{})
+	shipments, ok := payload["shipment"].([]any)
 	require.True(t, ok, "payload missing 'shipment' array")
 	require.Len(t, shipments, 1)
-	shipment := shipments[0].(map[string]interface{})
+	shipment := shipments[0].(map[string]any)
 
 	// service — basicServiceCode not serviceId
 	service := requireNested(t, shipment, "service")
@@ -151,7 +151,7 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 	consignorName := requireNested(t, consignorParty, "nameIdentification")
 	assert.Equal(t, "Unisport Group", consignorName["name"])
 	consignorAddr := requireNested(t, consignorParty, "address")
-	streets := consignorAddr["streets"].([]interface{})
+	streets := consignorAddr["streets"].([]any)
 	assert.Equal(t, "Industrivej 10", streets[0])
 	assert.Equal(t, "DK", consignorAddr["countryCode"])
 
@@ -161,14 +161,14 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 	assert.Equal(t, "John Doe", consigneeName["name"])
 
 	// goodsItem — weight in kg with unit KGM
-	goodsItems, ok := shipment["goodsItem"].([]interface{})
+	goodsItems, ok := shipment["goodsItem"].([]any)
 	require.True(t, ok)
 	require.Len(t, goodsItems, 1)
-	item := goodsItems[0].(map[string]interface{})
+	item := goodsItems[0].(map[string]any)
 	assert.Equal(t, "PC", item["packageTypeCode"])
-	items := item["items"].([]interface{})
+	items := item["items"].([]any)
 	require.Len(t, items, 1)
-	weight := requireNested(t, items[0].(map[string]interface{}), "grossWeight")
+	weight := requireNested(t, items[0].(map[string]any), "grossWeight")
 	assert.Equal(t, 1.5, weight["value"])
 	assert.Equal(t, "KGM", weight["unit"])
 
@@ -194,8 +194,8 @@ func TestPostNordAdapter_BookShipment_ServicePoint(t *testing.T) {
 	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
-	shipments := (*captured)["shipment"].([]interface{})
-	shipment := shipments[0].(map[string]interface{})
+	shipments := (*captured)["shipment"].([]any)
+	shipment := shipments[0].(map[string]any)
 
 	// Service code 19 for service point
 	service := requireNested(t, shipment, "service")
@@ -225,8 +225,8 @@ func TestPostNordAdapter_BookShipment_Notifications(t *testing.T) {
 	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
-	shipments := (*captured)["shipment"].([]interface{})
-	shipment := shipments[0].(map[string]interface{})
+	shipments := (*captured)["shipment"].([]any)
+	shipment := shipments[0].(map[string]any)
 	parties := requireNested(t, shipment, "parties")
 	consignee := requireNested(t, parties, "consignee")
 	consigneeParty := requireNested(t, consignee, "party")
@@ -253,10 +253,10 @@ func TestPostNordAdapter_BookShipment_SignatureAndInsurance(t *testing.T) {
 		_, err := adapter.BookShipment(t.Context(), req)
 		require.NoError(t, err)
 
-		shipments := (*captured)["shipment"].([]interface{})
-		shipment := shipments[0].(map[string]interface{})
+		shipments := (*captured)["shipment"].([]any)
+		shipment := shipments[0].(map[string]any)
 		service := requireNested(t, shipment, "service")
-		codes := service["additionalServiceCode"].([]interface{})
+		codes := service["additionalServiceCode"].([]any)
 		assert.Contains(t, codes, "A2")
 		_ = adapter
 	})
@@ -267,18 +267,18 @@ func TestPostNordAdapter_BookShipment_SignatureAndInsurance(t *testing.T) {
 
 		req := postnordMinimalRequest()
 		req.Shipment.AddOns = []AddOn{{
-			Type:             AddOnInsurance,
-			InsuranceValue:   5000.0,
+			Type:              AddOnInsurance,
+			InsuranceValue:    5000.0,
 			InsuranceCurrency: "DKK",
 		}}
 
 		_, err := adapter.BookShipment(t.Context(), req)
 		require.NoError(t, err)
 
-		shipments := (*captured)["shipment"].([]interface{})
-		shipment := shipments[0].(map[string]interface{})
+		shipments := (*captured)["shipment"].([]any)
+		shipment := shipments[0].(map[string]any)
 		service := requireNested(t, shipment, "service")
-		codes := service["additionalServiceCode"].([]interface{})
+		codes := service["additionalServiceCode"].([]any)
 		assert.Contains(t, codes, "A8")
 		_ = adapter
 	})
@@ -309,10 +309,10 @@ func TestPostNordAdapter_BookShipment_SignatureAndInsurance(t *testing.T) {
 		_, err := adapter.BookShipment(t.Context(), req)
 		require.NoError(t, err)
 
-		shipments := (*captured)["shipment"].([]interface{})
-		shipment := shipments[0].(map[string]interface{})
+		shipments := (*captured)["shipment"].([]any)
+		shipment := shipments[0].(map[string]any)
 		service := requireNested(t, shipment, "service")
-		codes := service["additionalServiceCode"].([]interface{})
+		codes := service["additionalServiceCode"].([]any)
 		assert.Contains(t, codes, "A2")
 		assert.Contains(t, codes, "A8")
 		_ = adapter
@@ -355,10 +355,10 @@ func TestPostNordAdapter_BookShipment_IdempotencyKey(t *testing.T) {
 	_, err := adapter.BookShipment(t.Context(), req)
 	require.NoError(t, err)
 
-	shipments := (*captured)["shipment"].([]interface{})
-	shipment := shipments[0].(map[string]interface{})
-	refs := shipment["references"].([]interface{})
-	ref := refs[0].(map[string]interface{})
+	shipments := (*captured)["shipment"].([]any)
+	shipment := shipments[0].(map[string]any)
+	refs := shipment["references"].([]any)
+	ref := refs[0].(map[string]any)
 	assert.Equal(t, "order-98765", ref["referenceNo"])
 	assert.Equal(t, "CU", ref["referenceType"])
 
@@ -485,9 +485,9 @@ func TestPostNordAdapter_SupportsNativeIdempotency(t *testing.T) {
 // =========================================================================
 
 // requireNested extracts a nested map by key, failing the test if absent.
-func requireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
+func requireNested(t *testing.T, parent map[string]any, key string) map[string]any {
 	t.Helper()
-	nested, ok := parent[key].(map[string]interface{})
+	nested, ok := parent[key].(map[string]any)
 	require.True(t, ok, "object missing nested '%s' key", key)
 	return nested
 }
@@ -522,10 +522,10 @@ func postnordMockBookingResponse() string {
 	}`
 }
 
-func newPostNordTestServer(t *testing.T, statusCode int, body string) (*PostNordAdapter, *map[string]interface{}) {
+func newPostNordTestServer(t *testing.T, statusCode int, body string) (*PostNordAdapter, *map[string]any) {
 	t.Helper()
 
-	var captured map[string]interface{}
+	var captured map[string]any
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(r.Body)

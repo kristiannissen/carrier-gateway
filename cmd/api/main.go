@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,7 +23,8 @@ import (
 func main() {
 	log, err := logger.New()
 	if err != nil {
-		panic("failed to initialise logger: " + err.Error())
+		fmt.Fprintf(os.Stderr, "failed to initialise logger: %v\n", err)
+		os.Exit(1)
 	}
 	defer log.Sync() //nolint:errcheck
 

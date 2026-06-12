@@ -416,8 +416,8 @@ func (a *DHLExpressAdapter) BookShipment(ctx context.Context, request BookingReq
 	var onDemandDelivery map[string]any
 	if isODD {
 		onDemandDelivery = map[string]any{
-			"deliveryOption":          "servicepoint",
-			"servicePointId":          request.Shipment.Receiver.ServicePointID,
+			"deliveryOption":             "servicepoint",
+			"servicePointId":             request.Shipment.Receiver.ServicePointID,
 			"requestOndemandDeliveryURL": true,
 		}
 	}

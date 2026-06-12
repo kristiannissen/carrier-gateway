@@ -5,10 +5,11 @@ package validation
 
 import "fmt"
 
-// maxIdempotencyKeyLength is the maximum number of characters allowed in an
+// MaxIdempotencyKeyLength is the maximum number of characters allowed in an
 // idempotency key. Keys longer than this are rejected to avoid abuse and to
-// stay within carrier API header length limits.
-const maxIdempotencyKeyLength = 64
+// stay within carrier API header length limits. Exported so the middleware
+// layer can enforce the same limit without duplicating the value.
+const MaxIdempotencyKeyLength = 64
 
 // ValidateIdempotencyKey validates the idempotency key if one is provided.
 // A missing key is valid — the request is processed normally with no
@@ -17,10 +18,10 @@ func ValidateIdempotencyKey(key string) error {
 	if key == "" {
 		return nil
 	}
-	if len(key) > maxIdempotencyKeyLength {
+	if len(key) > MaxIdempotencyKeyLength {
 		return fmt.Errorf(
 			"idempotency key must be %d characters or fewer (got %d)",
-			maxIdempotencyKeyLength, len(key),
+			MaxIdempotencyKeyLength, len(key),
 		)
 	}
 	return nil

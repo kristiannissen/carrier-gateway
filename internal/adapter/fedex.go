@@ -201,15 +201,15 @@ type fedexShipRequest struct {
 }
 
 type fedexRequestedShipment struct {
-	ServiceType                 string                 `json:"serviceType"`
-	PackagingType               string                 `json:"packagingType"`
-	PickupType                  string                 `json:"pickupType"`
-	Shipper                     fedexParty             `json:"shipper"`
-	Recipients                  []fedexParty           `json:"recipients"`
-	ShippingChargesPayment      fedexPayment           `json:"shippingChargesPayment"`
-	TotalWeight                 fedexWeight            `json:"totalWeight"`
-	LabelSpecification          fedexLabelSpec         `json:"labelSpecification"`
-	RequestedPackageLineItems   []fedexPackageLineItem `json:"requestedPackageLineItems"`
+	ServiceType               string                 `json:"serviceType"`
+	PackagingType             string                 `json:"packagingType"`
+	PickupType                string                 `json:"pickupType"`
+	Shipper                   fedexParty             `json:"shipper"`
+	Recipients                []fedexParty           `json:"recipients"`
+	ShippingChargesPayment    fedexPayment           `json:"shippingChargesPayment"`
+	TotalWeight               fedexWeight            `json:"totalWeight"`
+	LabelSpecification        fedexLabelSpec         `json:"labelSpecification"`
+	RequestedPackageLineItems []fedexPackageLineItem `json:"requestedPackageLineItems"`
 }
 
 type fedexParty struct {
@@ -294,7 +294,7 @@ type fedexCancelRequest struct {
 
 // fedexTrackRequest is the body for POST /track/v1/trackingnumbers.
 type fedexTrackRequest struct {
-	IncludeDetailedScans bool               `json:"includeDetailedScans"`
+	IncludeDetailedScans bool                `json:"includeDetailedScans"`
 	TrackingInfo         []fedexTrackingInfo `json:"trackingInfo"`
 }
 
@@ -318,14 +318,14 @@ type fedexTrackOutput struct {
 }
 
 type fedexCompleteTrackResult struct {
-	TrackingNumber string            `json:"trackingNumber"`
+	TrackingNumber string             `json:"trackingNumber"`
 	TrackResults   []fedexTrackResult `json:"trackResults"`
 }
 
 type fedexTrackResult struct {
-	LatestStatusDetail fedexStatusDetail      `json:"latestStatusDetail"`
-	ScanEvents         []fedexScanEvent       `json:"scanEvents"`
-	DateAndTimes       []fedexDateAndTime     `json:"dateAndTimes"`
+	LatestStatusDetail fedexStatusDetail  `json:"latestStatusDetail"`
+	ScanEvents         []fedexScanEvent   `json:"scanEvents"`
+	DateAndTimes       []fedexDateAndTime `json:"dateAndTimes"`
 }
 
 type fedexStatusDetail struct {

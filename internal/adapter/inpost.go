@@ -40,17 +40,17 @@ func NewInPostAdapter(apiKey string, log *zap.Logger) *InPostAdapter {
 // inpostParty builds the sender/recipient object expected by the InPost API.
 // InPost requires street name and house number as separate fields.
 // Supplement is not forwarded — InPost has no second address line.
-func inpostParty(a Address) map[string]interface{} {
-	return map[string]interface{}{
+func inpostParty(a Address) map[string]any {
+	return map[string]any{
 		"name": a.Name,
-		"address": map[string]interface{}{
+		"address": map[string]any{
 			"streetName":  a.Street,
 			"houseNumber": a.HouseNumber,
 			"city":        a.City,
 			"postalCode":  a.PostalCode,
 			"country":     a.Country,
 		},
-		"contact": map[string]interface{}{
+		"contact": map[string]any{
 			"phone": a.Phone,
 			"email": a.Email,
 		},
@@ -60,11 +60,11 @@ func inpostParty(a Address) map[string]interface{} {
 // inpostParcel converts a single Colli to the InPost parcel wire format.
 // Weight is in kg and dimensions in cm, matching the unified model directly —
 // no unit conversion is required.
-func inpostParcel(index int, c Colli) map[string]interface{} {
-	return map[string]interface{}{
+func inpostParcel(index int, c Colli) map[string]any {
+	return map[string]any{
 		"id":     fmt.Sprintf("%d", index+1),
 		"weight": c.Weight,
-		"dimensions": map[string]interface{}{
+		"dimensions": map[string]any{
 			"length": c.Dimensions.Length,
 			"width":  c.Dimensions.Width,
 			"height": c.Dimensions.Height,
@@ -94,19 +94,19 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 		)
 	}
 
-	parcels := make([]map[string]interface{}, len(request.Shipment.Colli))
+	parcels := make([]map[string]any, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
 		parcels[i] = inpostParcel(i, c)
 	}
 
-	service := map[string]interface{}{
+	service := map[string]any{
 		"id": "INPOST_STANDARD",
 	}
 	if request.Shipment.Receiver.ServicePointID != "" {
 		service["targetLocker"] = request.Shipment.Receiver.ServicePointID
 	}
 
-	shipment := map[string]interface{}{
+	shipment := map[string]any{
 		"sender":    inpostParty(request.Shipment.Sender),
 		"recipient": inpostParty(request.Shipment.Receiver),
 		"parcels":   parcels,
@@ -117,7 +117,7 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 		shipment["reference"] = request.IdempotencyKey
 	}
 
-	payloadBytes, err := json.Marshal(map[string]interface{}{"shipment": shipment})
+	payloadBytes, err := json.Marshal(map[string]any{"shipment": shipment})
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal InPost request: %w", err)
 	}
@@ -261,5 +261,3 @@ func (a *InPostAdapter) TrackShipment(ctx context.Context, trackingNumber string
 		Events:         events,
 	}, nil
 }
-
-

@@ -52,9 +52,9 @@ func (c *Config) SendNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
 	if err != nil {
-		c.writeError(w, r, http.StatusBadRequest, "invalid request body", err.Error())
+		c.writeError(w, r, http.StatusRequestEntityTooLarge, "request body too large", "request body must not exceed 1 MB")
 		return
 	}
 

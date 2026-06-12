@@ -106,6 +106,16 @@ docker run -p 8080:8080 --env-file .env logistics-gateway
 docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development logistics-gateway
 ```
 
+### Rate limiting
+
+This service is stateless and does not enforce rate limits internally — in-memory counters would not survive across replicas. Rate limiting should be handled at the infrastructure layer, in front of the container.
+
+- **Traefik**: use the built-in [`rateLimit` middleware](https://doc.traefik.io/traefik/middlewares/http/ratelimit/) on the router
+- **nginx**: use `limit_req_zone` + `limit_req` directives in the upstream block
+- **API gateway**: configure limits per route or per API key at the gateway level
+
+Limit by API key rather than IP where possible — clients are typically server-to-server and may share egress IPs.
+
 ---
 
 ## API reference

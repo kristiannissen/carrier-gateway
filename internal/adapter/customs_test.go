@@ -44,20 +44,20 @@ func testCustomsRequest() CustomsRequest {
 			},
 		},
 		Sender: Address{
-			Name:       "Acme ApS",
-			Street:     "Nørrebrogade",
+			Name:        "Acme ApS",
+			Street:      "Nørrebrogade",
 			HouseNumber: "42",
-			City:       "Copenhagen",
-			PostalCode: "2200",
-			Country:    "DK",
+			City:        "Copenhagen",
+			PostalCode:  "2200",
+			Country:     "DK",
 		},
 		Receiver: Address{
-			Name:       "Oslo Goods AS",
-			Street:     "Karl Johans gate",
+			Name:        "Oslo Goods AS",
+			Street:      "Karl Johans gate",
 			HouseNumber: "1",
-			City:       "Oslo",
-			PostalCode: "0154",
-			Country:    "NO",
+			City:        "Oslo",
+			PostalCode:  "0154",
+			Country:     "NO",
 		},
 	}
 }
@@ -142,7 +142,7 @@ func TestBuildPostNordItems_TruncatesAt5(t *testing.T) {
 
 	c := Customs{
 		CustomsCurrency: "EUR",
-		Items: make([]CustomsItem, 7),
+		Items:           make([]CustomsItem, 7),
 	}
 	for i := range c.Items {
 		c.Items[i] = CustomsItem{HSCode: "61091000", Value: 10.0, Quantity: 1}

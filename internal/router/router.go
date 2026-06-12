@@ -26,6 +26,10 @@ func NewRouter(registry *adapter.Registry, notifSvc *notification.Service, log *
 	}
 
 	r := mux.NewRouter()
+	// Security headers and CORS are intentionally omitted here.
+	// This service runs behind a reverse proxy (Traefik/nginx) in Docker; those
+	// headers belong at the proxy layer. CORS is browser-only and irrelevant
+	// for a server-to-server API.
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Idempotency(log))
 	r.Use(middleware.LogPayloads(log))

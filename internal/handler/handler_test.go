@@ -44,34 +44,34 @@ func newTestConfig(t *testing.T) *Config {
 
 // minimalBookingBody returns a valid booking request JSON body for the given carrier.
 func minimalBookingBody(carrier string) []byte {
-	req := map[string]interface{}{
+	req := map[string]any{
 		"carrier": carrier,
-		"shipment": map[string]interface{}{
-			"sender": map[string]interface{}{
-				"name":       "Unisport Group",
-				"street":     "Industrivej",
+		"shipment": map[string]any{
+			"sender": map[string]any{
+				"name":        "Unisport Group",
+				"street":      "Industrivej",
 				"houseNumber": "10",
-				"city":       "Copenhagen",
-				"postalCode": "2300",
-				"country":    "DK",
+				"city":        "Copenhagen",
+				"postalCode":  "2300",
+				"country":     "DK",
 			},
-			"receiver": map[string]interface{}{
-				"name":       "Test Receiver",
-				"street":     "Main Street",
+			"receiver": map[string]any{
+				"name":        "Test Receiver",
+				"street":      "Main Street",
 				"houseNumber": "1",
-				"city":       "Stockholm",
-				"postalCode": "11122",
-				"country":    "SE",
+				"city":        "Stockholm",
+				"postalCode":  "11122",
+				"country":     "SE",
 			},
 			"totalWeight": 1.0,
-			"colli": []map[string]interface{}{
+			"colli": []map[string]any{
 				{
 					"id":     "box-1",
 					"weight": 1.0,
-					"dimensions": map[string]interface{}{
+					"dimensions": map[string]any{
 						"length": 10, "width": 10, "height": 10,
 					},
-					"items": []map[string]interface{}{
+					"items": []map[string]any{
 						{"description": "item", "weight": 0.5, "quantity": 1},
 					},
 				},
@@ -146,8 +146,8 @@ func TestBookShipment_InvalidJSON(t *testing.T) {
 func TestBookShipment_MissingCarrier(t *testing.T) {
 	t.Parallel()
 	cfg := newTestConfig(t)
-	body, _ := json.Marshal(map[string]interface{}{
-		"shipment": map[string]interface{}{
+	body, _ := json.Marshal(map[string]any{
+		"shipment": map[string]any{
 			"totalWeight": 1.0,
 		},
 	})

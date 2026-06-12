@@ -10,6 +10,8 @@ import (
 	"net/http"
 
 	"go.uber.org/zap"
+
+	"github.com/kristiannissen/carrier-gateway/internal/validation"
 )
 
 // idempotencyKeyCtxKey is an unexported context key for the idempotency key.
@@ -18,9 +20,10 @@ type idempotencyKeyCtxKey struct{}
 // IdempotencyHeader is the HTTP header name for the idempotency key.
 const IdempotencyHeader = "Idempotency-Key"
 
-// maxIdempotencyHeaderLen is the maximum length of the Idempotency-Key header
-// value. Matches the limit enforced by the validation package.
-const maxIdempotencyHeaderLen = 64
+// maxIdempotencyHeaderLen aliases validation.MaxIdempotencyKeyLength so both
+// the middleware (header) and the validation (body field) enforce the same cap
+// from a single source of truth.
+const maxIdempotencyHeaderLen = validation.MaxIdempotencyKeyLength
 
 // IdempotencyKeyFromContext retrieves the idempotency key stored on ctx by the
 // Idempotency middleware. Returns an empty string if none is present.
@@ -96,7 +99,7 @@ func Idempotency(log *zap.Logger) func(http.Handler) http.Handler {
 			}
 
 			// Attempt to parse the body as JSON to look for an existing key.
-			var body map[string]interface{}
+			var body map[string]any
 			if jsonErr := json.Unmarshal(raw, &body); jsonErr != nil {
 				// Not JSON — restore the body and let the handler deal with it.
 				r.Body = io.NopCloser(bytes.NewReader(raw))

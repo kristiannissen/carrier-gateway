@@ -87,9 +87,9 @@ func (c *Config) TrackAndNotify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
 	if err != nil {
-		c.writeError(w, r, http.StatusBadRequest, "invalid request body", err.Error())
+		c.writeError(w, r, http.StatusRequestEntityTooLarge, "request body too large", "request body must not exceed 1 MB")
 		return
 	}
 
@@ -171,13 +171,13 @@ func validateTrackAndNotifyRequest(req trackAndNotifyRequest) error {
 // (e.g. StatusUnknown, StatusBooked which is handled at booking time).
 func statusToEvent(s adapter.TrackingStatus) (notification.Event, bool) {
 	m := map[adapter.TrackingStatus]notification.Event{
-		adapter.StatusPickedUp:        notification.EventPickedUp,
-		adapter.StatusInTransit:       notification.EventInTransit,
-		adapter.StatusOutForDelivery:  notification.EventOutForDelivery,
-		adapter.StatusDelivered:       notification.EventDelivered,
-		adapter.StatusFailed:          notification.EventFailed,
-		adapter.StatusReturned:        notification.EventReturned,
-		adapter.StatusDelayed:         notification.EventDelayed,
+		adapter.StatusPickedUp:       notification.EventPickedUp,
+		adapter.StatusInTransit:      notification.EventInTransit,
+		adapter.StatusOutForDelivery: notification.EventOutForDelivery,
+		adapter.StatusDelivered:      notification.EventDelivered,
+		adapter.StatusFailed:         notification.EventFailed,
+		adapter.StatusReturned:       notification.EventReturned,
+		adapter.StatusDelayed:        notification.EventDelayed,
 	}
 	e, ok := m[s]
 	return e, ok

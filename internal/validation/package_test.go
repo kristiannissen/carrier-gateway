@@ -116,7 +116,6 @@ func TestValidateShipment_DimensionLimits(t *testing.T) {
 		{name: "dao length exceeded", carrier: "dao", l: 251, w: 100, h: 100, wantErr: true, errContains: "length 251 cm exceeds DAO limit"},
 		{name: "dao width exceeded", carrier: "dao", l: 100, w: 121, h: 100, wantErr: true, errContains: "width 121 cm exceeds DAO limit"},
 		{name: "dao height exceeded", carrier: "dao", l: 100, w: 100, h: 121, wantErr: true, errContains: "height 121 cm exceeds DAO limit"},
-
 	}
 
 	for _, tc := range cases {

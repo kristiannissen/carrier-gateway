@@ -30,9 +30,9 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
 	if err != nil {
-		c.writeError(w, r, http.StatusBadRequest, "invalid request body", err.Error())
+		c.writeError(w, r, http.StatusRequestEntityTooLarge, "request body too large", "request body must not exceed 1 MB")
 		return
 	}
 
@@ -86,7 +86,7 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// VIES live VAT validation — only for EU VAT numbers, parallel, non-blocking on outage.
-	var customsWarnings []string
+	customsWarnings := make([]string, 0, len(warned))
 	for _, w := range warned {
 		customsWarnings = append(customsWarnings, w.Reason)
 	}

@@ -160,9 +160,9 @@ func TestGLSAdapter_BookShipment_PayloadShape(t *testing.T) {
 
 	// ShipmentUnit
 	units := glsRequireArray(t, shipment, "ShipmentUnit", 1)
-	unit := units[0].(map[string]interface{})
+	unit := units[0].(map[string]any)
 	assert.Equal(t, float64(2.5), unit["Weight"])
-	refs := unit["ShipmentUnitReference"].([]interface{})
+	refs := unit["ShipmentUnitReference"].([]any)
 	assert.Equal(t, "box-1", refs[0])
 
 	// PrintingOptions
@@ -208,10 +208,10 @@ func TestGLSAdapter_BookShipment_ServicePoint(t *testing.T) {
 	shipment := glsRequireNested(t, *captured, "Shipment")
 
 	// Service block must be present with ShopDelivery
-	services := shipment["Service"].([]interface{})
+	services := shipment["Service"].([]any)
 	require.Len(t, services, 1)
-	svc := services[0].(map[string]interface{})
-	shopDelivery := svc["ShopDelivery"].(map[string]interface{})
+	svc := services[0].(map[string]any)
+	shopDelivery := svc["ShopDelivery"].(map[string]any)
 	assert.Equal(t, "DK-95763", shopDelivery["ParcelShopID"])
 	assert.Equal(t, "ShopDelivery", shopDelivery["ServiceName"])
 }
@@ -248,8 +248,8 @@ func TestGLSAdapter_BookShipment_MultiColli(t *testing.T) {
 	_ = adapter
 	shipment := glsRequireNested(t, *captured, "Shipment")
 	units := glsRequireArray(t, shipment, "ShipmentUnit", 2)
-	assert.Equal(t, float64(2.5), units[0].(map[string]interface{})["Weight"])
-	assert.Equal(t, float64(5.0), units[1].(map[string]interface{})["Weight"])
+	assert.Equal(t, float64(2.5), units[0].(map[string]any)["Weight"])
+	assert.Equal(t, float64(5.0), units[1].(map[string]any)["Weight"])
 }
 
 func TestGLSAdapter_BookShipment_ContentTypeHeader(t *testing.T) {
@@ -343,7 +343,7 @@ func TestGLSAdapter_FetchLabel_UsesReprintParcel(t *testing.T) {
 func TestGLSAdapter_FetchLabel_ZPLUsesZEBRA(t *testing.T) {
 	t.Parallel()
 
-	var capturedBody map[string]interface{}
+	var capturedBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/v2/token" {
 			w.WriteHeader(http.StatusOK)
@@ -435,7 +435,7 @@ func TestGLSAdapter_BookShipment_UnsupportedAddOns(t *testing.T) {
 func TestGLSAdapter_TrackShipment_RequestShape(t *testing.T) {
 	t.Parallel()
 
-	var capturedBody map[string]interface{}
+	var capturedBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/v2/token" {
 			w.WriteHeader(http.StatusOK)
@@ -476,10 +476,10 @@ func TestGLSAdapter_TrackShipment_RequestShape(t *testing.T) {
 
 // newGLSTestServer starts an httptest.Server that handles both the OAuth token
 // endpoint and the shipment endpoint. Captures the shipment request body.
-func newGLSTestServer(t *testing.T, statusCode int, body string) (*GLSAdapter, *map[string]interface{}) {
+func newGLSTestServer(t *testing.T, statusCode int, body string) (*GLSAdapter, *map[string]any) {
 	t.Helper()
 
-	var captured map[string]interface{}
+	var captured map[string]any
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Handle OAuth token requests separately.
@@ -543,16 +543,16 @@ func glsMockTrackingResponse() string {
 	}`
 }
 
-func glsRequireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
+func glsRequireNested(t *testing.T, parent map[string]any, key string) map[string]any {
 	t.Helper()
-	v, ok := parent[key].(map[string]interface{})
+	v, ok := parent[key].(map[string]any)
 	require.True(t, ok, "missing nested key %q", key)
 	return v
 }
 
-func glsRequireArray(t *testing.T, parent map[string]interface{}, key string, wantLen int) []interface{} {
+func glsRequireArray(t *testing.T, parent map[string]any, key string, wantLen int) []any {
 	t.Helper()
-	v, ok := parent[key].([]interface{})
+	v, ok := parent[key].([]any)
 	require.True(t, ok, "missing array key %q", key)
 	require.Len(t, v, wantLen)
 	return v
@@ -611,10 +611,10 @@ func glsTestColli(id string, weightKg float64) Colli {
 
 // newGLSReturnTestServer starts an httptest.Server for the GLS Shop Returns
 // Customer Plus API v3. Captures the return-order request body.
-func newGLSReturnTestServer(t *testing.T, appID string) (*GLSAdapter, *map[string]interface{}) {
+func newGLSReturnTestServer(t *testing.T, appID string) (*GLSAdapter, *map[string]any) {
 	t.Helper()
 
-	var captured map[string]interface{}
+	var captured map[string]any
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/oauth2/v2/token" {
@@ -660,13 +660,13 @@ func TestGLSAdapter_BookShipment_Return_PayloadShape(t *testing.T) {
 			DeliveryType: "return",
 			Sender:       glsTestSender(),
 			Receiver: Address{
-				Name:       "Returning Customer",
-				Street:     "Storgatan",
+				Name:        "Returning Customer",
+				Street:      "Storgatan",
 				HouseNumber: "1",
-				City:       "Stockholm",
-				PostalCode: "111 22",
-				Country:    "SE",
-				Email:      "customer@example.com",
+				City:        "Stockholm",
+				PostalCode:  "111 22",
+				Country:     "SE",
+				Email:       "customer@example.com",
 			},
 			TotalWeight: 2.0,
 			Colli:       []Colli{glsTestColli("order-ref-001", 2.0)},
@@ -690,17 +690,17 @@ func TestGLSAdapter_BookShipment_Return_PayloadShape(t *testing.T) {
 	assert.Equal(t, "OTHER", payload["returnReason"])
 
 	// Sender is the customer (our Receiver) returning the parcel
-	sender := payload["sender"].(map[string]interface{})
+	sender := payload["sender"].(map[string]any)
 	assert.Equal(t, "Returning Customer", sender["personName"])
-	addr := sender["address"].(map[string]interface{})
+	addr := sender["address"].(map[string]any)
 	assert.Equal(t, "Storgatan", addr["street"])
 	assert.Equal(t, "111 22", addr["zipCode"])
 	assert.Equal(t, "SE", addr["countryCode"])
 
 	// Receiver is the merchant (our Sender)
-	receiver := payload["receiver"].(map[string]interface{})
+	receiver := payload["receiver"].(map[string]any)
 	assert.Equal(t, "Unisport Group", receiver["companyName"])
-	recvAddr := receiver["address"].(map[string]interface{})
+	recvAddr := receiver["address"].(map[string]any)
 	assert.Equal(t, "DK", recvAddr["countryCode"])
 
 	// Label format must be lowercase
@@ -718,13 +718,13 @@ func TestGLSAdapter_BookShipment_Return_EmailNotification(t *testing.T) {
 			DeliveryType: "return",
 			Sender:       glsTestSender(),
 			Receiver: Address{
-				Name:       "Customer",
-				Street:     "Storgatan",
+				Name:        "Customer",
+				Street:      "Storgatan",
 				HouseNumber: "1",
-				City:       "Stockholm",
-				PostalCode: "111 22",
-				Country:    "SE",
-				Email:      "notify@example.com",
+				City:        "Stockholm",
+				PostalCode:  "111 22",
+				Country:     "SE",
+				Email:       "notify@example.com",
 			},
 			TotalWeight: 1.0,
 			Colli:       []Colli{glsTestColli("ref-002", 1.0)},
@@ -736,9 +736,9 @@ func TestGLSAdapter_BookShipment_Return_EmailNotification(t *testing.T) {
 	require.NoError(t, err)
 
 	payload := *captured
-	opts, ok := payload["options"].(map[string]interface{})
+	opts, ok := payload["options"].(map[string]any)
 	require.True(t, ok, "options must be present when AddOnEmailNotification is set")
-	mail := opts["confirmationMail"].(map[string]interface{})
+	mail := opts["confirmationMail"].(map[string]any)
 	assert.Equal(t, "notify@example.com", mail["sendTo"])
 }
 

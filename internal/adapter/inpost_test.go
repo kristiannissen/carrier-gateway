@@ -148,7 +148,7 @@ func TestInPostAdapter_BookShipment_PayloadShape(t *testing.T) {
 
 	// Parcels
 	parcels := inpostRequireArray(t, shipment, "parcels", 1)
-	parcel := parcels[0].(map[string]interface{})
+	parcel := parcels[0].(map[string]any)
 	assert.Equal(t, "1", parcel["id"])
 	assert.Equal(t, float64(2.0), parcel["weight"]) // kg, no conversion
 	dims := inpostRequireNested(t, parcel, "dimensions")
@@ -206,11 +206,11 @@ func TestInPostAdapter_BookShipment_MultiColli(t *testing.T) {
 	shipment := inpostRequireNested(t, *captured, "shipment")
 	parcels := inpostRequireArray(t, shipment, "parcels", 2)
 
-	p0 := parcels[0].(map[string]interface{})
+	p0 := parcels[0].(map[string]any)
 	assert.Equal(t, "1", p0["id"])
 	assert.Equal(t, float64(2.0), p0["weight"])
 
-	p1 := parcels[1].(map[string]interface{})
+	p1 := parcels[1].(map[string]any)
 	assert.Equal(t, "2", p1["id"])
 	assert.Equal(t, float64(3.0), p1["weight"])
 }
@@ -296,10 +296,10 @@ func TestInPostAdapter_BookShipment_ServicePoint(t *testing.T) {
 // Helpers
 // =========================================================================
 
-func newInPostTestServer(t *testing.T, statusCode int, body string) (*InPostAdapter, *map[string]interface{}) {
+func newInPostTestServer(t *testing.T, statusCode int, body string) (*InPostAdapter, *map[string]any) {
 	t.Helper()
 
-	var captured map[string]interface{}
+	var captured map[string]any
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(r.Body)
@@ -321,16 +321,16 @@ func inpostMockBookingResponse() string {
 	return `{"shipmentId":"INPOST-550e8400-e29b-41d4-a716-446655440007","trackingNumber":"INPOST123456789PL","labelUrl":"https://mock.inpost.pl/labels/550e8400.pdf","status":"booked","cost":8.00,"currency":"PLN","lockerId":"WAR001"}`
 }
 
-func inpostRequireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
+func inpostRequireNested(t *testing.T, parent map[string]any, key string) map[string]any {
 	t.Helper()
-	v, ok := parent[key].(map[string]interface{})
+	v, ok := parent[key].(map[string]any)
 	require.True(t, ok, "missing nested key %q", key)
 	return v
 }
 
-func inpostRequireArray(t *testing.T, parent map[string]interface{}, key string, wantLen int) []interface{} {
+func inpostRequireArray(t *testing.T, parent map[string]any, key string, wantLen int) []any {
 	t.Helper()
-	v, ok := parent[key].([]interface{})
+	v, ok := parent[key].([]any)
 	require.True(t, ok, "missing array key %q", key)
 	require.Len(t, v, wantLen)
 	return v

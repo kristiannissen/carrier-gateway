@@ -172,8 +172,8 @@ func TestDAOAdapter_BookShipment_AddOnWarnings(t *testing.T) {
 					Phone: "+4587654321", Email: "receiver@example.com",
 				},
 				TotalWeight: 1.0,
-				Colli: []Colli{{ID: "c1", Weight: 1.0}},
-				AddOns: []AddOn{{Type: AddOnSMSNotification}},
+				Colli:       []Colli{{ID: "c1", Weight: 1.0}},
+				AddOns:      []AddOn{{Type: AddOnSMSNotification}},
 			},
 		})
 
@@ -268,4 +268,3 @@ func TestMockDAOAdapter_TrackShipment(t *testing.T) {
 	assert.Equal(t, StatusInTransit, response.NormalizedStatus)
 	assert.Len(t, response.Events, 1)
 }
-

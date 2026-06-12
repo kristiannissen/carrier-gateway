@@ -160,8 +160,8 @@ func dhlProduct(deliveryType string) string {
 
 // dhlSenderBlock builds the cPAN sender address block.
 // street1 and street1Nr are sent as separate fields per DHL spec.
-func (a *DHLAdapter) dhlSenderBlock(addr Address) map[string]interface{} {
-	sender := map[string]interface{}{
+func (a *DHLAdapter) dhlSenderBlock(addr Address) map[string]any {
+	sender := map[string]any{
 		"type":                   "default",
 		"name":                   addr.Name,
 		"street1":                addr.Street,
@@ -191,14 +191,14 @@ func (a *DHLAdapter) dhlSenderBlock(addr Address) map[string]interface{} {
 // The accesspoint entry requires the literal "accesspoint" as street1 and the
 // service point ID as street1Nr, per DHL eConnect spec.
 // Home/business delivery uses a single-element array containing a doorstep object.
-func dhlRecipientBlock(addr Address, deliveryType string) []interface{} {
+func dhlRecipientBlock(addr Address, deliveryType string) []any {
 	hasServicePoint := addr.ServicePointID != ""
 
 	if hasServicePoint {
 		// Service point delivery: array with accesspoint entry followed by
 		// doorstep fallback. street1 must be the literal "accesspoint" keyword;
 		// street1Nr carries the service point ID.
-		accesspoint := map[string]interface{}{
+		accesspoint := map[string]any{
 			"type":      "accesspoint",
 			"name":      addr.Name,
 			"street1":   "accesspoint",
@@ -210,7 +210,7 @@ func dhlRecipientBlock(addr Address, deliveryType string) []interface{} {
 		if addr.Email != "" {
 			accesspoint["email"] = addr.Email
 		}
-		doorstep := map[string]interface{}{
+		doorstep := map[string]any{
 			"type":     "doorstep",
 			"name":     addr.Name,
 			"street1":  addr.Street,
@@ -227,10 +227,10 @@ func dhlRecipientBlock(addr Address, deliveryType string) []interface{} {
 		if addr.Email != "" {
 			doorstep["email"] = addr.Email
 		}
-		return []interface{}{accesspoint, doorstep}
+		return []any{accesspoint, doorstep}
 	}
 
-	base := map[string]interface{}{
+	base := map[string]any{
 		"type":     "doorstep",
 		"name":     addr.Name,
 		"postcode": addr.PostalCode,
@@ -252,13 +252,13 @@ func dhlRecipientBlock(addr Address, deliveryType string) []interface{} {
 	if addr.Supplement != "" {
 		base["street2"] = addr.Supplement
 	}
-	return []interface{}{base}
+	return []any{base}
 }
 
 // dhlPhysicalFeatures builds the features.physical block.
 // DHL expects weight in kg (string format "nn.nnn") and dimensions in metres (string "nn.nn").
-func dhlPhysicalFeatures(colli Colli) map[string]interface{} {
-	physical := map[string]interface{}{
+func dhlPhysicalFeatures(colli Colli) map[string]any {
+	physical := map[string]any{
 		"grossWeight": fmt.Sprintf("%.3f", colli.Weight),
 	}
 	if colli.Dimensions.Length > 0 {
@@ -302,7 +302,7 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 	// Label details.
 	labelFormat := "pdf"
-	labelDetails := map[string]interface{}{
+	labelDetails := map[string]any{
 		"label":       true,
 		"formatLabel": labelFormat,
 		"size":        "10x15",
@@ -318,7 +318,7 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 	// Physical features (first colli only — DHL eConnect is single-parcel per cPAN).
 	colli := request.Shipment.Colli[0]
-	features := map[string]interface{}{
+	features := map[string]any{
 		"physical": dhlPhysicalFeatures(colli),
 	}
 
@@ -333,8 +333,8 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		if cod.CODAccountNumber == "" {
 			return nil, fmt.Errorf("cash_on_delivery add-on requires CODAccountNumber (IBAN)")
 		}
-		features["cod"] = map[string]interface{}{
-			"sepa": map[string]interface{}{
+		features["cod"] = map[string]any{
+			"sepa": map[string]any{
 				"amount":            fmt.Sprintf("%.2f", cod.CODAmount),
 				"currency":          cod.CODCurrency,
 				"bankAccountHolder": request.Shipment.Receiver.Name,
@@ -372,15 +372,15 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		senderBlock["referenceNr"] = request.IdempotencyKey
 	}
 
-	cPAN := map[string]interface{}{
-		"addresses": map[string]interface{}{
-			"sender":    []interface{}{senderBlock},
+	cPAN := map[string]any{
+		"addresses": map[string]any{
+			"sender":    []any{senderBlock},
 			"recipient": dhlRecipientBlock(request.Shipment.Receiver, request.Shipment.DeliveryType),
 		},
 		"features": features,
 	}
 
-	general := map[string]interface{}{
+	general := map[string]any{
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 		"product":   product,
 	}
@@ -405,7 +405,7 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		}
 	}
 
-	dataElement := map[string]interface{}{
+	dataElement := map[string]any{
 		"parcelOriginOrganization":      request.Shipment.Sender.Country,
 		"parcelDestinationOrganization": request.Shipment.Receiver.Country,
 		"labelDetails":                  labelDetails,
@@ -413,7 +413,7 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		"cPAN":                          cPAN,
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"dataElement": dataElement,
 	}
 
@@ -454,9 +454,9 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 			Shipment      struct {
 				ShipmentID  string `json:"shipmentId"`
 				RoutingCode string `json:"routingCode"`
-				Label       string `json:"label"`   // base64 PDF/PNG/ZPL
-				QRCode      string `json:"qrCode"`  // base64 QR code for labelless returns
-				URL         string `json:"url"`     // deep link for consumer
+				Label       string `json:"label"`  // base64 PDF/PNG/ZPL
+				QRCode      string `json:"qrCode"` // base64 QR code for labelless returns
+				URL         string `json:"url"`    // deep link for consumer
 			} `json:"shipment"`
 		} `json:"response"`
 	}

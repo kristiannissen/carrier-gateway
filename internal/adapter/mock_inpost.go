@@ -45,7 +45,7 @@ func (m *MockInPostAdapter) BookShipment(ctx context.Context, request BookingReq
 
 	zap.L().Info("MockInPostAdapter: returning mock booking response")
 
-	shipmentID := fmt.Sprintf("INPOST-%x", rand.Uint32())             //nolint:gosec // mock data, not security-sensitive
+	shipmentID := fmt.Sprintf("INPOST-%x", rand.Uint32())                //nolint:gosec // mock data, not security-sensitive
 	trackingNumber := fmt.Sprintf("INPOST%09dPL", rand.Intn(1000000000)) //nolint:gosec // mock data, not security-sensitive
 
 	return &BookingResponse{
@@ -93,7 +93,6 @@ func (m *MockInPostAdapter) TrackShipment(ctx context.Context, trackingNumber st
 		Events:            events,
 	}, nil
 }
-
 
 // FetchLabel returns a mock label response for InPost.
 func (m *MockInPostAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {

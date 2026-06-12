@@ -82,12 +82,12 @@ func bringNatureOfCargo(c Customs) string {
 // bringCustomsParty builds the party block used in customsInformation.
 // It mirrors the shape of bringParty but omits contact nesting — the
 // customs party schema only needs address fields and an optional vatNumber.
-func bringCustomsParty(a Address, vatNumber string) map[string]interface{} {
+func bringCustomsParty(a Address, vatNumber string) map[string]any {
 	street := a.Street
 	if a.HouseNumber != "" {
 		street = a.Street + " " + a.HouseNumber
 	}
-	p := map[string]interface{}{
+	p := map[string]any{
 		"name":        a.Name,
 		"addressLine": street,
 		"postalCode":  a.PostalCode,
@@ -113,19 +113,19 @@ func bringCustomsParty(a Address, vatNumber string) map[string]interface{} {
 //	  "natureOfCargo": "SALE_OF_GOODS",
 //	  "articles": [{ "quantity", "description", "customsTariffCode", "grossWeight", "totalValue", "currency", "countryOfOrigin" }]
 //	}
-func buildBringCustomsInformation(s Shipment) map[string]interface{} {
+func buildBringCustomsInformation(s Shipment) map[string]any {
 	c := s.Customs
 	if len(c.Items) == 0 && c.HSCode == "" {
 		return nil
 	}
 
-	articles := make([]map[string]interface{}, 0, len(c.Items))
+	articles := make([]map[string]any, 0, len(c.Items))
 	for _, item := range c.Items {
 		cur := item.Currency
 		if cur == "" {
 			cur = c.CustomsCurrency
 		}
-		articles = append(articles, map[string]interface{}{
+		articles = append(articles, map[string]any{
 			"quantity":          item.Quantity,
 			"description":       item.Description,
 			"customsTariffCode": item.HSCode,
@@ -138,7 +138,7 @@ func buildBringCustomsInformation(s Shipment) map[string]interface{} {
 
 	// Top-level fallback when no line items but a top-level HS code is set.
 	if len(articles) == 0 {
-		articles = append(articles, map[string]interface{}{
+		articles = append(articles, map[string]any{
 			"quantity":          1,
 			"description":       "Goods",
 			"customsTariffCode": c.HSCode,
@@ -149,7 +149,7 @@ func buildBringCustomsInformation(s Shipment) map[string]interface{} {
 		})
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"consent":       true,
 		"exporter":      bringCustomsParty(s.Sender, c.ExporterVATNumber),
 		"importer":      bringCustomsParty(s.Receiver, c.ImporterVATNumber),
@@ -160,19 +160,19 @@ func buildBringCustomsInformation(s Shipment) map[string]interface{} {
 
 // bringParty builds a Bring sender or recipient address block.
 // Contact details are nested under a "contact" object as required by the Bring API.
-func bringParty(a Address) map[string]interface{} {
+func bringParty(a Address) map[string]any {
 	street := a.Street
 	if a.HouseNumber != "" {
 		street = a.Street + " " + a.HouseNumber
 	}
-	party := map[string]interface{}{
+	party := map[string]any{
 		"name":        a.Name,
 		"addressLine": street,
 		"postalCode":  a.PostalCode,
 		"city":        a.City,
 		"countryCode": a.Country,
 	}
-	contact := map[string]interface{}{}
+	contact := map[string]any{}
 	if a.Name != "" {
 		contact["name"] = a.Name
 	}
@@ -190,17 +190,17 @@ func bringParty(a Address) map[string]interface{} {
 
 // bringPackage converts a single Colli to the Bring package wire format.
 // Dimensions are nested under a "dimensions" block.
-func bringPackage(c Colli) map[string]interface{} {
+func bringPackage(c Colli) map[string]any {
 	desc := "Goods"
 	if len(c.Items) > 0 {
 		desc = c.Items[0].Description
 	}
-	pkg := map[string]interface{}{
+	pkg := map[string]any{
 		"weightInKg":       c.Weight,
 		"goodsDescription": desc,
 	}
 	if c.Dimensions.Length > 0 || c.Dimensions.Width > 0 || c.Dimensions.Height > 0 {
-		pkg["dimensions"] = map[string]interface{}{
+		pkg["dimensions"] = map[string]any{
 			"lengthInCm": c.Dimensions.Length,
 			"widthInCm":  c.Dimensions.Width,
 			"heightInCm": c.Dimensions.Height,
@@ -239,7 +239,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		return nil, fmt.Errorf("shipment must contain at least one colli")
 	}
 
-	packages := make([]map[string]interface{}, len(request.Shipment.Colli))
+	packages := make([]map[string]any, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
 		packages[i] = bringPackage(c)
 	}
@@ -252,7 +252,7 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		recipient["pickupPointId"] = request.Shipment.Receiver.ServicePointID
 	}
 
-	product := map[string]interface{}{
+	product := map[string]any{
 		"id":             productID,
 		"customerNumber": a.CustomerNumber,
 	}
@@ -275,23 +275,23 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 	// Build additionalServices from AddOns.
 	// Bring service codes: 1091=eAdvising (SMS+email), 0041=flex delivery,
 	// 1131=direct signature, 1000=cash on delivery.
-	var additionalServices []map[string]interface{}
+	var additionalServices []map[string]any
 	if hasAddOn(request.Shipment.AddOns, AddOnSMSNotification) ||
 		hasAddOn(request.Shipment.AddOns, AddOnEmailNotification) {
 		// 1091 handles both SMS and email notification.
-		additionalServices = append(additionalServices, map[string]interface{}{
+		additionalServices = append(additionalServices, map[string]any{
 			"id": "1091",
 		})
 	}
 	if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
-		flexSvc := map[string]interface{}{"id": "0041"}
+		flexSvc := map[string]any{"id": "0041"}
 		if flex.Instructions != "" {
 			flexSvc["instructions"] = flex.Instructions
 		}
 		additionalServices = append(additionalServices, flexSvc)
 	}
 	if hasAddOn(request.Shipment.AddOns, AddOnSignatureRequired) {
-		additionalServices = append(additionalServices, map[string]interface{}{
+		additionalServices = append(additionalServices, map[string]any{
 			"id": "1131", // Direct signature
 		})
 	}
@@ -305,9 +305,9 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		if cod.CODAccountNumber == "" {
 			return nil, fmt.Errorf("cash_on_delivery add-on requires CODAccountNumber")
 		}
-		additionalServices = append(additionalServices, map[string]interface{}{
+		additionalServices = append(additionalServices, map[string]any{
 			"id": "1000",
-			"cashOnDelivery": map[string]interface{}{
+			"cashOnDelivery": map[string]any{
 				"amount":        cod.CODAmount,
 				"currency":      cod.CODCurrency,
 				"accountNumber": cod.CODAccountNumber,
@@ -318,9 +318,9 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		product["additionalServices"] = additionalServices
 	}
 
-	consignment := map[string]interface{}{
+	consignment := map[string]any{
 		"shippingDateTime": time.Now().UTC().Format("2006-01-02T15:04:05"),
-		"parties": map[string]interface{}{
+		"parties": map[string]any{
 			"sender":    bringParty(request.Shipment.Sender),
 			"recipient": recipient,
 		},
@@ -330,16 +330,16 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 
 	// Return booking — include returnProduct block.
 	if strings.EqualFold(request.Shipment.DeliveryType, "return") {
-		returnProduct := map[string]interface{}{
+		returnProduct := map[string]any{
 			"id": "9350", // Return Drop Off — customer brings to service point
 		}
 		// Flex delivery on the return label.
 		if flex, ok := getAddOn(request.Shipment.AddOns, AddOnFlexDelivery); ok {
-			flexSvc := map[string]interface{}{"id": "0041"}
+			flexSvc := map[string]any{"id": "0041"}
 			if flex.Instructions != "" {
 				flexSvc["instructions"] = flex.Instructions
 			}
-			returnProduct["additionalServices"] = []interface{}{flexSvc}
+			returnProduct["additionalServices"] = []any{flexSvc}
 		}
 		consignment["returnProduct"] = returnProduct
 	}
@@ -348,9 +348,9 @@ func (a *BringAdapter) BookShipment(ctx context.Context, request BookingRequest)
 		consignment["clientReference"] = request.IdempotencyKey
 	}
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"schemaVersion": 1,
-		"consignments":  []interface{}{consignment},
+		"consignments":  []any{consignment},
 	}
 
 	payloadBytes, err := json.Marshal(payload)

@@ -1,5 +1,10 @@
 // Package main is the entry point for the CLI application.
 // This file is located at /cmd/cli/main.go.
+//
+// Logging policy: structured zap logging is used for internal diagnostics.
+// Human-readable terminal output (booking results, tracking events, health
+// status) is written via fmt.Print* — this is intentional. CLI commands
+// produce user-facing text on stdout; errors go to stderr via fmt.Fprintln.
 package main
 
 import (
@@ -15,7 +20,8 @@ import (
 func main() {
 	log, err := logger.New()
 	if err != nil {
-		panic("Failed to initialize logger:" + err.Error())
+		fmt.Fprintf(os.Stderr, "failed to initialise logger: %v\n", err)
+		os.Exit(1)
 	}
 	defer log.Sync() //nolint:errcheck
 
@@ -34,7 +40,7 @@ func main() {
 	)
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

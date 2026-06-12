@@ -36,7 +36,7 @@ type LabelResponse struct {
 	Carrier        string      `json:"carrier"`
 	Format         LabelFormat `json:"format"`
 	// Data is the base64-encoded label content.
-	Data     string `json:"data"`
+	Data string `json:"data"`
 	// MimeType describes the content (e.g. application/pdf, image/png).
 	MimeType string `json:"mimeType"`
 }
@@ -59,6 +59,12 @@ func MimeTypeForFormat(f LabelFormat) string {
 }
 
 // CarrierAdapter defines the interface for all carrier adapters.
+//
+// Five methods are intentional: book, track, label, cancel, and update map to
+// five distinct shipment lifecycle operations every carrier must express.
+// Splitting into smaller role interfaces (e.g. Booker, Tracker) would scatter
+// the constraint without reducing its footprint — every adapter implements all
+// five and every handler selects a single adapter by name.
 type CarrierAdapter interface {
 	// BookShipment books a shipment with the carrier and returns a tracking number and label URL.
 	BookShipment(ctx context.Context, request BookingRequest) (*BookingResponse, error)
@@ -149,9 +155,9 @@ type UpdateRequest struct {
 
 // UpdateResponse is returned after a successful shipment update.
 type UpdateResponse struct {
-	TrackingNumber string   `json:"trackingNumber"`
-	Carrier        string   `json:"carrier"`
-	Status         string   `json:"status"` // always "updated"
+	TrackingNumber string `json:"trackingNumber"`
+	Carrier        string `json:"carrier"`
+	Status         string `json:"status"` // always "updated"
 	// UpdatedFields lists the field names that were successfully updated.
 	UpdatedFields []string `json:"updatedFields"`
 }
@@ -184,14 +190,16 @@ var capabilities = map[string]carrierCapabilities{
 	"gls":      {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
 	"dao":      {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: true},
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	"hermes": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	"inpost": {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
+	"hermes":   {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	"inpost":   {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
 	// FedEx: cancellation is supported via PUT /ship/v1/shipments/cancel.
 	// Full capabilities will be confirmed once the Ship and Track API specs are available.
 	"fedex": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
 	// DHL Express: cancel AWB is not available via API; pickup cancellation requires
 	// the dispatchConfirmationNumber from BookingResponse, not the AWB.
 	"dhl_express": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	// DPD: update is not available in the DPD Shipping API v1.1.
+	"dpd": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -549,10 +557,10 @@ type AddOn struct {
 
 // Shipment represents the shipment details.
 type Shipment struct {
-	Sender      Address  `json:"sender"      validate:"required"`
-	Receiver    Address  `json:"receiver"    validate:"required"`
-	TotalWeight float64  `json:"totalWeight" validate:"required,gt=0"`
-	Colli       []Colli  `json:"colli"       validate:"required,min=1"`
+	Sender      Address `json:"sender"      validate:"required"`
+	Receiver    Address `json:"receiver"    validate:"required"`
+	TotalWeight float64 `json:"totalWeight" validate:"required,gt=0"`
+	Colli       []Colli `json:"colli"       validate:"required,min=1"`
 	// DeliveryType controls the shipping product. When empty the adapter
 	// selects a sensible default based on whether ServicePointID is set.
 	// Accepted values: "home", "business", "servicepoint", "return".
@@ -605,12 +613,12 @@ type Dimensions struct {
 // PostalCode are optional for the receiver — the carrier routes to the
 // service point directly. Each carrier maps this to its own wire field name:
 //
-//	- PostNord: servicePointId
-//	- Bring: pickupPointId
-//	- GLS: parcelShopId
-//	- DAO: lockerId
-//	- InPost: targetLocker (service block)
-//	- DHL Express: onDemandDelivery.servicePointId (6-char code, e.g. "BRU001")
+//   - PostNord: servicePointId
+//   - Bring: pickupPointId
+//   - GLS: parcelShopId
+//   - DAO: lockerId
+//   - InPost: targetLocker (service block)
+//   - DHL Express: onDemandDelivery.servicePointId (6-char code, e.g. "BRU001")
 type Address struct {
 	Name           string `json:"name"           validate:"required"`
 	Street         string `json:"street"         validate:"required"`
@@ -636,18 +644,18 @@ type Item struct {
 
 // BookingResponse represents the response from a carrier after booking a shipment.
 type BookingResponse struct {
-	ShipmentID       string          `json:"shipmentId,omitempty"`
-	TrackingNumber   string          `json:"trackingNumber"`
-	LabelURL         string          `json:"labelUrl,omitempty"`
-	Carrier          string          `json:"carrier"`
-	Cost             float64         `json:"cost,omitempty"`
-	Currency         string          `json:"currency,omitempty"`
-	ServiceLevel     string          `json:"serviceLevel,omitempty"`
-	Status           string          `json:"status,omitempty"`
-	Colli            []ColliResponse `json:"colli,omitempty"`
-	Errors           []string        `json:"errors,omitempty"`
-	LockerId         string          `json:"lockerId,omitempty"`
-	ServicePointID   string          `json:"servicePointId,omitempty"`
+	ShipmentID     string          `json:"shipmentId,omitempty"`
+	TrackingNumber string          `json:"trackingNumber"`
+	LabelURL       string          `json:"labelUrl,omitempty"`
+	Carrier        string          `json:"carrier"`
+	Cost           float64         `json:"cost,omitempty"`
+	Currency       string          `json:"currency,omitempty"`
+	ServiceLevel   string          `json:"serviceLevel,omitempty"`
+	Status         string          `json:"status,omitempty"`
+	Colli          []ColliResponse `json:"colli,omitempty"`
+	Errors         []string        `json:"errors,omitempty"`
+	LockerId       string          `json:"lockerId,omitempty"`
+	ServicePointID string          `json:"servicePointId,omitempty"`
 	// FlaggedForReview is true when the address passed a ReviewRequired
 	// validation — the booking was accepted but should be checked manually.
 	FlaggedForReview bool `json:"flaggedForReview,omitempty"`
@@ -731,13 +739,13 @@ const (
 
 // TrackingResponse represents the tracking status of a shipment.
 type TrackingResponse struct {
-	ShipmentID        string          `json:"shipmentId,omitempty"`
-	TrackingNumber    string          `json:"trackingNumber"`
-	Carrier           string          `json:"carrier"`
+	ShipmentID     string `json:"shipmentId,omitempty"`
+	TrackingNumber string `json:"trackingNumber"`
+	Carrier        string `json:"carrier"`
 	// Status is the raw carrier-specific status string. Preserved for backward compatibility.
-	Status            string          `json:"status"`
+	Status string `json:"status"`
 	// NormalizedStatus is the carrier-agnostic status. Always present.
-	NormalizedStatus  TrackingStatus  `json:"normalizedStatus"`
+	NormalizedStatus TrackingStatus `json:"normalizedStatus"`
 	// OriginalStatus is the unmodified raw status string from the carrier.
 	OriginalStatus    string          `json:"originalStatus"`
 	Events            []TrackingEvent `json:"events"`
@@ -763,7 +771,7 @@ type ColliTracking struct {
 type TrackingEvent struct {
 	Timestamp string `json:"timestamp"`
 	// Status is the raw carrier-specific status string. Preserved for backward compatibility.
-	Status           string         `json:"status"`
+	Status string `json:"status"`
 	// NormalizedStatus is the carrier-agnostic status for this event.
 	NormalizedStatus TrackingStatus `json:"normalizedStatus"`
 	Location         string         `json:"location,omitempty"`

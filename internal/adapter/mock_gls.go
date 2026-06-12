@@ -50,7 +50,7 @@ func (m *MockGLSAdapter) BookShipment(ctx context.Context, request BookingReques
 	// Mock a returnOrderId as ShipmentID and a trackId as TrackingNumber.
 	if strings.EqualFold(request.Shipment.DeliveryType, "return") {
 		trackID := fmt.Sprintf("GLS-RET-%09d", rand.Intn(1000000000)) //nolint:gosec // mock data
-		orderID := fmt.Sprintf("RO-%09d", rand.Intn(1000000000))       //nolint:gosec // mock data
+		orderID := fmt.Sprintf("RO-%09d", rand.Intn(1000000000))      //nolint:gosec // mock data
 		colli := make([]ColliResponse, len(request.Shipment.Colli))
 		for i, c := range request.Shipment.Colli {
 			colli[i] = ColliResponse{ID: c.ID, TrackingNumber: trackID, Status: "booked"}
@@ -112,7 +112,6 @@ func (m *MockGLSAdapter) TrackShipment(ctx context.Context, trackingNumber strin
 		Events:            events,
 	}, nil
 }
-
 
 // FetchLabel returns a mock label response.
 func (m *MockGLSAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {

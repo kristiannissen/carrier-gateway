@@ -130,10 +130,10 @@ type dhlCustomsPayload struct {
 }
 
 type dhlCustomsDataElement struct {
-	ParcelOriginOrganization      string              `json:"parcelOriginOrganization"`
-	ParcelDestinationOrganization string              `json:"parcelDestinationOrganization"`
-	General                       dhlCustomsGeneral   `json:"general"`
-	CCustoms                      dhlCCustoms         `json:"cCustoms"`
+	ParcelOriginOrganization      string            `json:"parcelOriginOrganization"`
+	ParcelDestinationOrganization string            `json:"parcelDestinationOrganization"`
+	General                       dhlCustomsGeneral `json:"general"`
+	CCustoms                      dhlCCustoms       `json:"cCustoms"`
 }
 
 type dhlCustomsGeneral struct {
@@ -143,7 +143,7 @@ type dhlCustomsGeneral struct {
 }
 
 type dhlCCustoms struct {
-	CustomsIDs      dhlCustomsIDs       `json:"CustomsIDs"`
+	CustomsIDs       dhlCustomsIDs       `json:"CustomsIDs"`
 	GoodsDescription dhlGoodsDescription `json:"goodsDescription"`
 }
 
@@ -166,11 +166,11 @@ type dhlGoodsDescription struct {
 
 type dhlGoodsGeneral struct {
 	// Incoterms accepts DDP or DAP only.
-	Incoterms          string `json:"incoterms"`
+	Incoterms           string `json:"incoterms"`
 	GoodsClassification string `json:"goodsClassification"`
-	TotalValue         string `json:"totalValue"`
-	Currency           string `json:"currency"`
-	ShipmentWeight     string `json:"shipmentWeight"`
+	TotalValue          string `json:"totalValue"`
+	Currency            string `json:"currency"`
+	ShipmentWeight      string `json:"shipmentWeight"`
 }
 
 type dhlGoodsItem struct {
@@ -242,11 +242,11 @@ func (a *DHLAdapter) buildCCustomsRequest(req CustomsRequest) dhlCustomsPayload 
 				},
 				GoodsDescription: dhlGoodsDescription{
 					General: dhlGoodsGeneral{
-						Incoterms:          dhlIncoterms(req.Customs.Incoterms),
+						Incoterms:           dhlIncoterms(req.Customs.Incoterms),
 						GoodsClassification: "CommercialSaleOfGoods",
-						TotalValue:         fmt.Sprintf("%.2f", req.Customs.CustomsValue),
-						Currency:           req.Customs.CustomsCurrency,
-						ShipmentWeight:     "0.000", // populated from shipment weight at call site if needed
+						TotalValue:          fmt.Sprintf("%.2f", req.Customs.CustomsValue),
+						Currency:            req.Customs.CustomsCurrency,
+						ShipmentWeight:      "0.000", // populated from shipment weight at call site if needed
 					},
 					Items: items,
 				},
@@ -342,16 +342,16 @@ type glsCustomsInvoice struct {
 
 // glsCustomsConsignment is the GLS Customs API v3 POST /customs-consignments body.
 type glsCustomsConsignment struct {
-	ParcelNumbers                []string            `json:"parcelNumbers"`
-	CustomerReference            string              `json:"customerReference,omitempty"`
-	GLSIncotermCode              string              `json:"glsIncotermCode"`
-	IsExportDeclarationRequested bool                `json:"isExportDeclarationRequested"`
-	TotalGrossWeight             glsCustomsWeight    `json:"totalGrossWeight"`
-	SaveAsDraft                  bool                `json:"saveAsDraft,omitempty"`
-	ExportDeclarationNumbers     []string            `json:"exportDeclarationNumbers,omitempty"`
-	Exporter                     glsCustomsPartyBody `json:"exporter"`
-	Importer                     glsCustomsPartyBody `json:"importer"`
-	Invoice                      glsCustomsInvoice   `json:"invoice"`
+	ParcelNumbers                []string             `json:"parcelNumbers"`
+	CustomerReference            string               `json:"customerReference,omitempty"`
+	GLSIncotermCode              string               `json:"glsIncotermCode"`
+	IsExportDeclarationRequested bool                 `json:"isExportDeclarationRequested"`
+	TotalGrossWeight             glsCustomsWeight     `json:"totalGrossWeight"`
+	SaveAsDraft                  bool                 `json:"saveAsDraft,omitempty"`
+	ExportDeclarationNumbers     []string             `json:"exportDeclarationNumbers,omitempty"`
+	Exporter                     glsCustomsPartyBody  `json:"exporter"`
+	Importer                     glsCustomsPartyBody  `json:"importer"`
+	Invoice                      glsCustomsInvoice    `json:"invoice"`
 	LineItems                    []glsCustomsLineItem `json:"lineItems"`
 }
 
@@ -525,12 +525,12 @@ func postNordReasonForExportation(shipmentType string) int {
 // Endpoint: POST /rest/shipment/v3/customs/declaration.
 type postNordCustomsDeclaration struct {
 	// ItemID is the PostNord EDI item identifier from the prior booking.
-	ItemID                 string                    `json:"itemId"`
-	SellerVATNumber        string                    `json:"sellerVatNumber,omitempty"`
-	BuyerVATNumber         string                    `json:"buyerVatNumber,omitempty"`
-	TermsOfSale            string                    `json:"termsOfSale,omitempty"`
-	ReasonForExportation   int                       `json:"reasonForExportation"`
-	Items                  []postNordCustomsItem     `json:"items"`
+	ItemID               string                `json:"itemId"`
+	SellerVATNumber      string                `json:"sellerVatNumber,omitempty"`
+	BuyerVATNumber       string                `json:"buyerVatNumber,omitempty"`
+	TermsOfSale          string                `json:"termsOfSale,omitempty"`
+	ReasonForExportation int                   `json:"reasonForExportation"`
+	Items                []postNordCustomsItem `json:"items"`
 }
 
 // postNordCustomsItem is a single line item in a PostNord customs declaration.

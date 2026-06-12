@@ -163,7 +163,6 @@ var iso3166Alpha2 = regexp.MustCompile(`^[A-Z]{2}$`)
 // euDeMinimisEUR is the de minimis threshold for EU B2C shipments.
 const euDeMinimisEUR = 150.0
 
-
 // viesBaseURL is the VIES REST API base URL. Overridable in tests via package-level
 // assignment so tests can point at an httptest.Server without DNS tricks.
 var viesBaseURL = "https://ec.europa.eu/taxation_customs/vies/rest-api/ms"

@@ -375,10 +375,10 @@ func (a *HermesAdapter) BookShipment(ctx context.Context, request BookingRequest
 	}
 
 	var hermesResp struct {
-		ShipmentID      string `json:"shipmentID"`
-		ShipmentOrderID string `json:"shipmentOrderID"`
-		LabelImage      string `json:"labelImage"`
-		LabelMediatype  string `json:"labelMediatype"`
+		ShipmentID        string `json:"shipmentID"`
+		ShipmentOrderID   string `json:"shipmentOrderID"`
+		LabelImage        string `json:"labelImage"`
+		LabelMediatype    string `json:"labelMediatype"`
 		ListOfResultCodes []struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
@@ -542,9 +542,9 @@ func (a *HermesAdapter) TrackShipment(ctx context.Context, trackingNumber string
 		Shipmentinfo []struct {
 			ShipmentID string `json:"shipmentID"`
 			Status     []struct {
-				Timestamp   string `json:"timestamp"`
-				Code        string `json:"code"`
-				Description string `json:"description"`
+				Timestamp    string `json:"timestamp"`
+				Code         string `json:"code"`
+				Description  string `json:"description"`
 				ScanningUnit struct {
 					Name        string `json:"name"`
 					City        string `json:"city"`

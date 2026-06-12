@@ -214,8 +214,8 @@ func TestScrubJSON_EmptyInput(t *testing.T) {
 }
 
 // fieldMap converts a zap field slice into a map for easy assertion access.
-func fieldMap(fields []zapcore.Field) map[string]interface{} {
-	m := make(map[string]interface{}, len(fields))
+func fieldMap(fields []zapcore.Field) map[string]any {
+	m := make(map[string]any, len(fields))
 	for _, f := range fields {
 		switch f.Type {
 		case zapcore.StringType:

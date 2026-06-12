@@ -13,6 +13,11 @@ import (
 	"github.com/kristiannissen/carrier-gateway/internal/notification"
 )
 
+// maxRequestBodyBytes caps request body reads in handlers that write to the
+// body directly (i.e. not routed through the idempotency middleware body read).
+// Mirrors the limit enforced by middleware.maxRequestBodyBytes.
+const maxRequestBodyBytes = 1 << 20 // 1 MB
+
 // Config holds shared configuration for HTTP handlers.
 type Config struct {
 	Registry *adapter.Registry

@@ -18,7 +18,7 @@ import (
 
 // captureBody is a test handler that reads and stores the request body and
 // idempotency key from context for assertion.
-func captureBody(t *testing.T, body *map[string]interface{}, ctxKey *string) http.Handler {
+func captureBody(t *testing.T, body *map[string]any, ctxKey *string) http.Handler {
 	t.Helper()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(r.Body)
@@ -38,7 +38,7 @@ func newIdempotencyMiddleware() func(http.Handler) http.Handler {
 func TestIdempotency_NoHeaderNoBody_PassesThrough(t *testing.T) {
 	t.Parallel()
 
-	var body map[string]interface{}
+	var body map[string]any
 	var ctxKey string
 
 	h := newIdempotencyMiddleware()(captureBody(t, &body, &ctxKey))
@@ -53,7 +53,7 @@ func TestIdempotency_NoHeaderNoBody_PassesThrough(t *testing.T) {
 func TestIdempotency_HeaderOnly_InjectedIntoBody(t *testing.T) {
 	t.Parallel()
 
-	var body map[string]interface{}
+	var body map[string]any
 	var ctxKey string
 
 	h := newIdempotencyMiddleware()(captureBody(t, &body, &ctxKey))
@@ -70,7 +70,7 @@ func TestIdempotency_HeaderOnly_InjectedIntoBody(t *testing.T) {
 func TestIdempotency_BodyOnly_PassesThrough(t *testing.T) {
 	t.Parallel()
 
-	var body map[string]interface{}
+	var body map[string]any
 	var ctxKey string
 
 	h := newIdempotencyMiddleware()(captureBody(t, &body, &ctxKey))
@@ -87,7 +87,7 @@ func TestIdempotency_BodyOnly_PassesThrough(t *testing.T) {
 func TestIdempotency_HeaderAndBodyMatch_Accepted(t *testing.T) {
 	t.Parallel()
 
-	var body map[string]interface{}
+	var body map[string]any
 	var ctxKey string
 
 	h := newIdempotencyMiddleware()(captureBody(t, &body, &ctxKey))
@@ -149,7 +149,7 @@ func TestIdempotency_HeaderExactly64Chars_Accepted(t *testing.T) {
 	t.Parallel()
 
 	var ctxKey string
-	h := newIdempotencyMiddleware()(captureBody(t, &map[string]interface{}{}, &ctxKey))
+	h := newIdempotencyMiddleware()(captureBody(t, &map[string]any{}, &ctxKey))
 
 	r := httptest.NewRequest(http.MethodPost, "/api/bookings",
 		strings.NewReader(`{"carrier":"postnord"}`))

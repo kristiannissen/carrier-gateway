@@ -69,12 +69,12 @@ func TestValidateAddress_PostalCodes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			addr := adapter.Address{
-				Name:       "Test",
-				Street:     "Test Street",
+				Name:        "Test",
+				Street:      "Test Street",
 				HouseNumber: "1",
-				City:       "Test City",
-				PostalCode: tc.postalCode,
-				Country:    tc.country,
+				City:        "Test City",
+				PostalCode:  tc.postalCode,
+				Country:     tc.country,
 			}
 			err := ValidateAddress(addr, "postnord", tc.country)
 			if tc.wantErr {
@@ -113,12 +113,12 @@ func TestValidateAddress_MunicipalityRequiredForFinland(t *testing.T) {
 	t.Parallel()
 
 	addr := adapter.Address{
-		Name:       "Test",
-		Street:     "Mannerheimintie",
+		Name:        "Test",
+		Street:      "Mannerheimintie",
 		HouseNumber: "1",
-		City:       "",
-		PostalCode: "00100",
-		Country:    "FI",
+		City:        "",
+		PostalCode:  "00100",
+		Country:     "FI",
 	}
 	err := ValidateAddress(addr, "bring", "FI")
 	require.Error(t, err)

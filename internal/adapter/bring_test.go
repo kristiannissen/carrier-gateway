@@ -124,7 +124,7 @@ func TestBringAdapter_BookShipment_PayloadShape(t *testing.T) {
 	_, hasCustomerID := payload["customerId"]
 	assert.False(t, hasCustomerID, "Bring v2 does not use top-level customerId")
 	consignments := bringRequireArray(t, payload, "consignments", 1)
-	consignment := consignments[0].(map[string]interface{})
+	consignment := consignments[0].(map[string]any)
 
 	assert.NotEmpty(t, consignment["shippingDateTime"])
 
@@ -160,7 +160,7 @@ func TestBringAdapter_BookShipment_PayloadShape(t *testing.T) {
 
 	// packages — dimensions nested
 	packages := bringRequireArray(t, consignment, "packages", 1)
-	pkg := packages[0].(map[string]interface{})
+	pkg := packages[0].(map[string]any)
 	assert.Equal(t, float64(5.0), pkg["weightInKg"])
 	assert.NotEmpty(t, pkg["goodsDescription"])
 	dims := bringRequireNested(t, pkg, "dimensions")
@@ -195,12 +195,12 @@ func TestBringAdapter_BookShipment_AddOns(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		consignment := consignments[0].(map[string]interface{})
+		consignment := consignments[0].(map[string]any)
 		product := bringRequireNested(t, consignment, "product")
-		services := product["additionalServices"].([]interface{})
+		services := product["additionalServices"].([]any)
 		// Only one entry — 1091 covers both SMS and email
 		require.Len(t, services, 1)
-		svc := services[0].(map[string]interface{})
+		svc := services[0].(map[string]any)
 		assert.Equal(t, "1091", svc["id"])
 	})
 
@@ -215,10 +215,10 @@ func TestBringAdapter_BookShipment_AddOns(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		consignment := consignments[0].(map[string]interface{})
+		consignment := consignments[0].(map[string]any)
 		product := bringRequireNested(t, consignment, "product")
-		services := product["additionalServices"].([]interface{})
-		svc := services[0].(map[string]interface{})
+		services := product["additionalServices"].([]any)
+		svc := services[0].(map[string]any)
 		assert.Equal(t, "0041", svc["id"])
 		assert.Equal(t, "Leave at door", svc["instructions"])
 	})
@@ -238,12 +238,12 @@ func TestBringAdapter_BookShipment_SignatureAndCOD(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		consignment := consignments[0].(map[string]interface{})
+		consignment := consignments[0].(map[string]any)
 		product := bringRequireNested(t, consignment, "product")
-		services := product["additionalServices"].([]interface{})
+		services := product["additionalServices"].([]any)
 		ids := make([]string, len(services))
 		for i, s := range services {
-			ids[i] = s.(map[string]interface{})["id"].(string)
+			ids[i] = s.(map[string]any)["id"].(string)
 		}
 		assert.Contains(t, ids, "1131")
 		_ = adapter
@@ -265,18 +265,18 @@ func TestBringAdapter_BookShipment_SignatureAndCOD(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		consignment := consignments[0].(map[string]interface{})
+		consignment := consignments[0].(map[string]any)
 		product := bringRequireNested(t, consignment, "product")
-		services := product["additionalServices"].([]interface{})
-		var codSvc map[string]interface{}
+		services := product["additionalServices"].([]any)
+		var codSvc map[string]any
 		for _, s := range services {
-			svc := s.(map[string]interface{})
+			svc := s.(map[string]any)
 			if svc["id"] == "1000" {
 				codSvc = svc
 			}
 		}
 		require.NotNil(t, codSvc, "expected 1000 service")
-		cod := codSvc["cashOnDelivery"].(map[string]interface{})
+		cod := codSvc["cashOnDelivery"].(map[string]any)
 		assert.Equal(t, 499.95, cod["amount"])
 		assert.Equal(t, "NOK", cod["currency"])
 		assert.Equal(t, "12345678901", cod["accountNumber"])
@@ -347,7 +347,7 @@ func TestBringAdapter_BookShipment_Return(t *testing.T) {
 	require.NoError(t, err)
 
 	consignments := bringRequireArray(t, *captured, "consignments", 1)
-	consignment := consignments[0].(map[string]interface{})
+	consignment := consignments[0].(map[string]any)
 
 	// returnProduct must be present
 	returnProduct := bringRequireNested(t, consignment, "returnProduct")
@@ -454,7 +454,7 @@ func TestBringAdapter_BookShipment_ServicePoint(t *testing.T) {
 	assert.Equal(t, "pp_456", resp.ServicePointID)
 
 	consignments := bringRequireArray(t, *captured, "consignments", 1)
-	consignment := consignments[0].(map[string]interface{})
+	consignment := consignments[0].(map[string]any)
 	parties := bringRequireNested(t, consignment, "parties")
 	recipient := bringRequireNested(t, parties, "recipient")
 
@@ -479,7 +479,7 @@ func TestBringAdapter_BookShipment_IdempotencyKey(t *testing.T) {
 
 	_ = adapter
 	consignments := bringRequireArray(t, *captured, "consignments", 1)
-	consignment := consignments[0].(map[string]interface{})
+	consignment := consignments[0].(map[string]any)
 	assert.Equal(t, "order-98765", consignment["clientReference"])
 }
 
@@ -497,7 +497,7 @@ func TestBringAdapter_BookShipment_Incoterms(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		consignment := consignments[0].(map[string]interface{})
+		consignment := consignments[0].(map[string]any)
 		product := bringRequireNested(t, consignment, "product")
 		assert.Equal(t, "DDP", product["incotermRule"])
 	})
@@ -517,7 +517,7 @@ func TestBringAdapter_BookShipment_Incoterms(t *testing.T) {
 				require.NoError(t, err)
 
 				consignments := bringRequireArray(t, *captured, "consignments", 1)
-				product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+				product := bringRequireNested(t, consignments[0].(map[string]any), "product")
 				assert.Equal(t, term, product["incotermRule"])
 			})
 		}
@@ -531,7 +531,7 @@ func TestBringAdapter_BookShipment_Incoterms(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		product := bringRequireNested(t, consignments[0].(map[string]any), "product")
 		_, hasIncoterm := product["incotermRule"]
 		assert.False(t, hasIncoterm, "incotermRule must be absent when Customs.Incoterms is empty")
 	})
@@ -565,7 +565,7 @@ func TestBringAdapter_BookShipment_CargoInternational(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		product := bringRequireNested(t, consignments[0].(map[string]any), "product")
 		assert.Equal(t, "CARGO_INTERNATIONAL", product["id"])
 		assert.Equal(t, "DDP", product["incotermRule"])
 	})
@@ -582,7 +582,7 @@ func TestBringAdapter_BookShipment_CustomsInformation(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		product := bringRequireNested(t, consignments[0].(map[string]any), "product")
 		_, hasCustoms := product["customsInformation"]
 		assert.False(t, hasCustoms, "customsInformation must be absent when no customs data is provided")
 	})
@@ -623,7 +623,7 @@ func TestBringAdapter_BookShipment_CustomsInformation(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		product := bringRequireNested(t, consignments[0].(map[string]any), "product")
 		info := bringRequireNested(t, product, "customsInformation")
 
 		// consent must always be true
@@ -636,17 +636,17 @@ func TestBringAdapter_BookShipment_CustomsInformation(t *testing.T) {
 		importer := bringRequireNested(t, info, "importer")
 		assert.Equal(t, "SE987654321", importer["vatNumber"])
 
-		articles, ok := info["articles"].([]interface{})
-		require.True(t, ok, "articles must be []interface{}")
+		articles, ok := info["articles"].([]any)
+		require.True(t, ok, "articles must be []any")
 		require.Len(t, articles, 2)
 
-		a0 := articles[0].(map[string]interface{})
+		a0 := articles[0].(map[string]any)
 		assert.Equal(t, "Cotton T-shirts", a0["description"])
 		assert.Equal(t, "610910", a0["customsTariffCode"])
 		assert.Equal(t, float64(5), a0["quantity"])
 		assert.Equal(t, "PL", a0["countryOfOrigin"])
 
-		a1 := articles[1].(map[string]interface{})
+		a1 := articles[1].(map[string]any)
 		assert.Equal(t, "Wool jacket", a1["description"])
 		assert.Equal(t, "DE", a1["countryOfOrigin"])
 	})
@@ -667,7 +667,7 @@ func TestBringAdapter_BookShipment_CustomsInformation(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		product := bringRequireNested(t, consignments[0].(map[string]any), "product")
 		info := bringRequireNested(t, product, "customsInformation")
 		assert.Equal(t, "SALE_OF_GOODS", info["natureOfCargo"])
 	})
@@ -688,12 +688,12 @@ func TestBringAdapter_BookShipment_CustomsInformation(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		product := bringRequireNested(t, consignments[0].(map[string]any), "product")
 		info := bringRequireNested(t, product, "customsInformation")
-		articles, ok := info["articles"].([]interface{})
+		articles, ok := info["articles"].([]any)
 		require.True(t, ok)
 		require.Len(t, articles, 1)
-		a0 := articles[0].(map[string]interface{})
+		a0 := articles[0].(map[string]any)
 		assert.Equal(t, "610910", a0["customsTariffCode"])
 		assert.Equal(t, 500.0, a0["totalValue"])
 	})
@@ -715,11 +715,11 @@ func TestBringAdapter_BookShipment_CustomsInformation(t *testing.T) {
 		require.NoError(t, err)
 
 		consignments := bringRequireArray(t, *captured, "consignments", 1)
-		product := bringRequireNested(t, consignments[0].(map[string]interface{}), "product")
+		product := bringRequireNested(t, consignments[0].(map[string]any), "product")
 		info := bringRequireNested(t, product, "customsInformation")
-		articles, ok := info["articles"].([]interface{})
+		articles, ok := info["articles"].([]any)
 		require.True(t, ok)
-		assert.Equal(t, "DKK", articles[0].(map[string]interface{})["currency"])
+		assert.Equal(t, "DKK", articles[0].(map[string]any)["currency"])
 	})
 }
 
@@ -740,10 +740,10 @@ func TestBringAdapter_BookShipment_MultiColli(t *testing.T) {
 
 	_ = adapter
 	consignments := bringRequireArray(t, *captured, "consignments", 1)
-	consignment := consignments[0].(map[string]interface{})
+	consignment := consignments[0].(map[string]any)
 	packages := bringRequireArray(t, consignment, "packages", 2)
-	assert.Equal(t, float64(3.0), packages[0].(map[string]interface{})["weightInKg"])
-	assert.Equal(t, float64(5.0), packages[1].(map[string]interface{})["weightInKg"])
+	assert.Equal(t, float64(3.0), packages[0].(map[string]any)["weightInKg"])
+	assert.Equal(t, float64(5.0), packages[1].(map[string]any)["weightInKg"])
 }
 
 func TestBringAdapter_BookShipment_APIError(t *testing.T) {
@@ -796,10 +796,10 @@ func TestBringAdapter_TrackShipment_RequestShape(t *testing.T) {
 // Helpers
 // =========================================================================
 
-func newBringTestServer(t *testing.T, statusCode int, body string) (*BringAdapter, *map[string]interface{}) {
+func newBringTestServer(t *testing.T, statusCode int, body string) (*BringAdapter, *map[string]any) {
 	t.Helper()
 
-	var captured map[string]interface{}
+	var captured map[string]any
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, err := io.ReadAll(r.Body)
@@ -868,16 +868,16 @@ func bringMockTrackingResponse() string {
 	}`
 }
 
-func bringRequireNested(t *testing.T, parent map[string]interface{}, key string) map[string]interface{} {
+func bringRequireNested(t *testing.T, parent map[string]any, key string) map[string]any {
 	t.Helper()
-	v, ok := parent[key].(map[string]interface{})
+	v, ok := parent[key].(map[string]any)
 	require.True(t, ok, "missing nested key %q", key)
 	return v
 }
 
-func bringRequireArray(t *testing.T, parent map[string]interface{}, key string, wantLen int) []interface{} {
+func bringRequireArray(t *testing.T, parent map[string]any, key string, wantLen int) []any {
 	t.Helper()
-	v, ok := parent[key].([]interface{})
+	v, ok := parent[key].([]any)
 	require.True(t, ok, "missing array key %q", key)
 	require.Len(t, v, wantLen)
 	return v

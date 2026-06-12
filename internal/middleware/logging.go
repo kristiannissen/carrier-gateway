@@ -144,7 +144,7 @@ func scrubJSON(b []byte) string {
 		return ""
 	}
 
-	var raw interface{}
+	var raw any
 	if err := json.Unmarshal(b, &raw); err != nil {
 		// Not JSON — safe to log as plain text.
 		return string(b)
@@ -161,9 +161,9 @@ func scrubJSON(b []byte) string {
 
 // scrubValue walks the parsed JSON tree and redacts sensitive fields in place.
 // Field name comparison is normalised to lower-case to catch any casing variant.
-func scrubValue(v interface{}) {
+func scrubValue(v any) {
 	switch node := v.(type) {
-	case map[string]interface{}:
+	case map[string]any:
 		for k, val := range node {
 			if sensitiveJSONFields[strings.ToLower(k)] {
 				node[k] = "[redacted]"
@@ -171,7 +171,7 @@ func scrubValue(v interface{}) {
 			}
 			scrubValue(val)
 		}
-	case []interface{}:
+	case []any:
 		for _, item := range node {
 			scrubValue(item)
 		}

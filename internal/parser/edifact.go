@@ -87,9 +87,9 @@ func (p *EDIFACTParser) Parse(body []byte) (*adapter.BookingRequest, error) {
 			components := strings.Split(elements[2], ":")
 			// DIM+1+CMT:length:width:height
 			if len(components) >= 4 {
-				length, _ := strconv.ParseFloat(components[1], 64)  //nolint:errcheck // malformed value defaults to 0
-				width, _ := strconv.ParseFloat(components[2], 64)   //nolint:errcheck // malformed value defaults to 0
-				height, _ := strconv.ParseFloat(components[3], 64)  //nolint:errcheck // malformed value defaults to 0
+				length, _ := strconv.ParseFloat(components[1], 64) //nolint:errcheck // malformed value defaults to 0
+				width, _ := strconv.ParseFloat(components[2], 64)  //nolint:errcheck // malformed value defaults to 0
+				height, _ := strconv.ParseFloat(components[3], 64) //nolint:errcheck // malformed value defaults to 0
 				currentColli.Dimensions = adapter.Dimensions{
 					Length: length,
 					Width:  width,

@@ -41,13 +41,13 @@ type GLSAdapter struct {
 	// ContactID is the GLS-assigned shipper contact ID sent on every booking.
 	ContactID string
 	// ReturnAppID is the GLS app-id path parameter for the Shop Returns API.
-	ReturnAppID    string
-	BaseURL        string
-	ReturnBaseURL  string
-	AuthURL        string
-	HTTPClient     *http.Client
-	tokenCache     glsTokenCache
-	log            *zap.Logger
+	ReturnAppID   string
+	BaseURL       string
+	ReturnBaseURL string
+	AuthURL       string
+	HTTPClient    *http.Client
+	tokenCache    glsTokenCache
+	log           *zap.Logger
 }
 
 // NewGLSAdapter creates a new GLSAdapter with the given credentials.
@@ -126,8 +126,8 @@ func (a *GLSAdapter) bearerToken(ctx context.Context) (string, error) {
 }
 
 // glsAddress converts a unified Address to the GLS ShipIT Address schema.
-func glsAddress(a Address) map[string]interface{} {
-	addr := map[string]interface{}{
+func glsAddress(a Address) map[string]any {
+	addr := map[string]any{
 		"Name1":       a.Name,
 		"Street":      a.Street,
 		"Zipcode":     a.PostalCode,
@@ -147,18 +147,18 @@ func glsAddress(a Address) map[string]interface{} {
 }
 
 // glsShipmentUnit converts a single Colli to a GLS ShipmentUnit.
-func glsShipmentUnit(c Colli) map[string]interface{} {
+func glsShipmentUnit(c Colli) map[string]any {
 	note := "Goods"
 	if len(c.Items) > 0 {
 		note = c.Items[0].Description
 	}
-	unit := map[string]interface{}{
+	unit := map[string]any{
 		"Weight":                c.Weight,
 		"Note1":                 note,
 		"ShipmentUnitReference": []string{c.ID},
 	}
 	if c.Dimensions.Length > 0 || c.Dimensions.Width > 0 || c.Dimensions.Height > 0 {
-		unit["Volume"] = map[string]interface{}{
+		unit["Volume"] = map[string]any{
 			"Length":         fmt.Sprintf("%.0f", c.Dimensions.Length),
 			"Width":          fmt.Sprintf("%.0f", c.Dimensions.Width),
 			"Height":         fmt.Sprintf("%.0f", c.Dimensions.Height),
@@ -206,7 +206,7 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		return nil, fmt.Errorf("failed to obtain GLS access token: %w", err)
 	}
 
-	units := make([]map[string]interface{}, len(request.Shipment.Colli))
+	units := make([]map[string]any, len(request.Shipment.Colli))
 	for i, c := range request.Shipment.Colli {
 		units[i] = glsShipmentUnit(c)
 	}
@@ -216,15 +216,15 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		category = "BUSINESS"
 	}
 
-	consignee := map[string]interface{}{
+	consignee := map[string]any{
 		"Category": category,
 		"Address":  glsAddress(request.Shipment.Receiver),
 	}
 
-	shipment := map[string]interface{}{
+	shipment := map[string]any{
 		"Product":      "PARCEL",
 		"ShippingDate": time.Now().UTC().Format(time.RFC3339),
-		"Shipper": map[string]interface{}{
+		"Shipper": map[string]any{
 			"ContactID": a.ContactID,
 			"Address":   glsAddress(request.Shipment.Sender),
 		},
@@ -233,14 +233,14 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	}
 
 	// Build Service array from ServicePointID and AddOns — opt-in only.
-	var services []map[string]interface{}
+	var services []map[string]any
 
 	isServicePoint := request.Shipment.Receiver.ServicePointID != "" ||
 		strings.EqualFold(request.Shipment.DeliveryType, "servicepoint")
 	if isServicePoint && request.Shipment.Receiver.ServicePointID != "" {
-		services = append(services, map[string]interface{}{
-			"Service":      map[string]interface{}{"ServiceName": "ShopDelivery"},
-			"ShopDelivery": map[string]interface{}{"ServiceName": "ShopDelivery", "ParcelShopID": request.Shipment.Receiver.ServicePointID},
+		services = append(services, map[string]any{
+			"Service":      map[string]any{"ServiceName": "ShopDelivery"},
+			"ShopDelivery": map[string]any{"ServiceName": "ShopDelivery", "ParcelShopID": request.Shipment.Receiver.ServicePointID},
 		})
 	}
 
@@ -280,10 +280,10 @@ func (a *GLSAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 	}
 
 	templateSet, labelFormat := glsLabelFormat(LabelFormatPDF)
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"Shipment": shipment,
-		"PrintingOptions": map[string]interface{}{
-			"ReturnLabels": map[string]interface{}{
+		"PrintingOptions": map[string]any{
+			"ReturnLabels": map[string]any{
 				"TemplateSet": templateSet,
 				"LabelFormat": labelFormat,
 			},
@@ -381,11 +381,11 @@ type glsReturnOptions struct {
 
 // glsCreateReturnOrder is the POST body for GLS Shop Returns Customer Plus API v3.
 type glsCreateReturnOrder struct {
-	OriginalOrderReference string           `json:"originalOrderReference"`
-	ReturnReason           string           `json:"returnReason"`
-	Sender                 glsReturnSender  `json:"sender"`
+	OriginalOrderReference string            `json:"originalOrderReference"`
+	ReturnReason           string            `json:"returnReason"`
+	Sender                 glsReturnSender   `json:"sender"`
 	Receiver               glsReturnReceiver `json:"receiver"`
-	LabelFormat            string           `json:"labelFormat,omitempty"`
+	LabelFormat            string            `json:"labelFormat,omitempty"`
 	Options                *glsReturnOptions `json:"options,omitempty"`
 }
 
@@ -580,10 +580,10 @@ func (a *GLSAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 	}
 
 	templateSet, labelFormat := glsLabelFormat(req.Format)
-	body, err := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]any{
 		"TrackID": req.TrackingNumber,
-		"PrintingOptions": map[string]interface{}{
-			"ReturnLabels": map[string]interface{}{
+		"PrintingOptions": map[string]any{
+			"ReturnLabels": map[string]any{
 				"TemplateSet": templateSet,
 				"LabelFormat": labelFormat,
 			},

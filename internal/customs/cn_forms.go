@@ -30,11 +30,11 @@ const cn22MaxValueEUR = 22.0
 type ReasonForExport string
 
 const (
-	ReasonSaleOfGoods      ReasonForExport = "sale_of_goods"
-	ReasonReturnedGoods    ReasonForExport = "returned_goods"
-	ReasonGift             ReasonForExport = "gift"
-	ReasonPersonalEffects  ReasonForExport = "personal_effects"
-	ReasonOther            ReasonForExport = "other"
+	ReasonSaleOfGoods     ReasonForExport = "sale_of_goods"
+	ReasonReturnedGoods   ReasonForExport = "returned_goods"
+	ReasonGift            ReasonForExport = "gift"
+	ReasonPersonalEffects ReasonForExport = "personal_effects"
+	ReasonOther           ReasonForExport = "other"
 )
 
 // FormRequest carries the data needed to generate a CN22 or CN23 form.
