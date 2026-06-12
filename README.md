@@ -13,6 +13,8 @@ A stateless Go microservice for booking, tracking, and returning shipments acros
 | `gls` | GLS | DK, SE, DE, NL, and more | ✅ | ✅ | ✅ | PDF, ZPL, ZPLGK | Production |
 | `dao` | DAO | DK | ✅ | ✅ | ✅ | PDF | Beta |
 | `dhl` | DHL eCommerce Europe | 28 European countries | ✅ | ✅ | ✅ | PDF | Beta |
+| `dhl_express` | DHL Express (MyDHL API) | Worldwide | ✅ | ✅ | ✅ | PDF, ZPL, EPL | Beta |
+| `hermes` | Hermes (HSI) | DE | ✅ | ✅ | ✅ | PDF, ZPL | Beta |
 | `fedex` | FedEx | US, EU, and more | ✅ | ✅ | ❌ | — | Beta |
 | `inpost` | InPost | PL | — | — | — | — | Demo |
 
