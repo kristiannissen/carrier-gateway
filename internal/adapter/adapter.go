@@ -189,6 +189,9 @@ var capabilities = map[string]carrierCapabilities{
 	// FedEx: cancellation is supported via PUT /ship/v1/shipments/cancel.
 	// Full capabilities will be confirmed once the Ship and Track API specs are available.
 	"fedex": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
+	// DHL Express: cancel AWB is not available via API; pickup cancellation requires
+	// the dispatchConfirmationNumber from BookingResponse, not the AWB.
+	"dhl_express": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -354,6 +357,30 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		)
 	}
 
+	dhlExpressUsername := os.Getenv("DHL_EXPRESS_USERNAME")
+	dhlExpressPassword := os.Getenv("DHL_EXPRESS_PASSWORD")
+	dhlExpressAccountNumber := os.Getenv("DHL_EXPRESS_ACCOUNT_NUMBER")
+	dhlExpressProductCode := os.Getenv("DHL_EXPRESS_PRODUCT_CODE")
+	if dhlExpressProductCode == "" {
+		dhlExpressProductCode = "P" // EXPRESS WORLDWIDE — override via DHL_EXPRESS_PRODUCT_CODE
+	}
+	dhlExpressReturnProductCode := os.Getenv("DHL_EXPRESS_RETURN_PRODUCT_CODE")
+	switch {
+	case mockMode:
+		adapters["dhl_express"] = &MockDHLExpressAdapter{}
+		log.Info("DHL Express adapter initialized in mock mode (MOCK_MODE=true)")
+	case dhlExpressUsername == "" || dhlExpressPassword == "":
+		adapters["dhl_express"] = &MockDHLExpressAdapter{}
+		log.Warn("DHL Express adapter falling back to mock mode (DHL_EXPRESS_USERNAME or DHL_EXPRESS_PASSWORD not set)")
+	default:
+		a := NewDHLExpressAdapter(dhlExpressUsername, dhlExpressPassword, dhlExpressAccountNumber, dhlExpressProductCode, dhlExpressReturnProductCode, log)
+		adapters["dhl_express"] = a
+		log.Info("DHL Express adapter initialized in production mode (beta)",
+			zap.String("baseURL", a.BaseURL),
+			zap.String("defaultProductCode", a.DefaultProductCode),
+		)
+	}
+
 	return adapters
 }
 
@@ -404,6 +431,19 @@ type Customs struct {
 	// Accepted values: "SALE_OF_GOODS", "GIFT", "RETURNED_GOODS", "COMMERCIAL_SAMPLE", "DOCUMENTS", "OTHER".
 	// When empty and ShipmentType is "B2B" or "B2C", Bring defaults to "SALE_OF_GOODS".
 	NatureOfCargo string `json:"natureOfCargo,omitempty"`
+
+	// InvoiceNumber is the commercial invoice number. Required by DHL Express
+	// for all customs-declarable shipments.
+	InvoiceNumber string `json:"invoiceNumber,omitempty"`
+
+	// InvoiceDate is the commercial invoice date in YYYY-MM-DD format. Required
+	// by DHL Express — drives exchange rate calculation. Defaults to today when empty.
+	InvoiceDate string `json:"invoiceDate,omitempty"`
+
+	// IossNumber is the EU Import One Stop Shop (IOSS) VAT registration number.
+	// Required for EU B2C shipments where VAT is collected at point of sale.
+	// DHL Express maps this to registrationNumbers typeCode "SDT" on the importer.
+	IossNumber string `json:"iossNumber,omitempty"`
 
 	// Items holds the line-item breakdown required for full customs declarations.
 	// Required for non-EU destinations; each item maps to one commodity in the
@@ -570,6 +610,7 @@ type Dimensions struct {
 //	- GLS: parcelShopId
 //	- DAO: lockerId
 //	- InPost: targetLocker (service block)
+//	- DHL Express: onDemandDelivery.servicePointId (6-char code, e.g. "BRU001")
 type Address struct {
 	Name           string `json:"name"           validate:"required"`
 	Street         string `json:"street"         validate:"required"`
@@ -636,6 +677,11 @@ type BookingResponse struct {
 	// NotificationsFailed lists notifications that failed at booking time.
 	// Callers should store these and retry via POST /api/notifications.
 	NotificationsFailed []NotificationRecord `json:"notificationsFailed,omitempty"`
+	// DispatchConfirmationNumber is the pickup booking reference returned by
+	// DHL Express when pickup.isRequested is true. Use with
+	// DELETE /pickups/{dispatchConfirmationNumber} to cancel the pickup
+	// independently of the shipment AWB.
+	DispatchConfirmationNumber string `json:"dispatchConfirmationNumber,omitempty"`
 }
 
 // NotificationRecord describes the outcome of a single notification dispatch.

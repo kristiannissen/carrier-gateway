@@ -67,7 +67,7 @@ func TestRegistry_Carriers(t *testing.T) {
 	registry := NewRegistry(zaptest.NewLogger(t))
 	carriers := registry.Carriers()
 
-	assert.ElementsMatch(t, []string{"postnord", "bring", "gls", "dao", "dhl", "inpost", "fedex", "hermes"}, carriers)
+	assert.ElementsMatch(t, []string{"postnord", "bring", "gls", "dao", "dhl", "inpost", "fedex", "hermes", "dhl_express"}, carriers)
 }
 
 // TestRegistry_StrategyExecution verifies that selecting a carrier and calling

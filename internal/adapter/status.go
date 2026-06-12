@@ -97,6 +97,27 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"unknown":     StatusUnknown,
 	},
 
+	"dhl_express": {
+		// Event type codes from MyDHL API v3.3.0 tracking response.
+		// TODO: Obtain the full event code reference from DHL Express to extend
+		// this map. Codes below are sourced from the API spec examples and descriptions.
+		"SS": StatusBooked,         // Shipment information sent to DHL
+		"PU": StatusPickedUp,       // Picked up from shipper
+		"PL": StatusInTransit,      // Processed at facility
+		"AF": StatusInTransit,      // Arrived at DHL facility
+		"DF": StatusInTransit,      // Departed DHL facility
+		"BR": StatusInTransit,      // Broker notified
+		"RR": StatusInTransit,      // Customs update
+		"CR": StatusInTransit,      // Customs clearance complete
+		"AR": StatusInTransit,      // Arrived at delivery facility
+		"WC": StatusOutForDelivery, // With courier, out for delivery
+		"OK": StatusDelivered,      // Delivered
+		"DM": StatusFailed,         // Damage reported
+		"OH": StatusFailed,         // On hold
+		"MS": StatusFailed,         // Shipment missed (not picked up)
+		"TP": StatusFailed,         // Transfer to post office
+	},
+
 	// hermes: 2x2 event codes from hermes_Germany_Eventcodes.csv.
 	// Codes are the 4-character second column (2x2 Code) returned in ShipmentStatus.code.
 	// TODO: Confirm the exact wire format of code from a live tracking response —

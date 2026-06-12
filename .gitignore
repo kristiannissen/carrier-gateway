@@ -35,6 +35,7 @@ go.work.sum
 *.md
 *.yaml
 *.pdf
+*.csv
 # Explicitely whitelist readme
 !README.md
 # Ignore OS specific files
