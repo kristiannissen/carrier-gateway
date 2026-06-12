@@ -106,15 +106,23 @@ docker run -p 8080:8080 --env-file .env logistics-gateway
 docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development logistics-gateway
 ```
 
-### Rate limiting
+### Security
 
-This service is stateless and does not enforce rate limits internally — in-memory counters would not survive across replicas. Rate limiting should be handled at the infrastructure layer, in front of the container.
+**Rate limiting** is stateless and intentionally not enforced inside the container — in-memory counters do not survive across replicas. Apply limits at the infrastructure layer instead.
 
-- **Traefik**: use the built-in [`rateLimit` middleware](https://doc.traefik.io/traefik/middlewares/http/ratelimit/) on the router
-- **nginx**: use `limit_req_zone` + `limit_req` directives in the upstream block
-- **API gateway**: configure limits per route or per API key at the gateway level
+- **Traefik**: [`rateLimit` middleware](https://doc.traefik.io/traefik/middlewares/http/ratelimit/) on the router
+- **nginx**: `limit_req_zone` + `limit_req` in the upstream block
+- **API gateway**: per-route or per-API-key limits at the gateway level
 
-Limit by API key rather than IP where possible — clients are typically server-to-server and may share egress IPs.
+Limit by API key rather than IP — clients are typically server-to-server and may share egress IPs.
+
+**TLS** should be terminated at the reverse proxy. The container speaks plain HTTP; the proxy is responsible for HTTPS enforcement and `Strict-Transport-Security`.
+
+**Security headers** (`X-Frame-Options`, `X-Content-Type-Options`, CORS) are not set by the application — they are browser-directed and irrelevant for a server-to-server API. If you expose this service to browser clients, configure those headers at the proxy.
+
+**Request body cap**: all write endpoints (`POST`, `PATCH`) reject bodies larger than 1 MB with `413 Request Entity Too Large`.
+
+**Webhook URLs** must use `https://` — plain HTTP webhook targets are rejected at dispatch time with an error.
 
 ---
 
