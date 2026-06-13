@@ -223,6 +223,11 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"9341": StatusFailed,         // Shipment cancelled by client
 	},
 
+	// dpd: DPD Baltic API v1 status normalization is handled by normalizeDPDStatus
+	// in dpd.go. It requires statusCode + serviceCode + prevStatusCode together
+	// (§6.1.4 of the API docs), so a single-key lookup here is insufficient.
+	// DPD is intentionally absent from this map.
+
 	"fedex": {
 		// Sourced from FedEx Track API v1 spec (fedex_track.json).
 		// Keys are derivedStatusCode / eventType values from ScanEvent.

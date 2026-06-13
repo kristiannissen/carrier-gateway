@@ -23,6 +23,7 @@ func TestCarrierAdapterInterface(t *testing.T) {
 		&MockDHLAdapter{},
 		&MockInPostAdapter{},
 		&MockFedExAdapter{},
+		&MockDPDAdapter{},
 	}
 
 	request := minimalBookingRequest("postnord")
@@ -124,6 +125,53 @@ func TestRegistry_SwitchingCarriers(t *testing.T) {
 				"response carrier must match the selected adapter for %s", carrier)
 		})
 	}
+}
+
+// TestRegisterDPD verifies that registerDPD registers one adapter per
+// DPD_{COUNTRY}_API_TOKEN + DPD_{COUNTRY}_BASE_URL pair found in env.
+// Subtests use t.Setenv and cannot be parallel.
+func TestRegisterDPD(t *testing.T) {
+	t.Run("registers dpd_lt when env vars are set", func(t *testing.T) {
+		t.Setenv("DPD_LT_API_TOKEN", "test-token")
+		t.Setenv("DPD_LT_BASE_URL", "https://esiunta.dpd.lt/api/v1")
+
+		adapters := make(map[string]CarrierAdapter)
+		registerDPD(adapters, false, zaptest.NewLogger(t))
+
+		a, ok := adapters["dpd_lt"]
+		require.True(t, ok, "dpd_lt should be registered")
+		assert.NotNil(t, a)
+	})
+
+	t.Run("falls back to mock when BASE_URL missing", func(t *testing.T) {
+		t.Setenv("DPD_BE_API_TOKEN", "test-token")
+		// DPD_BE_BASE_URL intentionally not set.
+
+		adapters := make(map[string]CarrierAdapter)
+		registerDPD(adapters, false, zaptest.NewLogger(t))
+
+		a, ok := adapters["dpd_be"]
+		require.True(t, ok, "dpd_be should be registered (as mock)")
+		assert.IsType(t, &MockDPDAdapter{}, a)
+	})
+
+	t.Run("no adapters registered when no DPD env vars", func(t *testing.T) {
+		adapters := make(map[string]CarrierAdapter)
+		registerDPD(adapters, false, zaptest.NewLogger(t))
+		assert.Empty(t, adapters)
+	})
+
+	t.Run("mock mode registers mock regardless of token", func(t *testing.T) {
+		t.Setenv("DPD_AT_API_TOKEN", "real-token")
+		t.Setenv("DPD_AT_BASE_URL", "https://...dpd.at/api/v1")
+
+		adapters := make(map[string]CarrierAdapter)
+		registerDPD(adapters, true, zaptest.NewLogger(t))
+
+		a, ok := adapters["dpd_at"]
+		require.True(t, ok)
+		assert.IsType(t, &MockDPDAdapter{}, a)
+	})
 }
 
 // minimalBookingRequest returns the smallest valid BookingRequest for the

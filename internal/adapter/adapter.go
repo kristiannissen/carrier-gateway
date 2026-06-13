@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -198,8 +199,9 @@ var capabilities = map[string]carrierCapabilities{
 	// DHL Express: cancel AWB is not available via API; pickup cancellation requires
 	// the dispatchConfirmationNumber from BookingResponse, not the AWB.
 	"dhl_express": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	// DPD: update is not available in the DPD Shipping API v1.1.
-	"dpd": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
+	// DPD: capabilities are registered dynamically per country key ("dpd_lt", "dpd_at", …)
+	// by registerDPD in InitAdapters. There is no static "dpd" entry — the key depends
+	// on which DPD_{COUNTRY}_API_TOKEN env vars are present at startup.
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -390,7 +392,88 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		)
 	}
 
+	registerDPD(adapters, mockMode, log)
+
 	return adapters
+}
+
+// registerDPD scans environment variables for DPD_{COUNTRY}_API_TOKEN and
+// DPD_{COUNTRY}_BASE_URL pairs and registers one adapter per configured country
+// under the key "dpd_{country}" (e.g. "dpd_at", "dpd_lt", "dpd_be").
+//
+// This factory approach means adding a new DPD country requires only new env
+// vars — no code change. It follows the same simplicity principle as the other
+// single-entity carrier blocks above, but handles the multi-region case without
+// hardcoding country keys.
+//
+// Example env vars:
+//
+//	DPD_LT_API_TOKEN=<token>  DPD_LT_BASE_URL=https://esiunta.dpd.lt/api/v1
+//	DPD_AT_API_TOKEN=<token>  DPD_AT_BASE_URL=https://...dpd.at/api/v1
+func registerDPD(adapters map[string]CarrierAdapter, mockMode bool, log *zap.Logger) {
+	seen := make(map[string]bool)
+	for _, env := range os.Environ() {
+		// Match DPD_{COUNTRY}_API_TOKEN.
+		if !strings.HasPrefix(env, "DPD_") || !strings.Contains(env, "_API_TOKEN=") {
+			continue
+		}
+		// env is e.g. "DPD_LT_API_TOKEN=abc123"
+		eqIdx := strings.Index(env, "=")
+		key := env[:eqIdx]   // "DPD_LT_API_TOKEN"
+		token := env[eqIdx+1:] // "abc123"
+
+		// Extract country from "DPD_{COUNTRY}_API_TOKEN".
+		parts := strings.SplitN(key, "_", 3) // ["DPD", "LT", "API_TOKEN"]
+		if len(parts) != 3 || parts[2] != "API_TOKEN" {
+			continue
+		}
+		country := strings.ToLower(parts[1]) // "lt"
+		carrierKey := "dpd_" + country       // "dpd_lt"
+
+		if seen[carrierKey] {
+			continue
+		}
+		seen[carrierKey] = true
+
+		if mockMode {
+			adapters[carrierKey] = NewMockDPDAdapter()
+			log.Info("DPD adapter initialized in mock mode",
+				zap.String("carrier", carrierKey),
+			)
+			continue
+		}
+
+		if token == "" {
+			adapters[carrierKey] = NewMockDPDAdapter()
+			log.Warn("DPD adapter falling back to mock mode (token empty)",
+				zap.String("carrier", carrierKey),
+			)
+			continue
+		}
+
+		baseURL := os.Getenv("DPD_" + strings.ToUpper(country) + "_BASE_URL")
+		if baseURL == "" {
+			adapters[carrierKey] = NewMockDPDAdapter()
+			log.Warn("DPD adapter falling back to mock mode (BASE_URL not set)",
+				zap.String("carrier", carrierKey),
+				zap.String("missing", "DPD_"+strings.ToUpper(country)+"_BASE_URL"),
+			)
+			continue
+		}
+
+		adapters[carrierKey] = NewDPDAdapter(token, baseURL, log)
+		// Register capabilities for this country key at runtime.
+		capabilities[carrierKey] = carrierCapabilities{
+			NativeIdempotency:    false,
+			Beta:                 true,
+			SupportsCancellation: true,
+			SupportsUpdate:       false,
+		}
+		log.Info("DPD adapter initialized in production mode (beta)",
+			zap.String("carrier", carrierKey),
+			zap.String("baseURL", baseURL),
+		)
+	}
 }
 
 // Customs holds cross-border declaration data required for non-EU
