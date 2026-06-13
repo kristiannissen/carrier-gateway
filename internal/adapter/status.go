@@ -60,8 +60,11 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"HANDED_IN":              StatusPickedUp,
 		"INTERNATIONAL":          StatusInTransit,
 		"IN_TRANSIT":             StatusInTransit,
-		"NOTIFICATION_SENT":      StatusBooked,
-		"PRE_NOTIFIED":           StatusBooked,
+		"NOTIFICATION_SENT": StatusBooked,
+		// PRE_NOTIFIED means the carrier has sent the recipient a delivery
+		// notification — the shipment is already moving toward the address.
+		// Previously mapped to StatusBooked (incorrect: booked = just registered).
+		"PRE_NOTIFIED":           StatusInTransit,
 		"READY_FOR_PICKUP":       StatusOutForDelivery,
 		"RETURN":                 StatusReturned,
 		"TERMINAL":               StatusInTransit,

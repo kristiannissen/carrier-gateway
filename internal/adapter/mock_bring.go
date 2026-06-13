@@ -149,6 +149,47 @@ func (m *MockBringAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (
 	return nil, notSupported("Bring", "manifest close", "")
 }
 
+// RegisterCustomerWebhook returns a canned customer webhook subscription for Bring.
+func (m *MockBringAdapter) RegisterCustomerWebhook(_ context.Context, req BringCustomerWebhookRequest) (*BringCustomerWebhookResponse, error) {
+	if req.CustomerNumber == "" {
+		return nil, fmt.Errorf("customerNumber is required")
+	}
+	if len(req.EventSet) == 0 {
+		return nil, fmt.Errorf("eventSet must contain at least one event")
+	}
+	if req.WebhookConfiguration.WebhookURL == "" {
+		return nil, fmt.Errorf("webhookConfiguration.webhookUrl is required")
+	}
+	return &BringCustomerWebhookResponse{
+		ID:                   "mock-subscription-id",
+		CustomerNumber:       req.CustomerNumber,
+		EventSet:             req.EventSet,
+		WebhookConfiguration: req.WebhookConfiguration,
+		Created:              time.Now().UTC(),
+		Expiry:               time.Now().Add(365 * 24 * time.Hour).UTC(),
+	}, nil
+}
+
+// DeleteCustomerWebhook is a no-op for the mock.
+func (m *MockBringAdapter) DeleteCustomerWebhook(_ context.Context, subscriptionID string) error {
+	if subscriptionID == "" {
+		return fmt.Errorf("subscriptionID is required")
+	}
+	return nil
+}
+
+// RenewCustomerWebhook returns a canned renewed subscription for the mock.
+func (m *MockBringAdapter) RenewCustomerWebhook(_ context.Context, subscriptionID string) (*BringCustomerWebhookResponse, error) {
+	if subscriptionID == "" {
+		return nil, fmt.Errorf("subscriptionID is required")
+	}
+	return &BringCustomerWebhookResponse{
+		ID:      subscriptionID,
+		Created: time.Now().UTC(),
+		Expiry:  time.Now().Add(365 * 24 * time.Hour).UTC(),
+	}, nil
+}
+
 // NewMockBringAdapter returns a new MockBringAdapter with default behaviour.
 func NewMockBringAdapter() *MockBringAdapter {
 	return &MockBringAdapter{}

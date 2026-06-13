@@ -69,7 +69,7 @@ func TestNormalizeStatus(t *testing.T) {
 			{"INTERNATIONAL", StatusInTransit},
 			{"IN_TRANSIT", StatusInTransit},
 			{"NOTIFICATION_SENT", StatusBooked},
-			{"PRE_NOTIFIED", StatusBooked},
+			{"PRE_NOTIFIED", StatusInTransit},
 			{"READY_FOR_PICKUP", StatusOutForDelivery},
 			{"RETURN", StatusReturned},
 			{"TERMINAL", StatusInTransit},

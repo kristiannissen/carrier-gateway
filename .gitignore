@@ -44,5 +44,4 @@ Thumbs.db
 *.sh
 *.swp
 *.github_token
-docs/
-agents/
+APIdocs/
