@@ -41,6 +41,10 @@ func NewRouter(registry *adapter.Registry, notifSvc *notification.Service, log *
 	r.HandleFunc("/api/trackings/{trackingNumber}", h.TrackAndNotify).Methods("POST")
 	r.HandleFunc("/api/labels/{trackingNumber}", h.GetLabel).Methods("GET")
 	r.HandleFunc("/api/notifications", h.SendNotification).Methods("POST")
+	r.HandleFunc("/api/pickups", h.BookPickup).Methods("POST")
+	r.HandleFunc("/api/pickups/{confirmationNumber}", h.UpdatePickup).Methods("PUT")
+	r.HandleFunc("/api/pickups/{confirmationNumber}", h.CancelPickup).Methods("DELETE")
+	r.HandleFunc("/api/manifests", h.CloseManifest).Methods("POST")
 	r.HandleFunc("/api/health", h.HealthCheck).Methods("GET")
 
 	return r

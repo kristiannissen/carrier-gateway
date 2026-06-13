@@ -122,6 +122,33 @@ func (m *MockBringAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*
 	return nil, notSupported("Bring", "post-booking update", "")
 }
 
+// BookPickup returns a canned pickup confirmation for Bring.
+func (m *MockBringAdapter) BookPickup(_ context.Context, req PickupRequest) (*PickupResponse, error) {
+	return &PickupResponse{
+		Carrier:            "bring",
+		ConfirmationNumber: "MOCK-BRING-PICKUP-001",
+		Date:               req.Pickup.Date,
+		ReadyTime:          "08:00",
+		CloseTime:          "16:00",
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup is not supported for Bring.
+func (m *MockBringAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("Bring", "pickup update", "cancel and rebook via BookPickup")
+}
+
+// CancelPickup is not supported for Bring.
+func (m *MockBringAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return notSupported("Bring", "pickup cancellation", "contact Bring customer service to cancel")
+}
+
+// CloseManifest is not supported for Bring.
+func (m *MockBringAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("Bring", "manifest close", "")
+}
+
 // NewMockBringAdapter returns a new MockBringAdapter with default behaviour.
 func NewMockBringAdapter() *MockBringAdapter {
 	return &MockBringAdapter{}

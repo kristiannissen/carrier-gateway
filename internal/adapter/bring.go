@@ -15,12 +15,13 @@ import (
 	"go.uber.org/zap"
 )
 
-// BringAdapter implements CarrierAdapter for Bring.
+// BringAdapter implements CarrierAdapter and ManifestAdapter for Bring.
 // Authentication uses X-MyBring-API-Uid (CustomerID) and X-MyBring-API-Key (APIKey).
 type BringAdapter struct {
 	APIKey         string
 	CustomerID     string // Mybring login email — used for API authentication
 	CustomerNumber string // Bring customer account number — used in product.customerNumber
+	CompanyName    string // Company name sent in pickup booking customerInformation
 	BaseURL        string
 	HTTPClient     *http.Client
 	log            *zap.Logger
@@ -29,11 +30,13 @@ type BringAdapter struct {
 // NewBringAdapter creates a new BringAdapter.
 // customerID is the Mybring login email.
 // customerNumber is the Bring customer account number (for billing/invoicing).
-func NewBringAdapter(apiKey, customerID, customerNumber string, log *zap.Logger) *BringAdapter {
+// companyName is included in the pickup API customerInformation block.
+func NewBringAdapter(apiKey, customerID, customerNumber, companyName string, log *zap.Logger) *BringAdapter {
 	return &BringAdapter{
 		APIKey:         apiKey,
 		CustomerID:     customerID,
 		CustomerNumber: customerNumber,
+		CompanyName:    companyName,
 		BaseURL:        "https://api.bring.com",
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -614,4 +617,144 @@ func (a *BringAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 		OriginalStatus:   originalStatus,
 		Events:           events,
 	}, nil
+}
+
+// BookPickup schedules a carrier collection at the warehouse via the Bring Pickup API.
+//
+// Wire format: POST /api/create.
+// The service is always "PARCEL" for warehouse parcel pickup.
+// EstimatedWeight is converted from kg to grams as required by the Bring API.
+// The carrier returns a confirmed time window in isoFormattedEarliestPickupDateTime
+// and isoFormattedLatestPickupDateTime, which may differ from the requested window.
+func (a *BringAdapter) BookPickup(ctx context.Context, req PickupRequest) (*PickupResponse, error) {
+	street := req.Address.Street
+	if req.Address.HouseNumber != "" {
+		street = req.Address.Street + " " + req.Address.HouseNumber
+	}
+
+	pickupAddress := map[string]any{
+		"street":      street,
+		"postalCode":  req.Address.PostalCode,
+		"city":        req.Address.City,
+		"email":       req.Contact.Email,
+		"phoneNumber": req.Contact.Phone,
+	}
+	if req.Contact.Name != "" {
+		pickupAddress["contactName"] = req.Contact.Name
+	}
+	if req.Pickup.SpecialInstructions != "" {
+		pickupAddress["message"] = req.Pickup.SpecialInstructions
+	}
+	if req.Pickup.Location != "" {
+		pickupAddress["deliveryInstruction"] = req.Pickup.Location
+	}
+
+	body := map[string]any{
+		"service": "PARCEL",
+		"customerInformation": map[string]any{
+			"customerNumber": a.CustomerNumber,
+			"companyName":    a.CompanyName,
+		},
+		"pickupAddress": pickupAddress,
+		"pickupDate":    req.Pickup.Date,
+		"countryCode":   req.Address.Country,
+	}
+
+	if req.EstimatedParcels > 0 || req.EstimatedWeight > 0 {
+		packages := map[string]any{}
+		if req.EstimatedParcels > 0 {
+			packages["count"] = req.EstimatedParcels
+		}
+		if req.EstimatedWeight > 0 {
+			packages["weightInGrams"] = int(req.EstimatedWeight * 1000)
+		}
+		body["pickupDetails"] = map[string]any{
+			"packages": packages,
+		}
+	}
+
+	payloadBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("bring: failed to marshal pickup request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		a.BaseURL+"/api/create", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("bring: failed to create pickup request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("X-MyBring-API-Uid", a.CustomerID)
+	httpReq.Header.Set("X-MyBring-API-Key", a.APIKey)
+	httpReq.Header.Set("X-Bring-Client-URL", "https://github.com/kristiannissen/carrier-gateway")
+	httpReq.Header.Set("X-Bring-Test-Indicator", "false")
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("bring: pickup API call failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("bring: failed to read pickup response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("bring: pickup API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var bringResp struct {
+		PickupConfirmation struct {
+			Status                             string `json:"status"`
+			PackageNumber                      string `json:"packageNumber"`
+			ISOFormattedEarliestPickupDateTime string `json:"isoFormattedEarliestPickupDateTime"`
+			ISOFormattedLatestPickupDateTime   string `json:"isoFormattedLatestPickupDateTime"`
+		} `json:"pickupConfirmation"`
+		Errors any `json:"errors"`
+	}
+	if err := json.Unmarshal(respBody, &bringResp); err != nil {
+		return nil, fmt.Errorf("bring: failed to decode pickup response: %w", err)
+	}
+
+	if bringResp.PickupConfirmation.Status != "OK" {
+		return nil, fmt.Errorf("bring: pickup booking failed: %v", bringResp.Errors)
+	}
+
+	result := &PickupResponse{
+		Carrier:            "bring",
+		ConfirmationNumber: bringResp.PickupConfirmation.PackageNumber,
+		Date:               req.Pickup.Date,
+		Status:             "booked",
+	}
+
+	// Extract HH:MM from the ISO datetime strings returned by Bring.
+	if t, err := time.Parse(time.RFC3339Nano, bringResp.PickupConfirmation.ISOFormattedEarliestPickupDateTime); err == nil {
+		result.ReadyTime = t.Format("15:04")
+	}
+	if t, err := time.Parse(time.RFC3339Nano, bringResp.PickupConfirmation.ISOFormattedLatestPickupDateTime); err == nil {
+		result.CloseTime = t.Format("15:04")
+	}
+
+	return result, nil
+}
+
+// UpdatePickup is not supported for Bring.
+// The Bring Pickup API has no endpoint for modifying a scheduled pickup.
+func (a *BringAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("Bring", "pickup update", "cancel and rebook via BookPickup")
+}
+
+// CancelPickup is not supported for Bring.
+// The Bring Pickup API has no cancellation endpoint.
+func (a *BringAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return notSupported("Bring", "pickup cancellation", "contact Bring customer service to cancel")
+}
+
+// CloseManifest is not supported for Bring.
+// Bring has no end-of-day or manifest close endpoint; the handover is managed
+// by Bring's own systems when the driver scans parcels at collection.
+func (a *BringAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("Bring", "manifest close", "")
 }

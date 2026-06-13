@@ -259,6 +259,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	bringAPIKey := os.Getenv("BRING_API_KEY")
 	bringCustomerID := os.Getenv("BRING_CUSTOMER_ID")
 	bringCustomerNumber := os.Getenv("BRING_CUSTOMER_NUMBER")
+	bringCompanyName := os.Getenv("BRING_COMPANY_NAME")
 	switch {
 	case mockMode:
 		adapters["bring"] = &MockBringAdapter{}
@@ -267,7 +268,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		adapters["bring"] = &MockBringAdapter{}
 		log.Warn("Bring adapter falling back to mock mode (BRING_API_KEY or BRING_CUSTOMER_ID not set)")
 	default:
-		adapters["bring"] = NewBringAdapter(bringAPIKey, bringCustomerID, bringCustomerNumber, log)
+		adapters["bring"] = NewBringAdapter(bringAPIKey, bringCustomerID, bringCustomerNumber, bringCompanyName, log)
 		log.Info("Bring adapter initialized in production mode")
 	}
 
