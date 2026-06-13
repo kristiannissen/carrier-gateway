@@ -758,3 +758,9 @@ func (a *BringAdapter) CancelPickup(_ context.Context, _, _ string) error {
 func (a *BringAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
 	return nil, notSupported("Bring", "manifest close", "")
 }
+
+// GetPickupAvailability is not supported for Bring.
+// Bring does not require a pre-flight availability check before BookPickup.
+func (a *BringAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("Bring", "pickup availability", "")
+}

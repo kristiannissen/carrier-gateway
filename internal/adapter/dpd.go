@@ -521,6 +521,12 @@ func (a *DPDAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*Manif
 	return nil, notSupported("DPD", "manifest close", "pickup creation serves as the handover instruction")
 }
 
+// GetPickupAvailability is not supported by DPD.
+// DPD does not expose a pre-flight timeslot availability endpoint.
+func (a *DPDAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("DPD", "pickup availability", "")
+}
+
 // dpdLabelFormat maps LabelFormat to the DPD labelFormat string.
 func dpdLabelFormat(f LabelFormat) string {
 	switch f {

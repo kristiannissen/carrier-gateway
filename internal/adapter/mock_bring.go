@@ -149,6 +149,11 @@ func (m *MockBringAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (
 	return nil, notSupported("Bring", "manifest close", "")
 }
 
+// GetPickupAvailability is not supported for Bring.
+func (m *MockBringAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("Bring", "pickup availability", "")
+}
+
 // RegisterCustomerWebhook returns a canned customer webhook subscription for Bring.
 func (m *MockBringAdapter) RegisterCustomerWebhook(_ context.Context, req BringCustomerWebhookRequest) (*BringCustomerWebhookResponse, error) {
 	if req.CustomerNumber == "" {

@@ -31,13 +31,6 @@ go.work.sum
 # .idea/
 # .vscode/
 
-# Ignore all .md files
-*.md
-*.yaml
-*.pdf
-*.csv
-# Explicitely whitelist readme
-!README.md
 # Ignore OS specific files
 .DS_STore
 Thumbs.db

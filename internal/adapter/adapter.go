@@ -182,6 +182,14 @@ type carrierCapabilities struct {
 	// SupportsUpdate is true when the carrier's API supports partial updates
 	// to a booked shipment (contact, weight, service point).
 	SupportsUpdate bool
+	// SupportsReturnBooking is true when the carrier supports registering a
+	// return against an already-delivered shipment via POST /api/returns.
+	// The adapter must expose a BookReturn method callable directly from the handler.
+	SupportsReturnBooking bool
+	// SupportsEventPolling is true when the carrier exposes a cursor-based
+	// tracking event stream. The adapter runs an internal background poller and
+	// pushes events to the notification service; no public API change is needed.
+	SupportsEventPolling bool
 }
 
 // capabilities maps carrier keys to their known API capabilities.
@@ -193,6 +201,13 @@ var capabilities = map[string]carrierCapabilities{
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	"hermes":   {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	"inpost":   {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
+	"omniva": {
+		NativeIdempotency:     false,
+		SupportsCancellation:  true,
+		SupportsUpdate:        true,
+		SupportsReturnBooking: true,
+		SupportsEventPolling:  true,
+	},
 	// FedEx: cancellation is supported via PUT /ship/v1/shipments/cancel.
 	// Full capabilities will be confirmed once the Ship and Track API specs are available.
 	"fedex": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
@@ -394,6 +409,22 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 
 	registerDPD(adapters, mockMode, log)
 
+	omnivaUsername := os.Getenv("OMNIVA_USERNAME")
+	omnivaPassword := os.Getenv("OMNIVA_PASSWORD")
+	omnivaCustomerCode := os.Getenv("OMNIVA_CUSTOMER_CODE")
+	omnivaAgentID := os.Getenv("OMNIVA_AGENT_ID")
+	switch {
+	case mockMode:
+		adapters["omniva"] = &MockOmnivaAdapter{}
+		log.Info("Omniva adapter initialized in mock mode (MOCK_MODE=true)")
+	case omnivaUsername == "" || omnivaPassword == "":
+		adapters["omniva"] = &MockOmnivaAdapter{}
+		log.Warn("Omniva adapter falling back to mock mode (OMNIVA_USERNAME or OMNIVA_PASSWORD not set)")
+	default:
+		adapters["omniva"] = NewOmnivaAdapter(omnivaUsername, omnivaPassword, omnivaCustomerCode, omnivaAgentID, log)
+		log.Info("Omniva adapter initialized in production mode")
+	}
+
 	return adapters
 }
 
@@ -537,6 +568,27 @@ type Customs struct {
 	// DHL Express maps this to registrationNumbers typeCode "SDT" on the importer.
 	IossNumber string `json:"iossNumber,omitempty"`
 
+	// GoodsCategoryCode classifies the shipment contents for customs.
+	// Accepted values: "SALE_OF_GOODS", "GIFT", "COMMERCIAL_SAMPLE", "DOCUMENTS",
+	// "RETURNED_GOODS", "OTHER". Required by Omniva for non-EU destinations.
+	// NB: Omniva does not permit GIFT for US destinations via OMX.
+	// When empty and NatureOfCargo is set, adapters may derive a compatible value.
+	GoodsCategoryCode string `json:"goodsCategoryCode,omitempty"`
+	// CategoryExplanation is required when GoodsCategoryCode is "OTHER" (max 40 chars).
+	// Omniva maps this to customs.categoryExplanation.
+	CategoryExplanation string `json:"categoryExplanation,omitempty"`
+	// LicenceNumber is the export licence reference (max 21 chars).
+	// Omniva maps this to customs.licenceNumber.
+	LicenceNumber string `json:"licenceNumber,omitempty"`
+	// CertificateNumber is a phytosanitary or other certificate reference (max 21 chars).
+	// Omniva maps this to customs.certificateNumber.
+	CertificateNumber string `json:"certificateNumber,omitempty"`
+	// SenderCustomsReference is the sender's own customs reference number (max 21 chars).
+	// Omniva maps this to customs.senderCustomsReference.
+	SenderCustomsReference string `json:"senderCustomsReference,omitempty"`
+	// ImportersReference is the importer's customs reference number (max 21 chars).
+	// Omniva maps this to customs.importersReference.
+	ImportersReference string `json:"importersReference,omitempty"`
 	// Items holds the line-item breakdown required for full customs declarations.
 	// Required for non-EU destinations; each item maps to one commodity in the
 	// carrier's customs API (DHL cCustoms item, GLS lineItem, PostNord item, etc.).
@@ -613,6 +665,26 @@ const (
 	// Set InsuranceValue and InsuranceCurrency on the AddOn.
 	// Currently supported on PostNord only (additionalServiceCode "A8").
 	AddOnInsurance AddOnType = "insurance"
+	// AddOnDeliveryToSpecificPerson requires the carrier to deliver only to a named
+	// individual. Set PersonalCode on the AddOn when the channel is PARCEL_MACHINE.
+	// Omniva maps this to addService DELIVERY_TO_A_SPECIFIC_PERSON.
+	AddOnDeliveryToSpecificPerson AddOnType = "delivery_to_specific_person"
+	// AddOnDeliveryToPrivatePerson signals that the receiver is a private individual.
+	// Omniva requires contact mobile or email when this add-on is active.
+	// Omniva maps this to addService DELIVERY_TO_PRIVATE_PERSON.
+	AddOnDeliveryToPrivatePerson AddOnType = "delivery_to_private_person"
+	// AddOnFragile marks the parcel as fragile. Allowed inside Omniva consolidated
+	// shipments alongside COD, DOCUMENT_RETURN, or MULTIPLE_PARCELS_DELIVERY_TOGETHER.
+	// Omniva maps this to addService FRAGILE.
+	AddOnFragile AddOnType = "fragile"
+	// AddOnDocumentReturn instructs the carrier to return a signed document
+	// to the sender after delivery.
+	// Omniva maps this to addService DOCUMENT_RETURN.
+	AddOnDocumentReturn AddOnType = "document_return"
+	// AddOnMultiParcelTogether instructs the carrier to keep multiple parcels
+	// in a consolidated shipment together during delivery.
+	// Omniva maps this to addService MULTIPLE_PARCELS_DELIVERY_TOGETHER.
+	AddOnMultiParcelTogether AddOnType = "multi_parcel_together"
 )
 
 // AddOn represents an optional service attached to a shipment.
@@ -626,8 +698,15 @@ type AddOn struct {
 	// CODCurrency is the ISO 4217 currency code for COD (e.g. "DKK", "NOK"). Required for cash_on_delivery.
 	CODCurrency string `json:"codCurrency,omitempty"`
 	// CODAccountNumber is the bank account number to transfer the collected amount to.
-	// Required for Bring COD (VAS 1000).
+	// Required for Bring COD (VAS 1000). Must be IBAN for Omniva COD.
 	CODAccountNumber string `json:"codAccountNumber,omitempty"`
+	// CODReceiver is the name of the person who receives the COD payment.
+	// Omniva-specific: maps to addService param COD_RECEIVER.
+	CODReceiver string `json:"codReceiver,omitempty"`
+	// CODReferenceNo is the payment reference number appended to the COD transfer.
+	// Omniva-specific: validated against EE bank rules when CODAccountNumber is an
+	// Estonian IBAN. Maps to addService param COD_REFERENCE_NO.
+	CODReferenceNo string `json:"codReferenceNo,omitempty"`
 	// CODBic is the BIC/SWIFT code for the COD bank account.
 	// Required for DHL eConnect SEPA COD.
 	CODBic string `json:"codBic,omitempty"`
@@ -637,6 +716,9 @@ type AddOn struct {
 	// InsuranceCurrency is the ISO 4217 currency code for the insured value (e.g. "DKK").
 	// Required for insurance add-on.
 	InsuranceCurrency string `json:"insuranceCurrency,omitempty"`
+	// PersonalCode is the national identification code of the intended recipient.
+	// Omniva: required for delivery_to_specific_person when deliveryChannel is PARCEL_MACHINE.
+	PersonalCode string `json:"personalCode,omitempty"`
 }
 
 // Shipment represents the shipment details.
@@ -655,6 +737,17 @@ type Shipment struct {
 	// "labelless" (customer writes code on package).
 	// Defaults to "standard" when empty.
 	ReturnFunctionality string `json:"returnFunctionality,omitempty"`
+	// ServiceTier selects the product/speed tier within the delivery type.
+	// Omniva parcels: "economy", "standard", "premium".
+	// Omniva letters: "procedural_document", "registered_letter", "registered_maxiletter".
+	// Other carriers may map this to their own tier codes.
+	ServiceTier string `json:"serviceTier,omitempty"`
+	// PaidByReceiver instructs the carrier to bill the receiver rather than the sender.
+	// Omniva: valid for PARCEL and PALLET main services.
+	PaidByReceiver bool `json:"paidByReceiver,omitempty"`
+	// ShipmentComment is a free-text delivery instruction passed to the carrier (max 128 chars).
+	// Omniva maps this to shipmentComment.
+	ShipmentComment string `json:"shipmentComment,omitempty"`
 	// AddOns lists optional services to attach to the shipment.
 	// Each adapter maps these to its own wire format.
 	AddOns []AddOn `json:"addOns,omitempty"`
@@ -715,6 +808,14 @@ type Address struct {
 	ServicePointID string `json:"servicePointId,omitempty"`
 	Phone          string `json:"phone,omitempty"`
 	Email          string `json:"email,omitempty"`
+	// AltName overrides the carrier account name on the printed label and in
+	// notification messages. Omniva maps this to senderAddressee.altName.
+	// Only meaningful on sender addresses.
+	AltName string `json:"altName,omitempty"`
+	// UseAddressForReturn instructs the carrier to return undeliverable parcels
+	// to this address rather than the pre-configured handover location.
+	// Omniva maps this to senderAddressee.useSenderAddressForReturn.
+	UseAddressForReturn bool `json:"useAddressForReturn,omitempty"`
 }
 
 // Item represents an item in a colli.

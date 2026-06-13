@@ -131,6 +131,11 @@ func (m *MockDPDAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*M
 	return nil, notSupported("DPD", "manifest close", "pickup creation serves as the handover instruction")
 }
 
+// GetPickupAvailability is not supported by DPD.
+func (m *MockDPDAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("DPD", "pickup availability", "")
+}
+
 // NewMockDPDAdapter returns a MockDPDAdapter with default behaviour.
 func NewMockDPDAdapter() *MockDPDAdapter {
 	return &MockDPDAdapter{}

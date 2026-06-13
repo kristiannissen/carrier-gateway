@@ -115,6 +115,32 @@ type ManifestResponse struct {
 	Warnings []string `json:"warnings"`
 }
 
+// PickupSlot is a single available collection window returned by GetPickupAvailability.
+type PickupSlot struct {
+	// Date is the available collection date in ISO 8601 format (YYYY-MM-DD).
+	Date string `json:"date"`
+	// StartTime is the earliest collection time in HH:MM format.
+	StartTime string `json:"startTime"`
+	// EndTime is the latest collection time in HH:MM format.
+	EndTime string `json:"endTime"`
+}
+
+// PickupAvailabilityRequest is the input to GetPickupAvailability.
+type PickupAvailabilityRequest struct {
+	// Carrier is the carrier key (e.g. "omniva").
+	Carrier string `json:"carrier"`
+	// Address is the address where availability is checked.
+	Address PickupAddress `json:"address"`
+}
+
+// PickupAvailabilityResponse holds available collection timeslots.
+type PickupAvailabilityResponse struct {
+	// Carrier is the carrier key.
+	Carrier string `json:"carrier"`
+	// Slots is the list of available collection windows, ordered by date/time.
+	Slots []PickupSlot `json:"slots"`
+}
+
 // ManifestAdapter is implemented by carriers that support pickup scheduling
 // or end-of-day manifest operations. It is kept separate from CarrierAdapter
 // so carriers that do not support these operations are not required to implement it.
@@ -137,4 +163,11 @@ type ManifestAdapter interface {
 	// document where available. For carriers such as GLS that require an explicit
 	// close call before the driver arrives, this also submits that instruction.
 	CloseManifest(ctx context.Context, req ManifestRequest) (*ManifestResponse, error)
+
+	// GetPickupAvailability returns the available collection timeslots for the
+	// given address. Callers should invoke this before BookPickup to select a
+	// valid window, avoiding availability-zone errors from the carrier.
+	// Carriers that do not require pre-flight availability checks return
+	// ErrNotSupported; callers may proceed to BookPickup directly in that case.
+	GetPickupAvailability(ctx context.Context, req PickupAvailabilityRequest) (*PickupAvailabilityResponse, error)
 }

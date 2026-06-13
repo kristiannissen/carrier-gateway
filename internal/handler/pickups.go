@@ -182,6 +182,61 @@ func (c *Config) CancelPickup(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetPickupAvailability handles GET /api/pickups/availability?carrier=&street=&city=&postalCode=&country=.
+// Returns available collection timeslots for the given address.
+// Carriers that do not support availability queries return HTTP 501.
+func (c *Config) GetPickupAvailability(w http.ResponseWriter, r *http.Request) {
+	log := c.loggerFor(r)
+
+	carrier := r.URL.Query().Get("carrier")
+	if carrier == "" {
+		c.writeError(w, r, http.StatusBadRequest, "missing carrier", "carrier query parameter is required")
+		return
+	}
+
+	req := adapter.PickupAvailabilityRequest{
+		Carrier: carrier,
+		Address: adapter.PickupAddress{
+			Street:     r.URL.Query().Get("street"),
+			HouseNumber: r.URL.Query().Get("houseNumber"),
+			City:       r.URL.Query().Get("city"),
+			PostalCode: r.URL.Query().Get("postalCode"),
+			Country:    r.URL.Query().Get("country"),
+		},
+	}
+
+	if req.Address.PostalCode == "" || req.Address.Country == "" {
+		c.writeError(w, r, http.StatusBadRequest, "validation failed", "postalCode and country query parameters are required")
+		return
+	}
+
+	ma, ok := c.resolveManifestAdapter(w, r, carrier)
+	if !ok {
+		return
+	}
+
+	resp, err := ma.GetPickupAvailability(r.Context(), req)
+	if err != nil {
+		log.Error("failed to get pickup availability",
+			zap.Error(err),
+			zap.String("carrier", carrier),
+		)
+		if errors.Is(err, adapter.ErrNotSupported) {
+			c.writeError(w, r, http.StatusNotImplemented, "not supported",
+				fmt.Sprintf("carrier %s does not support pickup availability queries", carrier))
+		} else {
+			c.writeError(w, r, http.StatusInternalServerError, "pickup availability failed", err.Error())
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Error("failed to write pickup availability response", zap.Error(err))
+	}
+}
+
 // resolveManifestAdapter selects the carrier adapter and asserts it implements
 // ManifestAdapter. On failure it writes the appropriate error response and
 // returns false; callers must return immediately when ok is false.
