@@ -1,4 +1,4 @@
-# carrier-gateway
+# Carrier Gateway
 
 ## Why this exists
 
@@ -14,13 +14,14 @@ The bitter irony is that integrating directly with the carriers would have been 
 
 This project is what direct integration looks like when you do it properly. A single consistent API, adapters that absorb carrier-specific wire format details, and no middleware standing between your order management system and the carrier actually moving your parcel.
 
-It is also an experiment in how software gets built. Almost the entire codebase was written by AI — Claude, specifically — working from design decisions and architectural direction provided by a human with strong opinions and hard-won context. The human provides the judgement. The AI executes. It turns out that combination produces software faster than either could alone, and the result is readable enough that the human can tell when the AI is wrong.
+It is also an experiment in how software gets built. Almost the entire codebase was written by AI, specifically — working from design decisions and architectural direction provided by a human with strong opinions and hard-won context. The human provides the judgement. The AI executes. It turns out that combination produces software faster than either could alone, and the result is readable enough that the human can tell when the AI is wrong.
 
 Whether it holds up is the interesting question.
 
 ---
 
-A stateless Go microservice that provides a single consistent API for booking, tracking, and returning shipments across multiple Nordic and European carriers. Change the `carrier` field in your request — the rest of your integration stays the same.
+## What is Carrier GateWay
+A stateless Go microservice with the goal of providing a single consistent API for booking, tracking, and returning shipments across multiple Nordic and European carriers. Change the `carrier` field in your request — the rest of your integration stays the same.
 
 ```bash
 # Book with PostNord today, switch to Bring tomorrow — same request shape
