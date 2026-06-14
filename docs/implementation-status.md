@@ -106,7 +106,7 @@ feature mapping file in this folder with full detail.
 | DHL eCommerce UK | ✅ | `customsDetails[]` per piece — HS code (8-digit), DDP/DAP, IOSS, EORI/VAT registrations. Windsor Framework (GB→NI) not wired |
 | DPD | ✅ | customs inter block with EORI/VAT in shipment payload |
 | Hermes | ❌ | Germany domestic only |
-| FedEx | ❌ | Not yet wired — Ship API supports it |
+| FedEx | ⚠️ | `customsClearanceDetail` wired — commodities, HS codes, EORI/VAT, Incoterms, declared value. IOSS dropped with warning (no FedEx equivalent). |
 | InPost | ❌ | Not wired |
 
 ---

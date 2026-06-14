@@ -17,7 +17,10 @@ Pickup scheduling covers book, cancel, and availability check via the FedEx
 Pickup API v1; update is not supported (cancel-and-rebook). Service point
 delivery (Hold at Location) is wired — set `receiver.servicePointId` to the
 FedEx `locationId` code (e.g. "YBZA") obtained from the Location Search API.
-Customs and add-ons are not yet wired.
+Customs are wired for international shipments — populate `shipment.customs`
+with line items, HS codes, declared values, Incoterms, and EORI/VAT numbers.
+IOSS has no FedEx equivalent and is logged as a warning and dropped. Add-ons
+are not yet wired.
 
 ---
 
@@ -86,7 +89,7 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Customs / cross-border | ❌ | Not yet wired — FedEx Ship API supports full customs declaration but adapter does not map it |
+| Customs / cross-border | ✅ | `customsClearanceDetail` wired — commodities, HS codes, declared values, duties payment, EORI/VAT on shipper/recipient parties |
 | Service point delivery (HAL) | ✅ | `receiver.servicePointId` → `HOLD_AT_LOCATION` + `holdAtLocationDetail.locationId`. Use Location Search API to look up `locationId`. |
 | Multi-colli | ✅ | Multiple `RequestedPackageLineItems` per shipment |
 | Service type auto-selection | ✅ | `fedexServiceType()` selects domestic vs. international service based on sender/receiver country |
@@ -140,7 +143,26 @@ The adapter injects `HOLD_AT_LOCATION` into `specialServiceTypes` and populates
 near a delivery address, call `POST /location/v1/locations` on the FedEx
 Location Search API and filter by `transferOfPossessionType=HOLD_AT_LOCATION`.
 
-**Customs gap.** The FedEx Ship API supports a full customs declaration block
-(commodity descriptions, HS codes, declared values). This is not yet mapped
-in the adapter — international shipments requiring customs documentation must
-use the FedEx portal until this is wired.
+**Customs.** International shipments populate `customsClearanceDetail` automatically
+when `shipment.customs.items` is non-empty. Field mapping:
+
+| Gateway field | FedEx field |
+|---|---|
+| `customs.incoterms` | `dutiesPayment.paymentType` — DDP → SENDER, all others → RECIPIENT |
+| `customs.customsValue` + `customsCurrency` | `totalCustomsValue {amount, currency}` |
+| `customs.invoiceNumber` | `commercialInvoice.customerReferences[type=INVOICE_NUMBER]` |
+| `customs.invoiceDate` | `commercialInvoice.comments[0]` (no dedicated date field in FedEx) |
+| `customs.exporterVatNumber` | `shipper.tins[tinType=FEDERAL]` |
+| `customs.importerOfRecord` | `recipients[0].tins[tinType=BUSINESS_NATIONAL]` (EORI) |
+| `customs.importerVatNumber` | `recipients[0].tins[tinType=FEDERAL]` |
+| `customs.iossNumber` | ⚠️ **Not supported** — FedEx has no IOSS `tinType`; logged as warning and dropped |
+| `customs.items[].description` | `commodities[].description` (required) |
+| `customs.items[].hsCode` | `commodities[].harmonizedCode` (falls back to `customs.hsCode`) |
+| `customs.items[].countryOfOrigin` | `commodities[].countryOfManufacture` (falls back to `customs.countryOfOrigin`) |
+| `customs.items[].quantity` | `commodities[].quantity` + `quantityUnits: "EA"` |
+| `customs.items[].netWeight` | `commodities[].weight {units: "KG"}` |
+| `customs.items[].value` + `currency` | `commodities[].customsValue {amount, currency}` |
+
+Fields with no FedEx equivalent (`natureOfCargo`, `goodsCategoryCode`, `transportMode`,
+`licenceNumber`, `certificateNumber`) are silently omitted — FedEx does not expose
+equivalent commodity-level fields in the Ship API v1.

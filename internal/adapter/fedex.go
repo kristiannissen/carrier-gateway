@@ -211,6 +211,7 @@ type fedexRequestedShipment struct {
 	LabelSpecification        fedexLabelSpec                 `json:"labelSpecification"`
 	RequestedPackageLineItems []fedexPackageLineItem         `json:"requestedPackageLineItems"`
 	SpecialServicesRequested  *fedexSpecialServicesRequested `json:"specialServicesRequested,omitempty"`
+	CustomsClearanceDetail    *fedexCustomsClearanceDetail   `json:"customsClearanceDetail,omitempty"`
 }
 
 // fedexSpecialServicesRequested carries shipment-level special service flags.
@@ -230,6 +231,62 @@ type fedexHoldAtLocationDetail struct {
 type fedexParty struct {
 	Address fedexAddress `json:"address"`
 	Contact fedexContact `json:"contact"`
+	Tins    []fedexTIN   `json:"tins,omitempty"`
+}
+
+// fedexTIN is a tax identification number attached to a shipper or recipient
+// party. FedEx uses this for EORI, VAT, and similar registrations.
+type fedexTIN struct {
+	Number  string `json:"number"`
+	TINType string `json:"tinType"`
+}
+
+// fedexMoney is a currency-qualified monetary amount.
+type fedexMoney struct {
+	Amount   float64 `json:"amount"`
+	Currency string  `json:"currency"`
+}
+
+// fedexCustomerReference carries a typed reference on the commercial invoice.
+type fedexCustomerReference struct {
+	CustomerReferenceType string `json:"customerReferenceType"`
+	Value                 string `json:"value"`
+}
+
+// fedexCommercialInvoice is the commercial invoice block within
+// CustomsClearanceDetail. At least one field must be populated; FedEx
+// requires the object to be present even when most fields are omitted.
+type fedexCommercialInvoice struct {
+	CustomerReferences []fedexCustomerReference `json:"customerReferences,omitempty"`
+	Comments           []string                 `json:"comments,omitempty"`
+}
+
+// fedexDutiesPayment indicates who pays import duties.
+// SENDER corresponds to DDP; RECIPIENT to DAP/DDU.
+type fedexDutiesPayment struct {
+	PaymentType string `json:"paymentType"`
+}
+
+// fedexCommodity is a single line item in the customs declaration.
+type fedexCommodity struct {
+	Description          string      `json:"description"`
+	NumberOfPieces       int         `json:"numberOfPieces,omitempty"`
+	Quantity             int         `json:"quantity,omitempty"`
+	QuantityUnits        string      `json:"quantityUnits,omitempty"`
+	Weight               *fedexWeight `json:"weight,omitempty"`
+	CustomsValue         *fedexMoney  `json:"customsValue,omitempty"`
+	CountryOfManufacture string      `json:"countryOfManufacture,omitempty"`
+	HarmonizedCode       string      `json:"harmonizedCode,omitempty"`
+}
+
+// fedexCustomsClearanceDetail is the top-level customs block attached to the
+// shipment request for international and intra-country customs-declarable
+// shipments.
+type fedexCustomsClearanceDetail struct {
+	DutiesPayment     *fedexDutiesPayment    `json:"dutiesPayment,omitempty"`
+	CommercialInvoice fedexCommercialInvoice `json:"commercialInvoice"`
+	Commodities       []fedexCommodity       `json:"commodities"`
+	TotalCustomsValue *fedexMoney            `json:"totalCustomsValue,omitempty"`
 }
 
 type fedexAddress struct {
@@ -427,6 +484,107 @@ func fedexHoldAtLocation(servicePointID string) *fedexSpecialServicesRequested {
 	}
 }
 
+// fedexCustomsBlock builds a CustomsClearanceDetail from the gateway Customs
+// struct. Returns nil when there are no line items (domestic / no customs).
+// IOSS has no FedEx tinType equivalent and is skipped with a warning.
+// InvoiceDate has no dedicated FedEx field and is shimmed into
+// commercialInvoice.comments when non-empty.
+func fedexCustomsBlock(c Customs, log *zap.Logger) *fedexCustomsClearanceDetail {
+	if len(c.Items) == 0 {
+		return nil
+	}
+
+	detail := &fedexCustomsClearanceDetail{}
+
+	// Duties payment: DDP → sender pays, everything else → recipient pays.
+	if c.Incoterms == "DDP" {
+		detail.DutiesPayment = &fedexDutiesPayment{PaymentType: "SENDER"}
+	} else {
+		detail.DutiesPayment = &fedexDutiesPayment{PaymentType: "RECIPIENT"}
+	}
+
+	// Total customs value.
+	if c.CustomsValue > 0 {
+		cur := c.CustomsCurrency
+		if cur == "" {
+			cur = "EUR"
+		}
+		detail.TotalCustomsValue = &fedexMoney{Amount: c.CustomsValue, Currency: cur}
+	}
+
+	// Commercial invoice.
+	inv := fedexCommercialInvoice{}
+	if c.InvoiceNumber != "" {
+		inv.CustomerReferences = []fedexCustomerReference{
+			{CustomerReferenceType: "INVOICE_NUMBER", Value: c.InvoiceNumber},
+		}
+	}
+	if c.InvoiceDate != "" {
+		inv.Comments = []string{"Invoice date: " + c.InvoiceDate}
+	}
+	detail.CommercialInvoice = inv
+
+	// Commodities.
+	cur := c.CustomsCurrency
+	if cur == "" {
+		cur = "EUR"
+	}
+	commodities := make([]fedexCommodity, len(c.Items))
+	for i, item := range c.Items {
+		com := fedexCommodity{
+			Description:   item.Description,
+			Quantity:      item.Quantity,
+			QuantityUnits: "EA",
+		}
+		hsCode := item.HSCode
+		if hsCode == "" {
+			hsCode = c.HSCode
+		}
+		com.HarmonizedCode = hsCode
+
+		origin := item.CountryOfOrigin
+		if origin == "" {
+			origin = c.CountryOfOrigin
+		}
+		com.CountryOfManufacture = origin
+
+		if item.NetWeight > 0 {
+			com.Weight = &fedexWeight{Units: "KG", Value: item.NetWeight}
+		}
+
+		itemCur := item.Currency
+		if itemCur == "" {
+			itemCur = cur
+		}
+		if item.Value > 0 {
+			com.CustomsValue = &fedexMoney{Amount: item.Value, Currency: itemCur}
+		}
+
+		commodities[i] = com
+	}
+	detail.Commodities = commodities
+
+	if c.IossNumber != "" && log != nil {
+		log.Warn("FedEx: IossNumber is not supported by the FedEx Ship API and has been omitted",
+			zap.String("iossNumber", c.IossNumber))
+	}
+
+	return detail
+}
+
+// fedexPartyTINs returns the tins slice for a party from the provided EORI
+// and VAT numbers. Either may be empty; nil is returned when both are empty.
+func fedexPartyTINs(eori, vat string) []fedexTIN {
+	var tins []fedexTIN
+	if eori != "" {
+		tins = append(tins, fedexTIN{Number: eori, TINType: "BUSINESS_NATIONAL"})
+	}
+	if vat != "" {
+		tins = append(tins, fedexTIN{Number: vat, TINType: "FEDERAL"})
+	}
+	return tins
+}
+
 // fedexPackageItems converts gateway Colli to FedEx RequestedPackageLineItems.
 // Dimensions are converted from float64 cm to integer cm by rounding up to
 // avoid underreporting.
@@ -458,6 +616,14 @@ func fedexPackageItems(colli []Colli) []fedexPackageLineItem {
 // Labels are returned inline as base64-encoded PDF in the response and surfaced
 // as data URIs in each ColliResponse.LabelURL.
 func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*BookingResponse, error) {
+	customs := r.Shipment.Customs
+
+	shipper := fedexPartyFrom(r.Shipment.Sender)
+	shipper.Tins = fedexPartyTINs("", customs.ExporterVATNumber)
+
+	recipient := fedexPartyFrom(r.Shipment.Receiver)
+	recipient.Tins = fedexPartyTINs(customs.ImporterOfRecord, customs.ImporterVATNumber)
+
 	shipReq := fedexShipRequest{
 		AccountNumber:        fedexAccountNumber{Value: a.AccountNumber},
 		LabelResponseOptions: "LABEL",
@@ -465,8 +631,8 @@ func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*Boo
 			ServiceType:            fedexServiceType(r.Shipment),
 			PackagingType:          "YOUR_PACKAGING",
 			PickupType:             "USE_SCHEDULED_PICKUP",
-			Shipper:                fedexPartyFrom(r.Shipment.Sender),
-			Recipients:             []fedexParty{fedexPartyFrom(r.Shipment.Receiver)},
+			Shipper:                shipper,
+			Recipients:             []fedexParty{recipient},
 			ShippingChargesPayment: fedexPayment{PaymentType: "SENDER"},
 			TotalWeight:            fedexWeight{Units: "KG", Value: r.Shipment.TotalWeight},
 			LabelSpecification: fedexLabelSpec{
@@ -475,6 +641,7 @@ func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*Boo
 			},
 			RequestedPackageLineItems: fedexPackageItems(r.Shipment.Colli),
 			SpecialServicesRequested:  fedexHoldAtLocation(r.Shipment.Receiver.ServicePointID),
+			CustomsClearanceDetail:    fedexCustomsBlock(customs, a.log),
 		},
 	}
 
