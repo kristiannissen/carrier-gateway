@@ -249,3 +249,170 @@ OAuth2 credentials and is issued by DHL when the account is set up.
 the pickup account. The all-open mode manifests the last 20,000 labels and
 may include packages not intended for the current run — use specific IDs
 where possible.
+
+---
+
+# DHL eCommerce UK — Feature Mapping
+
+API: **DHL eCommerce UK API (parceluk)**
+Base URL (prod): `https://api.dhl.com/parceluk`
+Base URL (UAT): `https://api-uat.dhl.com/parceluk`
+Auth: OAuth2 client credentials (`POST /auth/v1/accesstoken`, 60-min tokens).
+Carrier key: `dhl_ecommerce_uk`
+Implementation status: **Beta**
+Spec: `APIdocs/DHL_ecom_UK.json`
+
+---
+
+## Summary
+
+DHL eCommerce UK is a distinct product and API from DHL eCommerce Europe and
+DHL eCommerce Americas — separate base URL, separate auth endpoint path, and
+a different API surface. Booking, label retrieval, tracking, cancellation, and
+pickup booking are all implemented. There is no manifest API on the UK platform.
+
+---
+
+## Feature fit/gap
+
+### Booking
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Book shipment | ✅ | `POST /shipping/v1/label?includeLabel=INCLUDE` — label returned inline |
+| Cancel shipment | ✅ | `POST /shipping/v1/cancellation` — consignee postal code cached at booking time |
+| Update shipment | ❌ | `POST /shipping/v1/amendment` schema is incompatible with `UpdateRequest` — returns 501 |
+| Idempotency key | ❌ | Client-side only |
+| Multi-colli | ⚠️ | API accepts exactly one shipment per request — adapter fans out one call per colli |
+
+### Labels
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Print label | ✅ | Inline in booking response (base64) |
+| Fetch/reprint label | ✅ | `GET /reprintlabels/v1/labels` |
+| Label formats | ✅ | ZPL, PDF, PNG (PNG_RAW to avoid ZIP wrapper). EPL not supported |
+| Page size | ⚠️ | `label6x4` used by default. A4 available for UK domestic only — not wired |
+| Label DPI | ⚠️ | Defaults to 203 dpi — 300 dpi not yet exposed |
+| Return label (in-box) | ✅ | `inBoxReturn=true` — requires `DHLECS_UK_RETURN_ACCOUNT` |
+| Service-point drop-off barcode | ❌ | `GET /reprintlabels/v1/servicepoint-dropoff-uk` not wired |
+
+### Tracking
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Current status | ✅ | `GET /tracking/v1/shipments?trackingNumber=...&service=parcelUk` |
+| Event history | ✅ | `events[]` returned in response |
+| Status normalization | ✅ | `"dhl_ecommerce_uk"` entry in `normalizedStatuses` — 5 codes: `pre-transit`, `transit`, `delivered`, `failure`, `unknown` |
+| Estimated delivery | ✅ | `estimatedDeliveryTime` where returned by carrier |
+| Proof of delivery | ❌ | `proofOfDelivery.signatureUrl` / `documentUrl` available in API but not surfaced |
+| Piece-level tracking | ❌ | `GET /tracking/v1/pieces` not wired |
+| Digital assets (signature photo) | ❌ | `GET /tracking/v1/images/{imageId}` not wired |
+| Webhooks / push events | ❌ | API is pull-only — no webhook registration endpoint |
+
+### Pickup scheduling
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Book pickup | ✅ | `POST /pickup/v1/pickup` — requires `DHLECS_UK_TRADING_LOCATION_ID` |
+| Update pickup | ❌ | No update endpoint — cancel and rebook |
+| Cancel pickup | ❌ | No API endpoint — contact DHL customer service |
+| Get pickup availability | ❌ | Not supported — proceed to BookPickup directly |
+
+### Manifest
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Close manifest | ❌ | DHL eCommerce UK has no manifest or end-of-day closeout API. Shipments are processed automatically |
+
+### Add-ons
+
+| Add-on | Implemented | Notes |
+|---|---|---|
+| SMS notification | ❌ | Not supported — DHL sends pre-delivery notifications to consignee email automatically |
+| Email notification | ⚠️ | Automatic when `consigneeAddress.email` is set — no explicit add-on mapping needed |
+| Flex delivery | ❌ | Not available on DHL eCommerce UK |
+| Signature required | ✅ | `deliveryChoice=SIG` — maps `signature_required` add-on |
+| Age verification | ❌ | `deliveryChoice=AGE` available in API but not wired to an add-on |
+| Cash on delivery | ❌ | `exchangeOnDelivery` (UK only) not wired — ignored with warning logged |
+| Insurance / extended liability | ✅ | `extendedLiabilityUnits=1` — maps `insurance` add-on when `InsuranceValue > 0` |
+
+### Customs
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| HS code | ✅ | Normalised to 8-digit no-dot format (`dhlUKHSCode`) |
+| Country of origin | ✅ | Falls back from item to shipment-level |
+| Item-level customs | ✅ | `customsDetails[]` per piece |
+| DDP / DAP | ✅ | `Customs.Incoterms` → `shipmentDetails.dutiesPaid` |
+| IOSS | ✅ | `iossShipment=true` + sender registration `type=IOSS` |
+| Customs invoice | ✅ | `reasonForExport` mapped from `NatureOfCargo`; invoice number/date forwarded |
+| EORI (sender/recipient) | ✅ | Mapped to `senderCustomsRegistrations` / `recipientCustomsRegistrations` |
+| VAT (sender/recipient) | ✅ | Mapped to respective customs registration arrays |
+| Windsor Framework (GB → NI) | ❌ | `clearanceDeclaration` (C2C/C2B/B2C/B2B) not wired — no `Customs` fields for this yet |
+
+### Other features
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Service point delivery | ✅ | `receiver.servicePointId` → `consigneeAddress.locationId` + `addressType=servicePoint` |
+| What3Words delivery | ❌ | `consigneeAddress.what3words` available in API but not wired |
+| Carriage-forward / third-party collection | ❌ | `carriageForward=true` flow not wired |
+| Product/service code lookup | ❌ | `GET /referencedata/v2/products` not wired — product code is a static env var |
+| Service point finder | ❌ | `GET /servicepoint/v1/find-by-address` not wired |
+| Customer price block | ❌ | `customerPrice` (VAT reporting) not wired |
+
+---
+
+## Cancellation caveat
+
+The DHL UK cancellation endpoint requires the consignee postal code alongside
+the shipment ID. The `CarrierAdapter.CancelShipment` interface only exposes the
+tracking number. To bridge this gap the adapter caches `shipmentID → postalCode`
+at booking time. Shipments booked outside this process (e.g. in a different pod
+or after a restart) cannot be cancelled via the API interface — contact DHL
+customer service in those cases.
+
+Shipments already scanned at a DHL depot cannot be cancelled. If a cancellation
+was requested before scanning but the parcel is later scanned anyway, DHL
+automatically recreates the shipment.
+
+---
+
+## Endpoint mapping
+
+| carrier-gateway | DHL eCommerce UK API | Status |
+|---|---|---|
+| `POST /api/bookings` | `POST /shipping/v1/label` | ✅ |
+| `DELETE /api/bookings/{id}` | `POST /shipping/v1/cancellation` | ✅ |
+| `PATCH /api/bookings/{id}` | `POST /shipping/v1/amendment` | ❌ → 501 (schema mismatch) |
+| `GET /api/trackings/{id}` | `GET /tracking/v1/shipments` | ✅ |
+| `GET /api/labels/{id}` | `GET /reprintlabels/v1/labels` | ✅ |
+| `POST /api/pickups` | `POST /pickup/v1/pickup` | ✅ |
+| `PUT /api/pickups/{id}` | — | ❌ → 501 |
+| `DELETE /api/pickups/{id}` | — | ❌ → 501 |
+| `POST /api/manifests` | — | ❌ → 501 (no manifest API) |
+
+---
+
+## Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `DHLECS_UK_CLIENT_ID` | ✅ | OAuth2 client_id |
+| `DHLECS_UK_CLIENT_SECRET` | ✅ | OAuth2 client_secret |
+| `DHLECS_UK_PICKUP_ACCOUNT` | ✅ | DHL account number (used as `pickupAccount` on all requests) |
+| `DHLECS_UK_ORDERED_PRODUCT` | ❌ | 3-digit product/service code (default: `220` — Signature At Address Next Day) |
+| `DHLECS_UK_TRADING_LOCATION_ID` | ❌ | Customer trading location ID — required for pickup booking |
+| `DHLECS_UK_RETURN_ACCOUNT` | ❌ | DHL return account number — required when `DeliveryType=return` |
+| `DHLECS_UK_RETURN_PRODUCT` | ❌ | Product code for return shipments (defaults to `DHLECS_UK_ORDERED_PRODUCT`) |
+
+## UAT test accounts
+
+| Account type | Pickup account | Drop-off account |
+|---|---|---|
+| UK domestic | `F020579` | `F020582` |
+| International road | `F820579` | `F820582` |
+| International air | `F520579` | `F520582` |
+
+UAT base URL: `https://api-uat.dhl.com/parceluk` — set `DHLEcomUKAdapter.BaseURL` directly or use a sandbox constructor.

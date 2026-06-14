@@ -20,6 +20,7 @@ feature mapping file in this folder with full detail.
 | Hermes Germany | Not fully implemented yet (Beta) | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
 | FedEx | Not fully implemented yet (Beta) | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
 | Evri | Not fully implemented yet (Beta) | GB | — |
+| DHL eCommerce UK | Not fully implemented yet (Beta) | GB | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | Omniva | Implemented | EE, LV, LT | — |
 | InPost | Not fully implemented yet (Demo) | PL, UK, FR, IT | [inpost-feature-mapping.md](inpost-feature-mapping.md) |
 
@@ -29,25 +30,25 @@ feature mapping file in this folder with full detail.
 
 ✅ = Implemented and live  ⚠️ = Partial or caveated  ❌ = Not supported or not wired  ❓ = Unknown / not confirmed
 
-| Feature | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom | DPD | Hermes | FedEx | InPost |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **Book shipment** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ Demo |
-| **Cancel shipment** | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
-| **Update shipment** | ⚠️ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Tracking + events** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ Demo |
-| **Labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ Demo |
-| **Return labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| **Idempotency (native)** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Feature | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Book shipment** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ Demo |
+| **Cancel shipment** | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **Update shipment** | ⚠️ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Tracking + events** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ Demo |
+| **Labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ Demo |
+| **Return labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **Idempotency (native)** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
 ## Pickup scheduling
 
-| Feature | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom | DPD | Hermes | FedEx | InPost |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **Book pickup** | ⚠️ | ✅ | ❌ | ❌ | ⚠️ | ❓ | ✅ | ❓ | ❌ | N/A |
-| **Update pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❓ | ❌ | N/A |
-| **Cancel pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ✅ | ❓ | ❌ | N/A |
+| Feature | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Book pickup** | ⚠️ | ✅ | ❌ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ❌ | N/A |
+| **Update pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | N/A |
+| **Cancel pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ❌ | N/A |
 
 **PostNord pickup note:** Domestic DK/SE/FI only. Requires item IDs from booking response.
 **DHL Express pickup note:** Implicit at booking (returns `dispatchConfirmationNumber`). Standalone `POST /api/pickups` not yet wired.
@@ -64,7 +65,8 @@ feature mapping file in this folder with full detail.
 | GLS | ❌ | ❌ | **Required** — `POST /rs/shipments/endofday` exists but not wired. Must be called before driver arrives. |
 | DAO | ❌ | ❌ | No API support |
 | DHL Express | ❌ | ✅ | Post-collection only via `GET /shipments/{id}/get-image?typeCode=MANIFEST` |
-| DHL eCommerce | ❓ | ❓ | Not confirmed |
+| DHL eCommerce EU | ❓ | ❓ | Not confirmed |
+| DHL eCommerce UK | ❌ | ❌ | No manifest API — shipments processed automatically by DHL |
 | DPD | ❌ | ❌ | No API support — pickup order acts as handover instruction |
 | Hermes | ❓ | ❓ | Not confirmed |
 | FedEx | ❌ | ❌ | No API support |
@@ -74,16 +76,18 @@ feature mapping file in this folder with full detail.
 
 ## Add-ons
 
-| Add-on | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom | DPD | Hermes | FedEx | InPost |
-|---|---|---|---|---|---|---|---|---|---|---|
-| SMS notification | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ❓ | ✅ | ✅ | ❌ | ❌ |
-| Email notification | ✅ | ✅ | ❌ | ⚠️ | ✅ | ❓ | ✅ | ✅ | ❌ | ❌ |
-| Flex delivery | ✅ | ✅ | ❌ | ❌ | ✅ | ⚠️ | ❓ | ❌ | ❌ | ❌ |
-| Signature required | ✅ | ✅ | ❌ | ❌ | ⚠️ | ⚠️ | ❓ | ✅ | ❌ | ❌ |
-| Cash on delivery | ❌ | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Insurance | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❓ | ❌ | ❌ | ❌ |
+| Add-on | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| SMS notification | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ❓ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| Email notification | ✅ | ✅ | ❌ | ⚠️ | ✅ | ❓ | ⚠️ | ✅ | ✅ | ❌ | ❌ |
+| Flex delivery | ✅ | ✅ | ❌ | ❌ | ✅ | ⚠️ | ❌ | ❓ | ❌ | ❌ | ❌ |
+| Signature required | ✅ | ✅ | ❌ | ❌ | ⚠️ | ⚠️ | ✅ | ❓ | ✅ | ❌ | ❌ |
+| Cash on delivery | ❌ | ✅ | ❌ | ❌ | ⚠️ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| Insurance | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❓ | ❌ | ❌ | ❌ |
 
-**DHL eCom `flex_delivery` and `signature_required`** are accepted by the adapter but silently skipped — logged as warnings, not mapped to any wire-format field. Marked ⚠️ until properly wired.
+**DHL eCom EU `flex_delivery` and `signature_required`** are accepted but silently skipped — logged as warnings. Marked ⚠️ until properly wired.
+
+**DHL eCom UK email notification** is automatic when `consigneeAddress.email` is set — DHL sends pre-delivery notifications without an explicit add-on mapping. Marked ⚠️.
 
 ---
 
@@ -96,7 +100,8 @@ feature mapping file in this folder with full detail.
 | GLS | ✅ | customs-consignments-v3 API. CN22/CN23 generation. |
 | DAO | ❌ | Denmark domestic only |
 | DHL Express | ✅ | Full customs block — Incoterms, IOSS, EORI, invoice number/date, line items |
-| DHL eCommerce | ✅ | Customs data block for cross-border |
+| DHL eCommerce EU | ✅ | Customs data block for cross-border |
+| DHL eCommerce UK | ✅ | `customsDetails[]` per piece — HS code (8-digit), DDP/DAP, IOSS, EORI/VAT registrations. Windsor Framework (GB→NI) not wired |
 | DPD | ✅ | customs inter block with EORI/VAT in shipment payload |
 | Hermes | ❌ | Germany domestic only |
 | FedEx | ❌ | Not yet wired — Ship API supports it |
@@ -113,7 +118,8 @@ feature mapping file in this folder with full detail.
 | GLS | ✅ | `receiver.servicePointId` → `parcelShopId` (ShopDeliveryService) |
 | DAO | ✅ | `receiver.servicePointId` → `shopid` |
 | DHL Express | ✅ | `receiver.servicePointId` → `onDemandDelivery.servicePointId` (6-char code) |
-| DHL eCommerce | ✅ | `deliveryType=parcelshop/parcelstation/postOffice` |
+| DHL eCommerce EU | ✅ | `deliveryType=parcelshop/parcelstation/postOffice` |
+| DHL eCommerce UK | ✅ | `receiver.servicePointId` → `consigneeAddress.locationId` + `addressType=servicePoint` |
 | DPD | ✅ | `pudo.pudoId` in shipment payload |
 | Hermes | ✅ | HSI routing API |
 | FedEx | ❌ | Not wired |
