@@ -46,6 +46,12 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 | Event detail text | ✅ | `statusDetailed` used when present; falls back to `status` short title |
 | Estimated delivery | ✅ | `estimatedTimeOfDelivery` where returned; falls back to `estimatedDeliveryTimeFrame.estimatedFrom` |
 | Tracking API key | ⚠️ | Separate credential (`DHL_TRACKING_API_KEY`) from eConnect booking credentials |
+| Response schema | ⚠️ | No machine-readable spec available — field mapping is inferred from the DHL developer portal user guide, not a validated OpenAPI schema. The `DHL_Shipment Tracking_2_0.yaml` in APIdocs is a stub (references a WADL, contains no schemas). |
+| Status code normalization | ⚠️ | `normalizeStatus("dhl", statusCode)` maps carrier codes to gateway statuses, but the full set of DHL Unified Tracking status codes is not documented in available specs — mapping may be incomplete |
+| Proof of Delivery (POD) | ❌ | Not implemented. Available for DHL Express and DHL Freight after postal-code validation; no spec for response schema in available docs |
+| Piece-level tracking | ❌ | Not implemented. Mentioned as available in the Unified Tracking API user guide but no response schema documented |
+| Rate limiting | ⚠️ | Default quota is 250 calls/day, 1 per 5 seconds — insufficient for production. No throttle/retry logic in adapter. Request upgrade via DHL developer portal |
+| `service` parameter | ⚠️ | Hardcoded to `ecommerce-europe`. For DHL Parcel DE domestic tracking use `parcel-de`; for DHL Express use `express`. Value not validated by available docs |
 
 ### Pickup scheduling
 
@@ -106,6 +112,25 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 **Two separate credentials.** The eConnect booking API uses OAuth2 (clientID +
 clientSecret). The DHL Unified Tracking API uses a separate API key
 (`DHL_TRACKING_API_KEY`). Both are required for full functionality.
+
+**Tracking spec gap.** No machine-readable OpenAPI spec for the DHL Unified
+Tracking API is available in the APIdocs folder — the `DHL_Shipment Tracking_2_0.yaml`
+file is an empty stub referencing a WADL. The response schema (field names,
+status code values, nesting) is inferred from the developer portal user guide
+(`dhl_tracking.md`) and live response observation. Before adding POD, piece-level
+tracking, or extended status normalization, obtain the actual OpenAPI spec from
+`developer.dhl.com` and add it to APIdocs.
+
+**Tracking rate limits.** The initial quota on a new DHL API key is 250 calls/day
+with a 1 call/5 second burst limit. This is only suitable for development. Request
+a production upgrade via the DHL developer portal before going live. The adapter
+has no retry or throttle logic — a 429 response will surface as an error.
+
+**Parcel DE vs. eCommerce Europe.** The Unified Tracking API serves both products
+via the same endpoint but requires the correct `service` query parameter. The
+adapter hardcodes `service=ecommerce-europe`. For German domestic shipments
+(DHL Parcel DE) the value must be `parcel-de` — these will not resolve correctly
+with the current adapter.
 
 **SEPA COD.** DHL eCommerce Europe COD uses SEPA bank transfer — not cash on
 delivery to a courier. Requires a valid IBAN and BIC. Only available on the
