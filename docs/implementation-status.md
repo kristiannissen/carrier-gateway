@@ -124,7 +124,7 @@ feature mapping file in this folder with full detail.
 | DHL eCommerce UK | ✅ | `receiver.servicePointId` → `consigneeAddress.locationId` + `addressType=servicePoint` |
 | DPD | ✅ | `pudo.pudoId` in shipment payload |
 | Hermes | ✅ | HSI routing API |
-| FedEx | ❌ | Not wired |
+| FedEx | ✅ | `receiver.servicePointId` → `HOLD_AT_LOCATION` + `holdAtLocationDetail.locationId` (Hold at Location) |
 | InPost | ✅ | `service.targetLocker` (locker code) |
 
 ---

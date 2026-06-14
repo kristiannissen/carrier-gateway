@@ -201,15 +201,30 @@ type fedexShipRequest struct {
 }
 
 type fedexRequestedShipment struct {
-	ServiceType               string                 `json:"serviceType"`
-	PackagingType             string                 `json:"packagingType"`
-	PickupType                string                 `json:"pickupType"`
-	Shipper                   fedexParty             `json:"shipper"`
-	Recipients                []fedexParty           `json:"recipients"`
-	ShippingChargesPayment    fedexPayment           `json:"shippingChargesPayment"`
-	TotalWeight               fedexWeight            `json:"totalWeight"`
-	LabelSpecification        fedexLabelSpec         `json:"labelSpecification"`
-	RequestedPackageLineItems []fedexPackageLineItem `json:"requestedPackageLineItems"`
+	ServiceType               string                         `json:"serviceType"`
+	PackagingType             string                         `json:"packagingType"`
+	PickupType                string                         `json:"pickupType"`
+	Shipper                   fedexParty                     `json:"shipper"`
+	Recipients                []fedexParty                   `json:"recipients"`
+	ShippingChargesPayment    fedexPayment                   `json:"shippingChargesPayment"`
+	TotalWeight               fedexWeight                    `json:"totalWeight"`
+	LabelSpecification        fedexLabelSpec                 `json:"labelSpecification"`
+	RequestedPackageLineItems []fedexPackageLineItem         `json:"requestedPackageLineItems"`
+	SpecialServicesRequested  *fedexSpecialServicesRequested `json:"specialServicesRequested,omitempty"`
+}
+
+// fedexSpecialServicesRequested carries shipment-level special service flags.
+type fedexSpecialServicesRequested struct {
+	SpecialServiceTypes  []string                   `json:"specialServiceTypes"`
+	HoldAtLocationDetail *fedexHoldAtLocationDetail `json:"holdAtLocationDetail,omitempty"`
+}
+
+// fedexHoldAtLocationDetail specifies the Hold-at-Location destination.
+// LocationID is the 4-character FedEx facility code returned by the
+// Location Search API (e.g. "YBZA"). It maps to Address.ServicePointID
+// in the gateway request.
+type fedexHoldAtLocationDetail struct {
+	LocationID string `json:"locationId"`
 }
 
 type fedexParty struct {
@@ -398,6 +413,20 @@ func fedexPartyFrom(addr Address) fedexParty {
 	}
 }
 
+// fedexHoldAtLocation returns a special services block for Hold-at-Location
+// delivery when servicePointID is non-empty, or nil for standard delivery.
+func fedexHoldAtLocation(servicePointID string) *fedexSpecialServicesRequested {
+	if servicePointID == "" {
+		return nil
+	}
+	return &fedexSpecialServicesRequested{
+		SpecialServiceTypes: []string{"HOLD_AT_LOCATION"},
+		HoldAtLocationDetail: &fedexHoldAtLocationDetail{
+			LocationID: servicePointID,
+		},
+	}
+}
+
 // fedexPackageItems converts gateway Colli to FedEx RequestedPackageLineItems.
 // Dimensions are converted from float64 cm to integer cm by rounding up to
 // avoid underreporting.
@@ -445,6 +474,7 @@ func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*Boo
 				LabelStockType: "PAPER_7X475",
 			},
 			RequestedPackageLineItems: fedexPackageItems(r.Shipment.Colli),
+			SpecialServicesRequested:  fedexHoldAtLocation(r.Shipment.Receiver.ServicePointID),
 		},
 	}
 

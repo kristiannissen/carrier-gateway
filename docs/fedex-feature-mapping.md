@@ -1,6 +1,6 @@
 # FedEx — Feature Mapping
 
-API: **FedEx Ship API v1 + Track API v1 + Pickup API v1**
+API: **FedEx Ship API v1 + Track API v1 + Pickup API v1 + Location Search API v1**
 Base URL (prod): `https://apis.fedex.com`
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token)
 Coverage: Worldwide.
@@ -14,8 +14,10 @@ FedEx covers booking, cancellation, tracking, and pickup scheduling. Labels are
 returned inline in the booking response (PDF only); the standalone label reprint
 endpoint is not yet wired (spec pending). Post-booking update is not supported.
 Pickup scheduling covers book, cancel, and availability check via the FedEx
-Pickup API v1; update is not supported (cancel-and-rebook). Customs, add-ons,
-and service point delivery are not yet wired.
+Pickup API v1; update is not supported (cancel-and-rebook). Service point
+delivery (Hold at Location) is wired — set `receiver.servicePointId` to the
+FedEx `locationId` code (e.g. "YBZA") obtained from the Location Search API.
+Customs and add-ons are not yet wired.
 
 ---
 
@@ -85,7 +87,7 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 | Feature | Implemented | Notes |
 |---|---|---|
 | Customs / cross-border | ❌ | Not yet wired — FedEx Ship API supports full customs declaration but adapter does not map it |
-| Service point delivery | ❌ | Not wired |
+| Service point delivery (HAL) | ✅ | `receiver.servicePointId` → `HOLD_AT_LOCATION` + `holdAtLocationDetail.locationId`. Use Location Search API to look up `locationId`. |
 | Multi-colli | ✅ | Multiple `RequestedPackageLineItems` per shipment |
 | Service type auto-selection | ✅ | `fedexServiceType()` selects domestic vs. international service based on sender/receiver country |
 
@@ -105,6 +107,7 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 | `PUT /api/pickups/{id}` | — | ❌ → 501 (cancel-and-rebook) |
 | `DELETE /api/pickups/{id}` | `PUT /pickup/v1/pickups/cancel` | ✅ |
 | `POST /api/manifests` | — | ❌ → 501 |
+| Service point lookup (caller-side) | `POST /location/v1/locations` | ℹ️ Not a gateway endpoint — callers call FedEx directly to resolve a `locationId` |
 
 ---
 
@@ -129,6 +132,13 @@ confirmation code. The cancel endpoint requires all three values, and they
 cannot be recovered from the code alone, so encoding them into the token avoids
 external state. The `location` segment is empty for Ground (FDXG) pickups and
 populated for Express (FDXE) pickups.
+
+**Hold at Location (service point delivery).** Set `receiver.servicePointId`
+to the FedEx `locationId` code (4–5 alphanumeric characters, e.g. "YBZA").
+The adapter injects `HOLD_AT_LOCATION` into `specialServiceTypes` and populates
+`holdAtLocationDetail.locationId` automatically. To look up valid location IDs
+near a delivery address, call `POST /location/v1/locations` on the FedEx
+Location Search API and filter by `transferOfPossessionType=HOLD_AT_LOCATION`.
 
 **Customs gap.** The FedEx Ship API supports a full customs declaration block
 (commodity descriptions, HS codes, declared values). This is not yet mapped
