@@ -208,8 +208,11 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsReturnBooking: true,
 		SupportsEventPolling:  true,
 	},
-	// FedEx: cancellation is supported via PUT /ship/v1/shipments/cancel.
-	// Full capabilities will be confirmed once the Ship and Track API specs are available.
+	// FedEx: cancellation via PUT /ship/v1/shipments/cancel.
+	// Pickup scheduling via POST /pickup/v1/pickups (Express/Ground).
+	// Pickup availability via POST /pickup/v1/pickups/availabilities.
+	// Pickup cancellation via PUT /pickup/v1/pickups/cancel.
+	// Update and manifest close are not supported — cancel-and-rebook for changes.
 	"fedex": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
 	// DHL Express: cancel AWB is not available via API; pickup cancellation requires
 	// the dispatchConfirmationNumber from BookingResponse, not the AWB.

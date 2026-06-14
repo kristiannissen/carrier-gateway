@@ -46,13 +46,15 @@ feature mapping file in this folder with full detail.
 
 | Feature | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book pickup** | ⚠️ | ✅ | ❌ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ❌ | N/A |
+| **Book pickup** | ⚠️ | ✅ | ❌ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | N/A |
 | **Update pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | N/A |
-| **Cancel pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ❌ | N/A |
+| **Cancel pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | N/A |
+| **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | N/A |
 
 **PostNord pickup note:** Domestic DK/SE/FI only. Requires item IDs from booking response.
 **DHL Express pickup note:** Implicit at booking (returns `dispatchConfirmationNumber`). Standalone `POST /api/pickups` not yet wired.
 **GLS pickup note:** `POST /rs/sporadiccollection` exists in ShipIT API but not yet wired.
+**FedEx pickup note:** Update not supported — cancel-and-rebook. Confirmation number is an opaque token encoding code + date + Express location.
 
 ---
 

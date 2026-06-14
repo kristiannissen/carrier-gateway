@@ -81,3 +81,53 @@ func (m *MockFedExAdapter) CancelShipment(_ context.Context, trackingNumber stri
 func (m *MockFedExAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
 	return nil, notSupported("FedEx", "post-booking update", "")
 }
+
+// BookPickup mocks scheduling a FedEx pickup.
+func (m *MockFedExAdapter) BookPickup(_ context.Context, req PickupRequest) (*PickupResponse, error) {
+	if req.Pickup.Date == "" {
+		return nil, fmt.Errorf("pickup.date is required")
+	}
+	// Return an opaque token matching the production format: {code}|{date}|{location}.
+	token := "MOCK001|" + req.Pickup.Date + "|COSA"
+	return &PickupResponse{
+		Carrier:            "fedex",
+		ConfirmationNumber: token,
+		Date:               req.Pickup.Date,
+		ReadyTime:          req.Pickup.ReadyTime,
+		CloseTime:          req.Pickup.CloseTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup returns unsupported for FedEx.
+func (m *MockFedExAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("FedEx", "pickup update", "cancel the existing pickup and book a new one")
+}
+
+// CancelPickup mocks cancelling a FedEx pickup.
+func (m *MockFedExAdapter) CancelPickup(_ context.Context, _ string, confirmationNumber string) error {
+	if confirmationNumber == "" {
+		return fmt.Errorf("confirmation number must not be empty")
+	}
+	return nil
+}
+
+// CloseManifest returns unsupported for FedEx.
+func (m *MockFedExAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("FedEx", "manifest close", "FedEx does not require an end-of-day manifest close for standard pickup accounts")
+}
+
+// GetPickupAvailability returns mock pickup slots for FedEx.
+func (m *MockFedExAdapter) GetPickupAvailability(_ context.Context, req PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	if req.Address.PostalCode == "" || req.Address.Country == "" {
+		return nil, fmt.Errorf("postalCode and country are required")
+	}
+	return &PickupAvailabilityResponse{
+		Carrier: "fedex",
+		Slots: []PickupSlot{
+			{Date: "2026-06-15", StartTime: "09:00", EndTime: "12:00"},
+			{Date: "2026-06-15", StartTime: "12:00", EndTime: "18:00"},
+			{Date: "2026-06-16", StartTime: "09:00", EndTime: "18:00"},
+		},
+	}, nil
+}

@@ -1,6 +1,6 @@
 # FedEx — Feature Mapping
 
-API: **FedEx Ship API v1 + Track API v1**
+API: **FedEx Ship API v1 + Track API v1 + Pickup API v1**
 Base URL (prod): `https://apis.fedex.com`
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token)
 Coverage: Worldwide.
@@ -10,11 +10,12 @@ Implementation status: **Not fully implemented yet** (Beta)
 
 ## Summary
 
-FedEx covers booking, cancellation, and tracking. Labels are returned inline in
-the booking response (PDF only); the standalone label reprint endpoint is not
-yet wired (spec pending). Post-booking update is not supported. Pickup
-scheduling is not in the FedEx API docs reviewed. Customs, add-ons, and service
-point delivery are not yet wired.
+FedEx covers booking, cancellation, tracking, and pickup scheduling. Labels are
+returned inline in the booking response (PDF only); the standalone label reprint
+endpoint is not yet wired (spec pending). Post-booking update is not supported.
+Pickup scheduling covers book, cancel, and availability check via the FedEx
+Pickup API v1; update is not supported (cancel-and-rebook). Customs, add-ons,
+and service point delivery are not yet wired.
 
 ---
 
@@ -50,14 +51,22 @@ point delivery are not yet wired.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Book pickup | ❌ | Not in reviewed API docs. Booking uses `pickupType=USE_SCHEDULED_PICKUP` — assumes a standing collection agreement. |
-| Update/Cancel pickup | ❌ | Not wired |
+| Book pickup | ✅ | `POST /pickup/v1/pickups` — FDXE (Express) carrier code. Returns opaque token encoding code + date + location. |
+| Check availability | ✅ | `POST /pickup/v1/pickups/availabilities` — returns available `PickupSlot` windows |
+| Update pickup | ❌ | Not supported by FedEx Pickup API — cancel and rebook |
+| Cancel pickup | ✅ | `PUT /pickup/v1/pickups/cancel` — requires the token from BookPickup |
+
+**Confirmation token.** `BookPickup` returns a pipe-delimited opaque token
+`{confirmationCode}|{YYYY-MM-DD}|{expressLocation}` rather than the raw FedEx
+confirmation code. This is required because the cancel endpoint needs the
+scheduled date and Express facility location alongside the code. Pass the token
+unchanged to `CancelPickup`; do not attempt to parse it.
 
 ### Manifest
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Close manifest | ❌ | Not in FedEx API docs (`501`) |
+| Close manifest | ❌ | Not supported — standard FedEx pickup accounts have no end-of-day manifest close (`501`) |
 | Manifest document | ❌ | Not available |
 
 ### Add-ons
@@ -91,9 +100,10 @@ point delivery are not yet wired.
 | `PATCH /api/bookings/{id}` | — | ❌ → 501 |
 | `GET /api/trackings/{id}` | `POST /track/v1/trackingnumbers` | ✅ |
 | `GET /api/labels/{id}` | — | ❌ → 501 (pending spec) |
-| `POST /api/pickups` | ❓ | ❌ not wired |
-| `PUT /api/pickups/{id}` | ❓ | ❌ not wired |
-| `DELETE /api/pickups/{id}` | ❓ | ❌ not wired |
+| `GET /api/pickups/availability` | `POST /pickup/v1/pickups/availabilities` | ✅ |
+| `POST /api/pickups` | `POST /pickup/v1/pickups` | ✅ |
+| `PUT /api/pickups/{id}` | — | ❌ → 501 (cancel-and-rebook) |
+| `DELETE /api/pickups/{id}` | `PUT /pickup/v1/pickups/cancel` | ✅ |
 | `POST /api/manifests` | — | ❌ → 501 |
 
 ---
@@ -109,9 +119,16 @@ includes a `BetaWarning`.
 method is not implemented — callers must save the label from the booking response.
 The FedEx label reprint API requires a separate spec review.
 
-**Pickup type.** The adapter sets `pickupType=USE_SCHEDULED_PICKUP`, which
-assumes the account has a standing daily collection agreement with FedEx. If
-on-demand pickup is needed, `FedExPickup` API must be wired.
+**Pickup type.** The adapter sets `pickupType=USE_SCHEDULED_PICKUP` on shipment
+bookings, which is compatible with accounts that have a standing collection
+agreement. On-demand pickup scheduling is now available via `POST /api/pickups`.
+
+**Pickup token.** The confirmation number returned by `BookPickup` is an opaque
+pipe-delimited token (`{code}|{date}|{location}`) rather than the raw FedEx
+confirmation code. The cancel endpoint requires all three values, and they
+cannot be recovered from the code alone, so encoding them into the token avoids
+external state. The `location` segment is empty for Ground (FDXG) pickups and
+populated for Express (FDXE) pickups.
 
 **Customs gap.** The FedEx Ship API supports a full customs declaration block
 (commodity descriptions, HS codes, declared values). This is not yet mapped

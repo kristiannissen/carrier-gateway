@@ -689,3 +689,389 @@ func (a *FedExAdapter) CancelShipment(ctx context.Context, trackingNumber string
 func (a *FedExAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
 	return nil, notSupported("FedEx", "post-booking update", "")
 }
+
+// ── Pickup wire types ─────────────────────────────────────────────────────────
+
+// fedexPickupOriginDetail holds the collection location and time window.
+type fedexPickupOriginDetail struct {
+	PickupLocation    fedexPickupLocationParty `json:"pickupLocation"`
+	ReadyDateTimestamp string                  `json:"readyDateTimestamp"`
+	CustomerCloseTime  string                  `json:"customerCloseTime"`
+	// PackageLocation is required for FDXG (Ground) pickups.
+	// Accepted values: FRONT, NONE, REAR, SIDE.
+	PackageLocation string `json:"packageLocation,omitempty"`
+}
+
+type fedexPickupLocationParty struct {
+	Contact fedexPickupContact `json:"contact"`
+	Address fedexPickupAddress `json:"address"`
+}
+
+type fedexPickupContact struct {
+	PersonName  string `json:"personName,omitempty"`
+	CompanyName string `json:"companyName,omitempty"`
+	PhoneNumber string `json:"phoneNumber"`
+}
+
+type fedexPickupAddress struct {
+	StreetLines         []string `json:"streetLines"`
+	City                string   `json:"city"`
+	StateOrProvinceCode string   `json:"stateOrProvinceCode,omitempty"`
+	PostalCode          string   `json:"postalCode"`
+	CountryCode         string   `json:"countryCode"`
+}
+
+// fedexCreatePickupRequest is the body for POST /pickup/v1/pickups.
+type fedexCreatePickupRequest struct {
+	AssociatedAccountNumber fedexAccountNumber      `json:"associatedAccountNumber"`
+	OriginDetail            fedexPickupOriginDetail `json:"originDetail"`
+	PackageCount            int                     `json:"packageCount,omitempty"`
+	TotalWeight             *fedexWeight            `json:"totalWeight,omitempty"`
+	// CarrierCode selects the FedEx operating company: FDXE (Express) or FDXG (Ground).
+	CarrierCode string `json:"carrierCode"`
+	// Remarks is passed to the courier; max 60 characters.
+	Remarks string `json:"remarks,omitempty"`
+}
+
+// fedexCreatePickupResponse wraps the Create Pickup API response.
+type fedexCreatePickupResponse struct {
+	TransactionID string                  `json:"transactionId"`
+	Output        fedexCreatePickupOutput `json:"output"`
+}
+
+type fedexCreatePickupOutput struct {
+	// PickupConfirmationCode is the carrier-issued pickup reference.
+	PickupConfirmationCode string `json:"pickupConfirmationCode"`
+	// Location is the FedEx Express facility responsible for the dispatch.
+	// Required when cancelling a FedEx Express pickup.
+	Location string `json:"location"`
+}
+
+// fedexCancelPickupRequest is the body for PUT /pickup/v1/pickups/cancel.
+type fedexCancelPickupRequest struct {
+	AssociatedAccountNumber fedexAccountNumber `json:"associatedAccountNumber"`
+	PickupConfirmationCode  string             `json:"pickupConfirmationCode"`
+	// ScheduledDate is the pickup dispatch date in YYYY-MM-DD format.
+	ScheduledDate string `json:"scheduledDate"`
+	// CarrierCode is optional; defaults to FDXE on the FedEx side.
+	CarrierCode string `json:"carrierCode,omitempty"`
+	// Location is required for FedEx Express pickups; returned by BookPickup.
+	Location string `json:"location,omitempty"`
+	// Remarks is passed to the courier; max 60 characters.
+	Remarks string `json:"remarks,omitempty"`
+}
+
+// fedexPickupAvailabilityRequest is the body for POST /pickup/v1/pickups/availabilities.
+type fedexPickupAvailabilityRequest struct {
+	PickupAddress       fedexAvailabilityAddress `json:"pickupAddress"`
+	Carriers            []string                 `json:"carriers"`
+	CountryRelationship string                   `json:"countryRelationship"`
+	PickupRequestType   []string                 `json:"pickupRequestType"`
+	DispatchDate        string                   `json:"dispatchDate,omitempty"`
+	PackageReadyTime    string                   `json:"packageReadyTime,omitempty"`
+	CustomerCloseTime   string                   `json:"customerCloseTime,omitempty"`
+}
+
+type fedexAvailabilityAddress struct {
+	PostalCode  string `json:"postalCode"`
+	CountryCode string `json:"countryCode"`
+}
+
+// fedexPickupAvailabilityResponse wraps the Pickup Availability API response.
+type fedexPickupAvailabilityResponse struct {
+	TransactionID string                        `json:"transactionId"`
+	Output        fedexPickupAvailabilityOutput `json:"output"`
+}
+
+type fedexPickupAvailabilityOutput struct {
+	Options []fedexPickupScheduleOption `json:"options"`
+}
+
+type fedexPickupScheduleOption struct {
+	Carrier           string   `json:"carrier"`
+	Available         bool     `json:"available"`
+	PickupDate        string   `json:"pickupDate"`
+	CutOffTime        string   `json:"cutOffTime"`
+	ReadyTimeOptions  []string `json:"readyTimeOptions"`
+	LatestTimeOptions []string `json:"latestTimeOptions"`
+	ScheduleDay       string   `json:"scheduleDay"`
+}
+
+// ── ManifestAdapter methods ───────────────────────────────────────────────────
+
+// BookPickup schedules a FedEx collection via POST /pickup/v1/pickups.
+//
+// The returned ConfirmationNumber is an opaque pipe-delimited token encoding
+// the FedEx confirmation code, scheduled date, and Express facility location:
+//
+//	{confirmationCode}|{YYYY-MM-DD}|{location}
+//
+// Callers must pass this token unchanged to CancelPickup; do not parse it.
+// The location field is empty for Ground pickups and populated for Express.
+func (a *FedExAdapter) BookPickup(ctx context.Context, req PickupRequest) (*PickupResponse, error) {
+	// Build readyDateTimestamp as YYYY-MM-DDTHH:MM:SS (no TZD per FedEx spec).
+	readyTime := req.Pickup.ReadyTime
+	if readyTime == "" {
+		readyTime = "09:00"
+	}
+	readyTS := req.Pickup.Date + "T" + readyTime + ":00"
+
+	closeTime := req.Pickup.CloseTime
+	if closeTime == "" {
+		closeTime = "18:00"
+	}
+	// Pad HH:MM → HH:MM:SS.
+	if len(closeTime) == 5 {
+		closeTime += ":00"
+	}
+
+	streetLine := req.Address.Street
+	if req.Address.HouseNumber != "" {
+		streetLine += " " + req.Address.HouseNumber
+	}
+
+	pickupReq := fedexCreatePickupRequest{
+		AssociatedAccountNumber: fedexAccountNumber{Value: a.AccountNumber},
+		OriginDetail: fedexPickupOriginDetail{
+			PickupLocation: fedexPickupLocationParty{
+				Contact: fedexPickupContact{
+					PersonName:  req.Contact.Name,
+					PhoneNumber: req.Contact.Phone,
+				},
+				Address: fedexPickupAddress{
+					StreetLines: []string{streetLine},
+					City:        req.Address.City,
+					PostalCode:  req.Address.PostalCode,
+					CountryCode: req.Address.Country,
+				},
+			},
+			ReadyDateTimestamp: readyTS,
+			CustomerCloseTime:  closeTime,
+		},
+		CarrierCode: "FDXE",
+	}
+
+	if req.EstimatedParcels > 0 {
+		pickupReq.PackageCount = req.EstimatedParcels
+	}
+	if req.EstimatedWeight > 0 {
+		pickupReq.TotalWeight = &fedexWeight{Units: "KG", Value: req.EstimatedWeight}
+	}
+	if req.Pickup.SpecialInstructions != "" {
+		// FedEx limits remarks to 60 characters.
+		remarks := req.Pickup.SpecialInstructions
+		if len(remarks) > 60 {
+			remarks = remarks[:60]
+		}
+		pickupReq.Remarks = remarks
+	}
+
+	body, err := json.Marshal(pickupReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal FedEx create pickup request: %w", err)
+	}
+
+	httpReq, err := a.newFedExRequest(ctx, http.MethodPost, "/pickup/v1/pickups", body)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("FedEx create pickup request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read FedEx create pickup response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("FedEx pickup API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var pickupResp fedexCreatePickupResponse
+	if err := json.Unmarshal(respBody, &pickupResp); err != nil {
+		return nil, fmt.Errorf("failed to decode FedEx create pickup response: %w", err)
+	}
+	if pickupResp.Output.PickupConfirmationCode == "" {
+		return nil, fmt.Errorf("FedEx pickup API returned empty confirmation code")
+	}
+
+	// Encode the three fields needed for cancellation into an opaque token.
+	// Format: {code}|{date}|{location} — location may be empty for Ground pickups.
+	token := pickupResp.Output.PickupConfirmationCode + "|" + req.Pickup.Date + "|" + pickupResp.Output.Location
+
+	a.log.Info("FedEx pickup booked",
+		zap.String("confirmationCode", pickupResp.Output.PickupConfirmationCode),
+		zap.String("location", pickupResp.Output.Location),
+		zap.String("date", req.Pickup.Date),
+	)
+
+	return &PickupResponse{
+		Carrier:            "fedex",
+		ConfirmationNumber: token,
+		Date:               req.Pickup.Date,
+		ReadyTime:          req.Pickup.ReadyTime,
+		CloseTime:          req.Pickup.CloseTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup is not supported by FedEx.
+// Cancel the existing pickup and book a new one instead.
+func (a *FedExAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("FedEx", "pickup update", "cancel the existing pickup and book a new one")
+}
+
+// CancelPickup cancels a FedEx pickup via PUT /pickup/v1/pickups/cancel.
+//
+// confirmationNumber must be the opaque token returned by BookPickup
+// ({code}|{date}|{location}). Passing the raw FedEx confirmation code
+// directly is not supported because the cancel endpoint also requires
+// the scheduled date and Express facility location.
+func (a *FedExAdapter) CancelPickup(ctx context.Context, _ string, confirmationNumber string) error {
+	// Parse the opaque token produced by BookPickup.
+	parts := strings.SplitN(confirmationNumber, "|", 3)
+	if len(parts) != 3 {
+		return fmt.Errorf("FedEx: invalid confirmation number %q: expected {code}|{date}|{location} token from BookPickup", confirmationNumber)
+	}
+	code, scheduledDate, location := parts[0], parts[1], parts[2]
+
+	cancelReq := fedexCancelPickupRequest{
+		AssociatedAccountNumber: fedexAccountNumber{Value: a.AccountNumber},
+		PickupConfirmationCode:  code,
+		ScheduledDate:           scheduledDate,
+		CarrierCode:             "FDXE",
+	}
+	if location != "" {
+		cancelReq.Location = location
+	}
+
+	body, err := json.Marshal(cancelReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal FedEx cancel pickup request: %w", err)
+	}
+
+	httpReq, err := a.newFedExRequest(ctx, http.MethodPut, "/pickup/v1/pickups/cancel", body)
+	if err != nil {
+		return err
+	}
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("FedEx cancel pickup request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read FedEx cancel pickup response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("FedEx pickup cancel API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	a.log.Info("FedEx pickup cancelled",
+		zap.String("confirmationCode", code),
+		zap.String("scheduledDate", scheduledDate),
+	)
+
+	return nil
+}
+
+// CloseManifest is not supported for FedEx.
+// FedEx standard pickup accounts do not require an end-of-day manifest close.
+func (a *FedExAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("FedEx", "manifest close", "FedEx does not require an end-of-day manifest close for standard pickup accounts")
+}
+
+// GetPickupAvailability checks FedEx pickup availability via POST /pickup/v1/pickups/availabilities.
+//
+// Returns available collection slots as PickupSlot values. Each slot covers
+// one (readyTime, latestTime) pair for a single pickup date. Unavailable options
+// are filtered out. When the carrier returns no fine-grained time windows, a
+// single slot ending at the cut-off time is synthesised.
+func (a *FedExAdapter) GetPickupAvailability(ctx context.Context, req PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	avReq := fedexPickupAvailabilityRequest{
+		PickupAddress: fedexAvailabilityAddress{
+			PostalCode:  req.Address.PostalCode,
+			CountryCode: req.Address.Country,
+		},
+		Carriers:            []string{"FDXE"},
+		CountryRelationship: "DOMESTIC",
+		PickupRequestType:   []string{"SAME_DAY", "FUTURE_DAY"},
+	}
+
+	body, err := json.Marshal(avReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal FedEx pickup availability request: %w", err)
+	}
+
+	httpReq, err := a.newFedExRequest(ctx, http.MethodPost, "/pickup/v1/pickups/availabilities", body)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("FedEx pickup availability request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read FedEx pickup availability response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("FedEx pickup availability API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var avResp fedexPickupAvailabilityResponse
+	if err := json.Unmarshal(respBody, &avResp); err != nil {
+		return nil, fmt.Errorf("failed to decode FedEx pickup availability response: %w", err)
+	}
+
+	slots := make([]PickupSlot, 0, len(avResp.Output.Options))
+	for _, opt := range avResp.Output.Options {
+		if !opt.Available {
+			continue
+		}
+		if len(opt.ReadyTimeOptions) > 0 && len(opt.LatestTimeOptions) > 0 {
+			// Pair each ready time with its corresponding latest time.
+			// When the slices differ in length, the shorter one is the limit.
+			n := len(opt.ReadyTimeOptions)
+			if len(opt.LatestTimeOptions) < n {
+				n = len(opt.LatestTimeOptions)
+			}
+			for i := range n {
+				slots = append(slots, PickupSlot{
+					Date:      opt.PickupDate,
+					StartTime: fedexTrimSeconds(opt.ReadyTimeOptions[i]),
+					EndTime:   fedexTrimSeconds(opt.LatestTimeOptions[i]),
+				})
+			}
+		} else {
+			// Fallback: single slot ending at the cut-off time.
+			slots = append(slots, PickupSlot{
+				Date:      opt.PickupDate,
+				StartTime: "09:00",
+				EndTime:   fedexTrimSeconds(opt.CutOffTime),
+			})
+		}
+	}
+
+	return &PickupAvailabilityResponse{
+		Carrier: "fedex",
+		Slots:   slots,
+	}, nil
+}
+
+// fedexTrimSeconds strips the trailing ":SS" from an "HH:MM:SS" time string.
+// It is a no-op for strings that are not exactly 8 characters.
+func fedexTrimSeconds(t string) string {
+	if len(t) == 8 && t[5] == ':' {
+		return t[:5]
+	}
+	return t
+}
