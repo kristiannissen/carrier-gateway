@@ -546,24 +546,30 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 			ID      string `json:"id"`
 			Service string `json:"service"`
 			Status  struct {
-				Timestamp   string `json:"timestamp"`
-				StatusCode  string `json:"statusCode"`
-				Status      string `json:"status"`
-				Description string `json:"description"`
-				Location    struct {
+				Timestamp      string `json:"timestamp"`
+				StatusCode     string `json:"statusCode"`
+				Status         string `json:"status"`
+				StatusDetailed string `json:"statusDetailed"`
+				Description    string `json:"description"`
+				Location       struct {
 					Address struct {
 						AddressLocality string `json:"addressLocality"`
 						CountryCode     string `json:"countryCode"`
 					} `json:"address"`
 				} `json:"location"`
 			} `json:"status"`
-			EstimatedTimeOfDelivery string `json:"estimatedTimeOfDelivery"`
-			Events                  []struct {
-				Timestamp   string `json:"timestamp"`
-				StatusCode  string `json:"statusCode"`
-				Status      string `json:"status"`
-				Description string `json:"description"`
-				Location    struct {
+			EstimatedTimeOfDelivery    string `json:"estimatedTimeOfDelivery"`
+			EstimatedDeliveryTimeFrame struct {
+				EstimatedFrom string `json:"estimatedFrom"`
+				EstimatedTo   string `json:"estimatedTo"`
+			} `json:"estimatedDeliveryTimeFrame"`
+			Events []struct {
+				Timestamp      string `json:"timestamp"`
+				StatusCode     string `json:"statusCode"`
+				Status         string `json:"status"`
+				StatusDetailed string `json:"statusDetailed"`
+				Description    string `json:"description"`
+				Location       struct {
 					Address struct {
 						AddressLocality string `json:"addressLocality"`
 						CountryCode     string `json:"countryCode"`
@@ -589,13 +595,22 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		if loc == "" {
 			loc = e.Location.Address.CountryCode
 		}
+		detail := e.StatusDetailed
+		if detail == "" {
+			detail = e.Status
+		}
 		events[i] = TrackingEvent{
 			Timestamp:        e.Timestamp,
 			Status:           e.StatusCode,
 			NormalizedStatus: normalizeStatus("dhl", e.StatusCode),
 			Location:         loc,
-			Details:          e.Status,
+			Details:          detail,
 		}
+	}
+
+	estimatedDelivery := s.EstimatedTimeOfDelivery
+	if estimatedDelivery == "" {
+		estimatedDelivery = s.EstimatedDeliveryTimeFrame.EstimatedFrom
 	}
 
 	return &TrackingResponse{
@@ -605,7 +620,7 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		Status:            s.Status.StatusCode,
 		NormalizedStatus:  normalizeStatus("dhl", s.Status.StatusCode),
 		OriginalStatus:    s.Status.StatusCode,
-		EstimatedDelivery: s.EstimatedTimeOfDelivery,
+		EstimatedDelivery: estimatedDelivery,
 		Events:            events,
 	}, nil
 }

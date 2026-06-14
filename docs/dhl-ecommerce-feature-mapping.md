@@ -43,7 +43,8 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 |---|---|---|
 | Current status | ✅ | DHL Unified Tracking API — normalized status |
 | Event history | ✅ | Scan events returned in `events[]` |
-| Estimated delivery | ✅ | Where returned |
+| Event detail text | ✅ | `statusDetailed` used when present; falls back to `status` short title |
+| Estimated delivery | ✅ | `estimatedTimeOfDelivery` where returned; falls back to `estimatedDeliveryTimeFrame.estimatedFrom` |
 | Tracking API key | ⚠️ | Separate credential (`DHL_TRACKING_API_KEY`) from eConnect booking credentials |
 
 ### Pickup scheduling
