@@ -223,6 +223,15 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsCancellation: false, // cancellation endpoint not yet confirmed
 		SupportsUpdate:       false,
 	},
+	// Evri (formerly Hermes UK): booking and label retrieval only.
+	// The Evri Classic API exposes no tracking, cancellation, or update endpoint.
+	// UK domestic only — all delivery addresses must be valid UK postcodes.
+	"evri": {
+		NativeIdempotency:    true, // clientUID used for server-side deduplication
+		Beta:                 true,
+		SupportsCancellation: false,
+		SupportsUpdate:       false,
+	},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -457,6 +466,20 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	default:
 		adapters["omniva"] = NewOmnivaAdapter(omnivaUsername, omnivaPassword, omnivaCustomerCode, omnivaAgentID, log)
 		log.Info("Omniva adapter initialized in production mode")
+	}
+
+	evriClientID := os.Getenv("EVRI_CLIENT_ID")
+	evriClientSecret := os.Getenv("EVRI_CLIENT_SECRET")
+	switch {
+	case mockMode:
+		adapters["evri"] = NewMockEvriAdapter()
+		log.Info("Evri adapter initialized in mock mode (MOCK_MODE=true)")
+	case evriClientID == "" || evriClientSecret == "":
+		adapters["evri"] = NewMockEvriAdapter()
+		log.Warn("Evri adapter falling back to mock mode (EVRI_CLIENT_ID or EVRI_CLIENT_SECRET not set)")
+	default:
+		adapters["evri"] = NewEvriAdapter(evriClientID, evriClientSecret, log)
+		log.Info("Evri adapter initialized in production mode (beta — tracking/cancel/update not supported)")
 	}
 
 	return adapters
