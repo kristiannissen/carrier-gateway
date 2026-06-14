@@ -69,8 +69,8 @@ Status column reflects the current state of the gateway implementation:
 | Carrier | Status | Notes |
 |---|---|---|
 | Royal Mail | Not implemented yet | Dominant for C2C and lightweight B2C. Click and Drop API available. |
-| DPD UK | Not implemented yet | See DPD under multi-country. Separate UK entity from DPD mainland Europe. |
-| Evri (formerly Hermes UK) | Not implemented yet | High-volume low-cost B2C. API available via business portal. No relation to Hermes Germany (HSI). |
+| DPD UK | Not fully implemented yet (Beta) | Separate UK entity from DPD mainland Europe. Key: `dpd_uk`. |
+| Evri (formerly Hermes UK) | Not fully implemented yet (Beta) | High-volume low-cost B2C. Key: `evri`. No relation to Hermes Germany (HSI). |
 
 ---
 
@@ -159,7 +159,7 @@ Status column reflects the current state of the gateway implementation:
 
 | Carrier | Status | Notes |
 |---|---|---|
-| Omniva | Not implemented yet | Estonian Post. Parcel locker network covering Estonia, Latvia and Lithuania. Relevant for Nordic businesses shipping to the Baltics. |
+| Omniva | Implemented | Estonian Post. Parcel locker network covering Estonia, Latvia and Lithuania. Relevant for Nordic businesses shipping to the Baltics. |
 
 ---
 
@@ -172,7 +172,7 @@ Carriers with a single API covering multiple European markets.
 | GLS | DE, DK, SE, NL, BE, FR, ES, PT, IT, AT, IE, HR, SI, SK, CZ, HU and more | Implemented | ShipIT API is consistent across all GLS countries. Single credentials, country selected by shipper/consignee address. |
 | DHL Express | Worldwide | Not fully implemented yet | MyDHL API. Time-definite international. Separate product from DHL Paket and DHL eCommerce. Returns not yet supported. |
 | DHL eCommerce Europe | 28 European countries | Not fully implemented yet | eConnect API. B2C parcel product for cross-border European delivery. |
-| DPD | DE, FR, NL, BE, AT, PL, CZ, SK, HU, RO, BG, HR, SI, LT, LV, EE and more | Not implemented yet | myDPD Business API. Pan-European network, owned by La Poste group. Single API covers most European markets. DPD UK, SEUR (ES) and BRT (IT) are separate entities within the DPD Group but use different APIs. |
+| DPD | DE, FR, NL, BE, AT, PL, CZ, SK, HU, RO, BG, HR, SI, LT, LV, EE and more | Not fully implemented yet (Beta) | Registered dynamically per country via `DPD_{COUNTRY}_API_TOKEN` env vars (e.g. key `dpd_lt`). DPD UK, SEUR (ES) and BRT (IT) are separate entities within the DPD Group. |
 | UPS | Worldwide | Not implemented yet | UPS Developer Kit. Global carrier. Consistent API across all markets. |
 | FedEx | Worldwide | Not fully implemented yet | FedEx Ship API v1. Booking implemented; returns not yet supported. |
 | InPost | PL, UK, FR, IT (expanding) | Not fully implemented yet | Parcel locker network. ShipX API. Currently mock only. |

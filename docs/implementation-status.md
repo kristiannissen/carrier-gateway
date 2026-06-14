@@ -16,8 +16,11 @@ feature mapping file in this folder with full detail.
 | DHL Express | Not fully implemented yet (Beta) | Worldwide | [dhl-express-feature-mapping.md](dhl-express-feature-mapping.md) |
 | DHL eCommerce Europe | Not fully implemented yet (Beta) | 28 European countries | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | DPD | Not fully implemented yet (Beta) | Pan-European | [dpd-group-feature-mapping.md](dpd-group-feature-mapping.md) |
+| DPD UK | Not fully implemented yet (Beta) | GB | — |
 | Hermes Germany | Not fully implemented yet (Beta) | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
 | FedEx | Not fully implemented yet (Beta) | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
+| Evri | Not fully implemented yet (Beta) | GB | — |
+| Omniva | Implemented | EE, LV, LT | — |
 | InPost | Not fully implemented yet (Demo) | PL, UK, FR, IT | [inpost-feature-mapping.md](inpost-feature-mapping.md) |
 
 ---
@@ -75,10 +78,12 @@ feature mapping file in this folder with full detail.
 |---|---|---|---|---|---|---|---|---|---|---|
 | SMS notification | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ❓ | ✅ | ✅ | ❌ | ❌ |
 | Email notification | ✅ | ✅ | ❌ | ⚠️ | ✅ | ❓ | ✅ | ✅ | ❌ | ❌ |
-| Flex delivery | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❓ | ❌ | ❌ | ❌ |
-| Signature required | ✅ | ✅ | ❌ | ❌ | ⚠️ | ✅ | ❓ | ✅ | ❌ | ❌ |
+| Flex delivery | ✅ | ✅ | ❌ | ❌ | ✅ | ⚠️ | ❓ | ❌ | ❌ | ❌ |
+| Signature required | ✅ | ✅ | ❌ | ❌ | ⚠️ | ⚠️ | ❓ | ✅ | ❌ | ❌ |
 | Cash on delivery | ❌ | ✅ | ❌ | ❌ | ⚠️ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Insurance | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❓ | ❌ | ❌ | ❌ |
+
+**DHL eCom `flex_delivery` and `signature_required`** are accepted by the adapter but silently skipped — logged as warnings, not mapped to any wire-format field. Marked ⚠️ until properly wired.
 
 ---
 
@@ -106,7 +111,7 @@ feature mapping file in this folder with full detail.
 | PostNord | ✅ | `receiver.servicePointId` → `servicePointId` |
 | Bring | ✅ | `receiver.servicePointId` → `pickupPointId` |
 | GLS | ✅ | `receiver.servicePointId` → `parcelShopId` (ShopDeliveryService) |
-| DAO | ✅ | `receiver.servicePointId` → `shopid` or `lockerId` |
+| DAO | ✅ | `receiver.servicePointId` → `shopid` |
 | DHL Express | ✅ | `receiver.servicePointId` → `onDemandDelivery.servicePointId` (6-char code) |
 | DHL eCommerce | ✅ | `deliveryType=parcelshop/parcelstation/postOffice` |
 | DPD | ✅ | `pudo.pudoId` in shipment payload |

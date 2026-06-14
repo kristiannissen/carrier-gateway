@@ -33,7 +33,7 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 | Feature | Implemented | Notes |
 |---|---|---|
 | Print label | ✅ | `GET /ccc/label-reprint` |
-| Label formats | ✅ | PDF, PNG, ZPL. Sizes: 15×10cm, 21×10cm. Resolutions: 200 or 300 dpi. |
+| Label formats | ✅ | PDF only. PNG and ZPL are available in the DHL eConnect API schema but not wired — `FetchLabel` returns `501` for non-PDF formats. |
 | Return label | ✅ | DHL Parcel Return Connect product (`DeliveryType=return`) |
 | Labelless return | ✅ | QR code / GIF format — DHL Parcel Return Connect (`returnFunctionality=labelless`) |
 
@@ -67,8 +67,8 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 |---|---|---|
 | SMS notification | ❓ | Not yet confirmed in adapter |
 | Email notification | ❓ | Not yet confirmed in adapter |
-| Flex delivery | ✅ | `DepositService` / `deliveryOption=deposit` |
-| Signature required | ✅ | Mapped in adapter |
+| Flex delivery | ⚠️ | Accepted but silently skipped — not mapped to a wire-format field |
+| Signature required | ⚠️ | Accepted but silently skipped — not mapped to a wire-format field |
 | Cash on delivery | ✅ | SEPA COD — requires `codAmount`, `codCurrency`, `codAccountNumber` (IBAN), `codBic` |
 | Insurance | ✅ | Additional insurance via contract |
 | Bulky | ⚠️ | Available in API schema but not wired in adapter |
@@ -79,7 +79,7 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 |---|---|---|
 | Customs / cross-border | ✅ | Customs data block for non-EU and cross-border shipments |
 | Service point delivery | ✅ | `deliveryType=parcelshop`, `parcelstation`, or `postOffice` — mapped from `receiver.servicePointId` |
-| Multi-colli | ✅ | Multiple pieces per shipment |
+| Multi-colli | ❌ | DHL eConnect is single-parcel per cPAN — only `Colli[0]` is sent |
 | Customer barcode | ❌ | Available in API but not wired |
 
 ---

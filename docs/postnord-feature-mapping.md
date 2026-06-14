@@ -2,7 +2,7 @@
 
 API: **PostNord Customer API**
 Base URL (prod): `https://api2.postnord.com`
-Auth: API key (header `x-PostNord-apikey`) + customer number + application ID
+Auth: API key (query parameter `?apikey=`) + customer number + application ID
 Coverage: Denmark, Sweden, Norway, Finland — single API key across all four markets.
 Implementation status: **Implemented**
 
@@ -35,7 +35,7 @@ shipments. Manifest is not available via API.
 | Print label | ✅ | PDF format via v3 label endpoint |
 | Return label | ✅ | `DeliveryType=return` triggers return booking |
 | Label format | ✅ | PDF |
-| ZPL | ❌ | Not available via PostNord API |
+| ZPL | ⚠️ | Code path exists (`/rest/shipment/v3/edi/labels/zpl`) but not validated against live PostNord API |
 
 ### Tracking
 

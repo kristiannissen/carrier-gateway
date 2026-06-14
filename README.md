@@ -40,13 +40,17 @@ curl -X POST http://localhost:8080/api/bookings \
 | `postnord` | PostNord (DK, SE, NO, FI) | Production |
 | `bring` | Bring / Posten (NO, SE, DK, FI) | Production |
 | `gls` | GLS (DE, DK, SE, NL, BE, FR, ES + more) | Production |
+| `omniva` | Omniva (EE, LV, LT) | Production |
 | `dao` | DAO (DK) | Beta |
 | `dhl` | DHL eCommerce Europe (28 countries) | Beta |
+| `dhl_express` | DHL Express (worldwide) | Beta |
+| `dpd_uk` | DPD UK (GB) | Beta |
+| `hermes` | Hermes Germany (DE) | Beta |
 | `fedex` | FedEx (worldwide) | Beta |
-| `posti` | Posti (FI) | Demo — mock only |
+| `evri` | Evri (GB) | Beta |
 | `inpost` | InPost (PL, UK, FR, IT) | Demo — mock only |
 
-Demo carriers return mock data and are not connected to any live API. For full country coverage see [`docs/carriers.md`](docs/carriers.md). For a feature-by-feature breakdown across all carriers see [`docs/implementation-status.md`](docs/implementation-status.md).
+Demo carriers return mock data and are not connected to any live API. DPD continental Europe is registered dynamically from `DPD_{COUNTRY}_API_TOKEN` env vars (e.g. `dpd_lt`, `dpd_at`). For full country coverage see [`docs/carriers.md`](docs/carriers.md). For a feature-by-feature breakdown across all carriers see [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ---
 
@@ -140,6 +144,26 @@ curl http://localhost:8080/api/health
 | `FEDEX_CLIENT_ID` | FedEx OAuth2 client ID | — |
 | `FEDEX_CLIENT_SECRET` | FedEx OAuth2 client secret | — |
 | `FEDEX_ACCOUNT_NUMBER` | FedEx account number | — |
+| `DHL_EXPRESS_USERNAME` | DHL Express MyDHL API username | — |
+| `DHL_EXPRESS_PASSWORD` | DHL Express MyDHL API password | — |
+| `DHL_EXPRESS_ACCOUNT_NUMBER` | DHL Express account number | — |
+| `DHL_EXPRESS_PRODUCT_CODE` | DHL Express product code (e.g. `P`) | — |
+| `DHL_EXPRESS_RETURN_PRODUCT_CODE` | DHL Express return product code | — |
+| `DPD_UK_USERNAME` | DPD UK username | — |
+| `DPD_UK_PASSWORD` | DPD UK password | — |
+| `DPD_UK_USER_ID` | DPD UK user ID | — |
+| `DPD_UK_NETWORK_CODE` | DPD UK network code | — |
+| `DPD_{COUNTRY}_API_TOKEN` | DPD continental Europe token per country (e.g. `DPD_LT_API_TOKEN`) | — |
+| `DPD_{COUNTRY}_BASE_URL` | DPD continental Europe base URL per country (e.g. `DPD_LT_BASE_URL`) | — |
+| `OMNIVA_USERNAME` | Omniva API username | — |
+| `OMNIVA_PASSWORD` | Omniva API password | — |
+| `OMNIVA_CUSTOMER_CODE` | Omniva customer code | — |
+| `OMNIVA_AGENT_ID` | Omniva agent ID | — |
+| `HERMES_CLIENT_ID` | Hermes HSI OAuth2 client ID | — |
+| `HERMES_CLIENT_SECRET` | Hermes HSI OAuth2 client secret | — |
+| `INPOST_API_KEY` | InPost ShipX API key | — |
+| `EVRI_CLIENT_ID` | Evri Classic API client ID | — |
+| `EVRI_CLIENT_SECRET` | Evri Classic API client secret | — |
 
 When a carrier's key is absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter. The `GET /api/health` response shows which mode each carrier is running in.
 
@@ -168,6 +192,12 @@ docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development carrier-gateway
 | `POST` | `/api/trackings/{trackingNumber}` | Track and dispatch webhook on status change |
 | `POST` | `/api/notifications` | Dispatch a webhook notification directly |
 | `GET` | `/api/labels/{trackingNumber}` | Fetch a shipping label |
+| `GET` | `/api/pickups/availability` | Check pickup availability for a carrier |
+| `POST` | `/api/pickups` | Book a pickup |
+| `PUT` | `/api/pickups/{confirmationNumber}` | Update a pickup |
+| `DELETE` | `/api/pickups/{confirmationNumber}` | Cancel a pickup |
+| `POST` | `/api/manifests` | Close end-of-day manifest |
+| `POST` | `/api/returns` | Book a return (Omniva) |
 | `GET` | `/api/health` | Health check — uptime, mock mode, per-carrier status |
 
 Every response includes `X-Request-ID`. Pass it in your request to forward a correlation ID.
@@ -366,11 +396,15 @@ curl http://localhost:8080/api/health
     "postnord": "production",
     "bring": "production",
     "gls": "production",
+    "omniva": "production",
     "dao": "beta",
     "dhl": "beta",
+    "dhl_express": "beta",
+    "dpd_uk": "beta",
+    "hermes": "beta",
     "fedex": "beta",
-    "posti": "production",
-    "inpost": "production"
+    "evri": "beta",
+    "inpost": "mock"
   }
 }
 ```
@@ -416,7 +450,7 @@ Set `deliveryType: "return"`. Sender is the customer returning the parcel; recei
 
 ## Idempotency
 
-Pass `idempotencyKey` in the request body (max 64 characters). PostNord forwards it as `shipmentReference` for server-side deduplication; for all other carriers, deduplication is the caller's responsibility.
+Pass `idempotencyKey` in the request body (max 64 characters). PostNord forwards it as `referenceNo` (type `CU`) for server-side deduplication. Evri uses `clientUID` natively. For all other carriers, deduplication is the caller's responsibility.
 
 ---
 

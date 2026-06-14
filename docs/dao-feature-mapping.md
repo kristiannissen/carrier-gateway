@@ -34,7 +34,7 @@ signature add-ons are not available.
 | Feature | Implemented | Notes |
 |---|---|---|
 | Print label | ✅ | PDF via `HentLabel.php` |
-| Return label | ✅ | `DeliveryType=return` — `withlabel` (customer prints) or `labelless` (QR code) |
+| Return label | ✅ | `DeliveryType=return` + `ReturnFunctionality=withlabel` (customer prints) or `labelless` (default, QR code) |
 | Label format | ✅ | PDF only |
 
 ### Tracking

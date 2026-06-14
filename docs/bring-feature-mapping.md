@@ -32,7 +32,7 @@ are not supported (cancel and rebook). Manifest is not available via API.
 | Feature | Implemented | Notes |
 |---|---|---|
 | Print label | ✅ | PDF |
-| Label format | ✅ | PDF, ZPL. QR code available for pickup-point drop-off. |
+| Label format | ✅ | PDF only. ZPL is not supported — `FetchLabel` returns `501` for non-PDF formats. |
 | Return label | ✅ | `DeliveryType=return` — standard and labelless (QR code) |
 
 ### Tracking
@@ -84,7 +84,7 @@ are not supported (cancel and rebook). Manifest is not available via API.
 
 | carrier-gateway | Bring API | Status |
 |---|---|---|
-| `POST /api/bookings` | POST `/booking/api/booking` | ✅ |
+| `POST /api/bookings` | POST `/booking/api/shipment` | ✅ |
 | `DELETE /api/bookings/{id}` | DELETE `/booking/api/shipment/{id}` | ✅ |
 | `PATCH /api/bookings/{id}` | — | ❌ → 501 |
 | `GET /api/trackings/{id}` | Mybring tracking | ✅ |

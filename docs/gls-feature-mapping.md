@@ -23,7 +23,7 @@ not yet wired. Post-booking update is not yet implemented.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Book shipment | ✅ | ShipIT API v1 `/rs/shipments/create` |
+| Book shipment | ✅ | ShipIT API v1 `POST /rs/shipments` |
 | Cancel shipment | ✅ | `POST /rs/shipments/cancel/{trackID}` |
 | Update shipment | ❌ | Not yet implemented |
 | Idempotency key | ❌ | Client-side only |
@@ -89,7 +89,7 @@ not yet wired. Post-booking update is not yet implemented.
 
 | carrier-gateway | GLS ShipIT API | Status |
 |---|---|---|
-| `POST /api/bookings` | `POST /rs/shipments/create` | ✅ |
+| `POST /api/bookings` | `POST /rs/shipments` | ✅ |
 | `DELETE /api/bookings/{id}` | `POST /rs/shipments/cancel/{id}` | ✅ |
 | `PATCH /api/bookings/{id}` | — | ❌ not yet implemented |
 | `GET /api/trackings/{id}` | `POST /rs/tracking/parceldetails` | ✅ |
