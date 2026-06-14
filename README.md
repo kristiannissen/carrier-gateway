@@ -20,7 +20,8 @@ Whether it holds up is the interesting question.
 
 ---
 
-## What is Carrier GateWay
+## What is Carrier Gateway
+
 A stateless Go microservice with the goal of providing a single consistent API for booking, tracking, and returning shipments across multiple Nordic and European carriers. Change the `carrier` field in your request — the rest of your integration stays the same.
 
 ```bash
@@ -34,8 +35,6 @@ curl -X POST http://localhost:8080/api/bookings \
 
 ## Supported carriers
 
-See [`docs/carriers.md`](docs/carriers.md) for full country coverage and [`docs/implementation-status.md`](docs/implementation-status.md) for a feature-by-feature breakdown.
-
 | Key | Carrier | Status |
 |---|---|---|
 | `postnord` | PostNord (DK, SE, NO, FI) | Production |
@@ -47,7 +46,7 @@ See [`docs/carriers.md`](docs/carriers.md) for full country coverage and [`docs/
 | `posti` | Posti (FI) | Demo — mock only |
 | `inpost` | InPost (PL, UK, FR, IT) | Demo — mock only |
 
-Demo carriers return mock data and are not connected to any live API.
+Demo carriers return mock data and are not connected to any live API. For full country coverage see [`docs/carriers.md`](docs/carriers.md). For a feature-by-feature breakdown across all carriers see [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ---
 
@@ -69,71 +68,30 @@ type CarrierAdapter interface {
 
 The handler layer never imports a carrier package directly — it calls `registry.Select(carrier)` and gets back a `CarrierAdapter`. Adding a new carrier means implementing this interface and registering it; no other files change.
 
-Unsupported operations (e.g. GLS cancellations, FedEx label reprint) return a typed `ErrNotSupported` error which the handler translates to `501 Not Implemented` with a descriptive message. The caller gets a clear signal instead of an opaque error.
+Unsupported operations return a typed `ErrNotSupported` error which the handler translates to `501 Not Implemented`. The caller gets a clear signal instead of an opaque error.
 
 ### Stateless by design
 
-The gateway holds no database and no per-request state. Every call is self-contained:
+The gateway holds no database and no per-request state. Every call is self-contained. Webhook dispatch is fire-and-forget — the caller owns retry state. CN22/CN23 customs forms are generated on the fly. Idempotency keys are logged and forwarded to carriers that support them natively.
 
-- Booking requests carry all the data the carrier needs.
-- Webhook dispatch (`POST /api/notifications`, `POST /api/trackings/{id}`) is fire-and-forget — the caller owns retry state.
-- CN22/CN23 customs forms are generated on the fly and returned inline in the booking response.
-- Idempotency keys are logged and forwarded to carriers that support them natively; deduplication for others is the caller's responsibility.
-
-The only planned stateful feature — subscription-based tracking events — is intentionally kept in a separate companion service ([`docs/parcel-poller.md`](docs/parcel-poller.md)) so the gateway itself stays stateless.
+The only planned stateful feature — subscription-based tracking — is intentionally kept in a separate companion service so the gateway itself stays stateless. See [`docs/parcel-poller.md`](docs/parcel-poller.md).
 
 ### Mock-first development
 
-Every carrier has a matching `mock_{carrier}.go` that satisfies `CarrierAdapter` and returns realistic fixture data. Mocks are selected in two ways:
+Every carrier has a matching `mock_{carrier}.go` that satisfies `CarrierAdapter`. Mocks are selected in two ways:
 
-- **`MOCK_MODE=true`** — all carriers use their mock adapter, regardless of credentials.
-- **Missing credentials** — if a carrier's API key is absent and `MOCK_MODE` is not set, that carrier automatically falls back to its mock adapter. The health endpoint reports which mode each carrier is running in.
+- **`MOCK_MODE=true`** — all carriers use their mock adapter.
+- **Missing credentials** — if a carrier's API key is absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter automatically.
 
-This means the server starts and returns sensible responses on day one, before any carrier account is open.
+The health endpoint reports which mode each carrier is running in.
 
 ### Normalised statuses
 
-Each carrier returns its own status vocabulary. The gateway maps every raw string to a shared `TrackingStatus` type:
-
-| Value | Meaning |
-|---|---|
-| `booked` | Booked but not yet collected |
-| `picked_up` | Collected from sender |
-| `in_transit` | Moving through carrier network |
-| `out_for_delivery` | On the delivery vehicle |
-| `delivered` | Delivered to recipient |
-| `failed` | Delivery attempt failed |
-| `returned` | Being returned to sender |
-| `delayed` | Delayed relative to original ETA |
-| `unknown` | Status not in mapping table |
-
-The raw carrier string is preserved in `originalStatus` for debugging. Callers should only branch on `normalizedStatus`.
+Each carrier returns its own status vocabulary. The gateway maps every raw string to a shared `TrackingStatus` type: `booked`, `picked_up`, `in_transit`, `out_for_delivery`, `delivered`, `failed`, `returned`, `delayed`, `unknown`. The raw carrier string is preserved in `originalStatus` for debugging. Callers should only branch on `normalizedStatus`.
 
 ### Webhook notifications
 
-The gateway signs all outgoing webhooks with HMAC-SHA256 (`X-Signature: sha256=<hex>`) and stamps every request with the event name (`X-Event-Type`). Webhooks are only dispatched to `https://` endpoints — plain HTTP is rejected at request time, not silently dropped.
-
-Dispatch can be triggered at three points:
-
-1. **At booking** — add a `notifications` block to the booking request; a `booked` event fires on success.
-2. **At poll** — `POST /api/trackings/{trackingNumber}` with `previousStatus` and a `notifications` block; a notification fires when the status has advanced.
-3. **On demand** — `POST /api/notifications` for ad-hoc dispatch without a booking or tracking call.
-
----
-
-## DX focus
-
-These decisions were made specifically to reduce integration friction:
-
-- **One request shape.** Every carrier uses the same `BookingRequest` / `BookingResponse` structure. Switching carriers is a one-field change.
-- **Inline labels.** Labels are returned as base64 in the booking response for most carriers — no second HTTP call to fetch them.
-- **Soft failures, not silent ones.** `addOnWarnings` and `customsWarnings` in the booking response surface partial failures (e.g. DAO SMS notification rejected after booking) without rolling back the shipment. The tracking number is always valid when returned.
-- **Mock without credentials.** `MOCK_MODE=true` starts the server with full mock coverage. Individual carriers fall back to mock automatically when their key is absent.
-- **501 for unsupported, not 400.** Operations a carrier does not support return `501 Not Implemented` with the carrier name and the unsupported operation in the error body — not a generic 400 that looks like a bad request.
-- **Correlation IDs.** Every response carries `X-Request-ID`. Pass your own in the request to propagate a trace ID end-to-end.
-- **Customs forms inline.** CN22/CN23 declarations are generated automatically for cross-border shipments and returned as base64 plain text in `cnDocument` — one step instead of two.
-- **Structured logging.** All logs use `zap` in JSON mode by default; `LOG_ENV=development` switches to coloured console output. Sensitive fields (`Authorization`, `apiKey`, `secret`, `token`, `password`) are redacted before writing.
-- **Development payload dumps.** `LOG_ENV=development` logs full request and response bodies at `DEBUG` level, making it straightforward to inspect what was sent to and received from each carrier API.
+All outgoing webhooks are signed with HMAC-SHA256 (`X-Signature: sha256=<hex>`) and only dispatched to `https://` endpoints. Dispatch can be triggered at booking, on a tracking poll, or on demand via `POST /api/notifications`.
 
 ---
 
@@ -151,7 +109,6 @@ MOCK_MODE=true LOG_ENV=development go run ./cmd/api
 The server starts on `http://localhost:8080`.
 
 ```bash
-# Verify it is up
 curl http://localhost:8080/api/health
 ```
 
@@ -183,7 +140,7 @@ curl http://localhost:8080/api/health
 | `FEDEX_CLIENT_SECRET` | FedEx OAuth2 client secret | — |
 | `FEDEX_ACCOUNT_NUMBER` | FedEx account number | — |
 
-When a carrier's key is absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter automatically. The `GET /api/health` response shows which mode each carrier is running in.
+When a carrier's key is absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter. The `GET /api/health` response shows which mode each carrier is running in.
 
 ---
 
@@ -289,7 +246,7 @@ For cross-border shipments with customs, warnings, or notifications the response
 | `shipment.totalWeight` | float | kg — must equal the sum of all colli weights |
 | `shipment.colli` | array | At least one package with `id`, `weight`, and `items` |
 | `shipment.deliveryType` | string | `home`, `business`, `servicepoint`, or `return` |
-| `shipment.addOns` | array | `sms_notification`, `email_notification`, `flex_delivery`, `signature_required`, `cash_on_delivery`, `insurance` |
+| `shipment.addOns` | array | `sms_notification`, `email_notification`, `flex_delivery`, `signature_required`, `cash_on_delivery`, `insurance` — see [`docs/implementation-status.md`](docs/implementation-status.md) for per-carrier support |
 | `shipment.customs` | object | Required for non-EU destinations — see [Cross-border](#cross-border-shipments-and-customs) |
 | `notifications` | object | `webhookUrl`, `webhookSecret`, `events` — dispatches a `booked` event on success |
 | `idempotencyKey` | string | Max 64 characters |
@@ -339,7 +296,7 @@ curl -X POST "http://localhost:8080/api/trackings/00073215400599388772" \
   }'
 ```
 
-`booked` and `unknown` statuses never trigger dispatch. `notificationsSent` and `notificationsFailed` appear in the response only when a dispatch was attempted.
+`booked` and `unknown` statuses never trigger dispatch.
 
 ### POST /api/notifications
 
@@ -367,30 +324,17 @@ curl -X POST http://localhost:8080/api/notifications \
 curl -X DELETE "http://localhost:8080/api/bookings/00073215400599388772?carrier=postnord"
 ```
 
-| Carrier | Support |
-|---|---|
-| PostNord | ✅ Before collection |
-| Bring | ✅ Before collection |
-| GLS | ✅ Before collection |
-| DAO | ✅ Before first terminal scan |
-| DHL | ❌ eConnect portal or customer service |
-| FedEx | ✅ Cancels all packages in the shipment |
+Per-carrier cancellation support is in [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ### PATCH /api/bookings/{trackingNumber}
 
-Updates contact details, weight, or service point after booking.
+Updates contact details, weight, or service point after booking. Per-carrier support is in [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ```bash
 curl -X PATCH "http://localhost:8080/api/bookings/00057126960000003016?carrier=dao" \
   -H "Content-Type: application/json" \
   -d '{"phone": "+4587654321", "email": "new@example.com", "weight": 2.3}'
 ```
-
-| Carrier | phone/email | weight | servicePointId |
-|---|---|---|---|
-| PostNord | ✅ (SE only) | ❌ | ❌ |
-| DAO | ✅ | ✅ | ✅ |
-| Others | ❌ | ❌ | ❌ |
 
 ### GET /api/labels/{trackingNumber}
 
@@ -430,8 +374,6 @@ curl http://localhost:8080/api/health
 }
 ```
 
-When `MOCK_MODE=true` all carriers report `"mock"`.
-
 ---
 
 ## Cross-border shipments and customs
@@ -453,73 +395,27 @@ A `customs` block is required for all non-EU destinations (NO, GB, CH, US, CA, A
 }
 ```
 
-For cross-border non-EU shipments the gateway auto-generates a CN22 (≤ €22) or CN23 form and returns it base64-encoded in `cnDocument`:
+For cross-border non-EU shipments the gateway auto-generates a CN22 (≤ €22) or CN23 form and returns it base64-encoded in `cnDocument`. VAT numbers are validated against format rules for DK, SE, FI, NO, DE, FR, NL, and PL, and checked against VIES (non-blocking). Sea-only Incoterms (`FOB`, `FAS`, `CFR`, `CIF`) are rejected when `transportMode` is `air`, `road`, or `rail`.
 
-```bash
-curl -s -X POST http://localhost:8080/api/bookings -H "Content-Type: application/json" \
-  -d '{ ... }' | jq -r '.cnDocument' | base64 -d > customs-declaration.txt
-```
-
-#### Carrier-specific item limits
-
-| Carrier | Max line items | EORI/VAT required for non-EU |
-|---|---|---|
-| DHL | 99 | Yes — `exporterVatNumber` required |
-| PostNord | 5 | No |
-| GLS | No limit (server-side) | No |
-
-VAT numbers are validated against format rules for DK, SE, FI, NO, DE, FR, NL, and PL. EU VAT numbers are additionally checked against the [VIES REST API](https://ec.europa.eu/taxation_customs/vies/) in parallel (2 second timeout). VIES failures are non-blocking — the booking proceeds with format-only validation and a `customsWarnings` entry.
-
-Sea-only Incoterms (`FOB`, `FAS`, `CFR`, `CIF`) are rejected when `transportMode` is `air`, `road`, or `rail`.
+Per-carrier item limits and EORI/VAT requirements are in [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ---
 
 ## Restricted goods
 
-Item descriptions are checked against per-carrier and per-destination prohibited and restricted goods lists. Blocked items return `400`; restricted items proceed with a `customsWarnings` entry.
-
-Examples: explosives and firearms are blocked for all carriers. Lithium batteries are warned for all carriers (UN3480/UN3481 labelling required). Norway blocks HS code chapters 22 (alcohol) and 24 (tobacco) at validation time.
-
----
-
-## Add-ons
-
-| Type | PostNord | Bring | GLS | DAO | DHL |
-|---|---|---|---|---|---|
-| `sms_notification` | ✅ | ✅ | ❌ | ⚠️ post-booking | ❌ |
-| `email_notification` | ✅ | ✅ | ❌ | ⚠️ post-booking | ❌ |
-| `flex_delivery` | ✅ | ✅ | ✅ | ❌ | ✅ |
-| `signature_required` | ✅ | ✅ | ✅ | ❌ | ✅ |
-| `cash_on_delivery` | ❌ | ✅ | ❌ | ❌ | ❌ |
-| `insurance` | ✅ | ❌ | ❌ | ❌ | ✅ |
-
-DAO SMS and email are applied via a separate contact-update call after booking. If that call fails, `addOnWarnings` is populated and the booking is still valid. Retry via `PATCH /api/bookings/{trackingNumber}?carrier=dao`.
+Item descriptions are checked against per-carrier and per-destination prohibited and restricted goods lists. Blocked items return `400`; restricted items proceed with a `customsWarnings` entry. Explosives and firearms are blocked for all carriers. Lithium batteries produce a warning on all carriers (UN3480/UN3481 labelling required).
 
 ---
 
 ## Returns
 
-Set `deliveryType: "return"`. Sender is the customer returning the parcel; receiver is the merchant — addresses are not swapped automatically.
-
-| Carrier | Mechanism | Labelless |
-|---|---|---|
-| PostNord | `/rest/shipment/v3/returns/edi/labels/pdf` | Yes — `returnFunctionality: "labelless"`, QR code via SMS/email |
-| Bring | `returnProduct.id: "9350"` | No |
-| GLS | Shop Returns Customer Plus API v3 | No |
-| DAO | `/DAOPakkeshop/returordre.php` | Yes — `returnFunctionality: "labelless"` (default) |
-| DHL | `product: "ParcelEurope.return.network"` | Yes — QR code as base64 PNG (BE, BG, DE, ES, LU, PL, PT, SE) |
-| FedEx | ❌ Not yet implemented | — |
+Set `deliveryType: "return"`. Sender is the customer returning the parcel; receiver is the merchant — addresses are not swapped automatically. For labelless return support and per-carrier mechanisms see [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ---
 
 ## Idempotency
 
-Pass `idempotencyKey` in the request body (max 64 characters).
-
-| Carrier | Behaviour |
-|---|---|
-| PostNord | Forwarded as `shipmentReference` — server-side deduplication |
-| Others | Logged; deduplication is the caller's responsibility |
+Pass `idempotencyKey` in the request body (max 64 characters). PostNord forwards it as `shipmentReference` for server-side deduplication; for all other carriers, deduplication is the caller's responsibility.
 
 ---
 
@@ -548,12 +444,12 @@ carrier-gateway/
 │   │   └── cn_forms.go         # Stateless CN22/CN23 form generation
 │   ├── handler/
 │   │   ├── handler.go
-│   │   ├── bookings.go         # POST /api/bookings
+│   │   ├── bookings.go
 │   │   ├── cancellations.go
 │   │   ├── updates.go
 │   │   ├── labels.go
-│   │   ├── trackings.go        # GET + POST /api/trackings
-│   │   ├── notifications.go    # POST /api/notifications
+│   │   ├── trackings.go
+│   │   ├── notifications.go
 │   │   └── health.go
 │   ├── middleware/
 │   │   ├── request_id.go
@@ -566,20 +462,20 @@ carrier-gateway/
 │   ├── router/router.go
 │   ├── logger/logger.go
 │   └── validation/
-│       ├── address.go          # Postal codes, house number, state/province rules
-│       ├── package.go          # Per-carrier weight and dimension limits
+│       ├── address.go
+│       ├── package.go
 │       ├── idempotency.go
-│       ├── customs.go          # Cross-border, de minimis, VAT format, VIES lookup
-│       ├── carrier_customs.go  # Per-carrier item limits and EORI requirements
-│       ├── countries.go        # EU / European country sets
-│       └── restricted.go       # Per-carrier and per-destination prohibited goods
+│       ├── customs.go
+│       ├── carrier_customs.go
+│       ├── countries.go
+│       └── restricted.go
 └── docs/
     ├── carriers.md                      # Full carrier coverage by country
     ├── implementation-status.md         # Feature matrix across all carriers
-    ├── feature-roadmap.md               # Batch booking, pickup scheduling, manifest, tracking subscriptions
-    ├── parcel-poller.md                 # Companion service design for subscription-based tracking
+    ├── feature-roadmap.md               # Roadmap
+    ├── parcel-poller.md                 # Companion service for tracking subscriptions
     ├── manifest-pickup-requirements.md  # Pickup and manifest endpoint spec
-    └── *-feature-mapping.md            # Per-carrier detailed feature mapping
+    └── *-feature-mapping.md             # Per-carrier detailed feature mapping
 ```
 
 ---
@@ -626,12 +522,10 @@ The handler, router, and validation layer require no other changes.
 
 See [`docs/feature-roadmap.md`](docs/feature-roadmap.md) for the full spec. In priority order:
 
-1. **Batch booking** — `POST /api/bookings/batch`, concurrent per-carrier fan-out, partial failure response
-2. **Pickup scheduling** — `POST /api/pickups`, `PUT`, `DELETE` — tell the carrier when to collect
-3. **Manifest** — `POST /api/manifests` — close the day and retrieve the handover document (required for GLS before driver arrival)
-4. **Tracking subscriptions** — register parcels and receive webhooks as statuses change; requires a backing store (see [`docs/parcel-poller.md`](docs/parcel-poller.md))
-
-Features 1–3 are fully stateless. Feature 4 requires a companion service with persistent state.
+1. **Batch booking** — concurrent per-carrier fan-out, partial failure response
+2. **Pickup scheduling** — tell the carrier when to collect
+3. **Manifest** — close the day and retrieve the handover document (required for GLS before driver arrives)
+4. **Tracking subscriptions** — register parcels and receive webhooks as statuses change (requires companion service — see [`docs/parcel-poller.md`](docs/parcel-poller.md))
 
 ---
 
