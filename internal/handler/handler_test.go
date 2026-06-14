@@ -308,14 +308,8 @@ func TestHealthCheck_CarriersReflectMockMode(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 
 	for carrier, mode := range resp.Carriers {
-		if carrier == "dao" {
-			// DAO is always shown as beta regardless of mock mode.
-			assert.Equal(t, "beta", mode,
-				"carrier dao should always be beta")
-		} else {
-			assert.Equal(t, "mock", mode,
-				"carrier %s should be mock when MockMode is true", carrier)
-		}
+		assert.Equal(t, "mock", mode,
+			"carrier %s should be mock when MockMode is true", carrier)
 	}
 }
 

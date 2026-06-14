@@ -197,7 +197,7 @@ var capabilities = map[string]carrierCapabilities{
 	"postnord": {NativeIdempotency: true, SupportsCancellation: true, SupportsUpdate: true},
 	"bring":    {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
 	"gls":      {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
-	"dao":      {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: true},
+	"dao":      {NativeIdempotency: false, Beta: false, SupportsCancellation: true, SupportsUpdate: true},
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	"hermes":   {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	"inpost":   {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
@@ -345,9 +345,9 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	default:
 		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey, daoTestMode, log)
 		if daoTestMode {
-			log.Info("DAO adapter initialized in test mode (beta) — test=1 on all requests")
+			log.Info("DAO adapter initialized in test mode — test=1 on all requests")
 		} else {
-			log.Info("DAO adapter initialized in production mode (beta)")
+			log.Info("DAO adapter initialized in production mode")
 		}
 	}
 

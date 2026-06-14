@@ -4,7 +4,7 @@ API: **DAO PHP API (proprietary)**
 Base URL: `https://api.dao.as`
 Auth: customerID + API key
 Coverage: Denmark only — consumer parcel network with strong home delivery and shop coverage.
-Implementation status: **Not fully implemented yet** (Beta)
+Implementation status: **Implemented**
 
 ---
 
@@ -104,8 +104,10 @@ signature add-ons are not available.
 
 ## Implementation notes
 
-**Beta status.** DAO is marked Beta in the gateway (`capabilities["dao"].Beta = true`).
-The integration is functional but not fully validated in production.
+**Production status.** DAO is marked as implemented (`capabilities["dao"].Beta = false`).
+All core operations are wired — booking, cancel, update, tracking, labels, and returns.
+Remaining gaps (no pickup scheduling, no manifest, partial notification add-ons) are
+carrier API limitations, not missing implementation.
 
 **Weight update.** DAO stores weight in grams internally. The adapter converts
 the `float64` kg value from `UpdateRequest.Weight` before calling

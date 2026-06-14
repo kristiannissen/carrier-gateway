@@ -12,7 +12,7 @@ feature mapping file in this folder with full detail.
 | PostNord | Implemented | DK, SE, NO, FI | [postnord-feature-mapping.md](postnord-feature-mapping.md) |
 | Bring | Implemented | NO, SE, DK, FI | [bring-feature-mapping.md](bring-feature-mapping.md) |
 | GLS | Implemented | DE, DK, SE, NL, BE, FR, ES, PT, IT, AT + more | [gls-feature-mapping.md](gls-feature-mapping.md) |
-| DAO | Not fully implemented yet (Beta) | DK only | [dao-feature-mapping.md](dao-feature-mapping.md) |
+| DAO | Implemented | DK only | [dao-feature-mapping.md](dao-feature-mapping.md) |
 | DHL Express | Not fully implemented yet (Beta) | Worldwide | [dhl-express-feature-mapping.md](dhl-express-feature-mapping.md) |
 | DHL eCommerce Europe | Not fully implemented yet (Beta) | 28 European countries | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | DPD | Not fully implemented yet (Beta) | Pan-European | [dpd-group-feature-mapping.md](dpd-group-feature-mapping.md) |
@@ -155,3 +155,20 @@ Issues that affect production operations and should be addressed next.
 7. **DPD tracking** — `GET /shipments/{id}` returns a numeric internal status
    code only. Full event tracking requires the separate DPD Tracking API
    (separate credentials).
+
+8. **DHL eCommerce UK — cancellation postal code** — `CancelShipment` requires
+   the consignee postal code alongside the shipment ID, but the `CarrierAdapter`
+   interface only exposes the tracking number. The adapter caches the postal code
+   at booking time; shipments booked in a different process or after a restart
+   cannot be cancelled via the API. Resolve by storing the postal code externally
+   (e.g. in the order database) and injecting it, or by extending the interface.
+
+9. **DHL eCommerce UK — Windsor Framework (GB → NI)** — shipments from Great
+   Britain to Northern Ireland require a `clearanceDeclaration` block
+   (`C2C`/`C2B`/`B2C`/`B2B` Green/Red Lane). No `Customs` fields map to this
+   yet. Must be added before routing GB→NI lanes through this adapter.
+
+10. **DHL eCommerce UK — amendment** — `UpdateShipment` returns 501. The
+    `/shipping/v1/amendment` endpoint supports post-booking address and weight
+    changes but its schema is incompatible with `UpdateRequest`. Wire when the
+    interface is extended.
