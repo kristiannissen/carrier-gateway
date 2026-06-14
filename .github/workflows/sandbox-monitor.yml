@@ -1,0 +1,147 @@
+name: Sandbox Monitor
+
+# Run weekly to detect carrier API changes before they impact production.
+# Also supports manual triggering for ad-hoc checks.
+on:
+  schedule:
+    - cron: "0 7 * * 1" # Every Monday at 07:00 UTC
+  workflow_dispatch:
+
+jobs:
+  probe:
+    name: Carrier Sandbox Probes
+    runs-on: ubuntu-latest
+
+    # Each carrier secret is optional — probes skip automatically when absent.
+    # Add new carrier secrets to the repository and list them here; no code change needed.
+    env:
+      # PostNord
+      POSTNORD_API_KEY:         ${{ secrets.POSTNORD_API_KEY }}
+      POSTNORD_CUSTOMER_NUMBER: ${{ secrets.POSTNORD_CUSTOMER_NUMBER }}
+
+      # Bring
+      BRING_API_KEY:        ${{ secrets.BRING_API_KEY }}
+      BRING_CUSTOMER_ID:    ${{ secrets.BRING_CUSTOMER_ID }}
+      BRING_CUSTOMER_NUMBER: ${{ secrets.BRING_CUSTOMER_NUMBER }}
+
+      # GLS
+      GLS_API_KEY:       ${{ secrets.GLS_API_KEY }}
+      GLS_CLIENT_SECRET: ${{ secrets.GLS_CLIENT_SECRET }}
+      GLS_CONTACT_ID:    ${{ secrets.GLS_CONTACT_ID }}
+
+      # DAO — test mode forced on in the probe; no real bookings created
+      DAO_CUSTOMER_ID: ${{ secrets.DAO_CUSTOMER_ID }}
+      DAO_API_KEY:     ${{ secrets.DAO_API_KEY }}
+
+      # DHL eConnect
+      DHL_CLIENT_ID:       ${{ secrets.DHL_CLIENT_ID }}
+      DHL_CLIENT_SECRET:   ${{ secrets.DHL_CLIENT_SECRET }}
+      DHL_CUSTOMER_ID:     ${{ secrets.DHL_CUSTOMER_ID }}
+      DHL_TRACKING_API_KEY: ${{ secrets.DHL_TRACKING_API_KEY }}
+
+      # DHL Express — set BASE_URL to the test environment
+      DHL_EXPRESS_USERNAME:       ${{ secrets.DHL_EXPRESS_USERNAME }}
+      DHL_EXPRESS_PASSWORD:       ${{ secrets.DHL_EXPRESS_PASSWORD }}
+      DHL_EXPRESS_ACCOUNT_NUMBER: ${{ secrets.DHL_EXPRESS_ACCOUNT_NUMBER }}
+      DHL_EXPRESS_BASE_URL:       ${{ secrets.DHL_EXPRESS_BASE_URL }}
+
+      # FedEx — probes run against https://apis-sandbox.fedex.com (hardcoded in probe)
+      FEDEX_CLIENT_ID:     ${{ secrets.FEDEX_CLIENT_ID }}
+      FEDEX_CLIENT_SECRET: ${{ secrets.FEDEX_CLIENT_SECRET }}
+      FEDEX_ACCOUNT_NUMBER: ${{ secrets.FEDEX_ACCOUNT_NUMBER }}
+
+      # Evri
+      EVRI_CLIENT_ID:     ${{ secrets.EVRI_CLIENT_ID }}
+      EVRI_CLIENT_SECRET: ${{ secrets.EVRI_CLIENT_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Run sandbox probes
+        id: probes
+        run: |
+          go test -tags sandbox -v -timeout 300s \
+            -run TestSandboxProbe \
+            ./internal/adapter/... \
+            2>&1 | tee probe-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-output
+          path: probe-output.txt
+          retention-days: 30
+
+      - name: Open GitHub issue on failure
+        if: steps.probes.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('probe-output.txt', 'utf8');
+
+            // Extract failing sub-tests from go test output.
+            const failed = [...output.matchAll(/--- FAIL:\s+(\S+)/g)]
+              .map(m => m[1])
+              .join('\n- ');
+
+            const runURL = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const body = [
+              `## Carrier sandbox probe failures`,
+              ``,
+              `The weekly sandbox monitor detected one or more carrier API changes.`,
+              `Check whether credentials have expired or the carrier updated its API.`,
+              ``,
+              `**Failed probes:**`,
+              failed ? `- ${failed}` : '_See full output in the workflow run._',
+              ``,
+              `**Workflow run:** ${runURL}`,
+              ``,
+              `<details><summary>Full probe output</summary>`,
+              ``,
+              `\`\`\``,
+              output.slice(-8000), // GitHub issue body limit
+              `\`\`\``,
+              `</details>`,
+            ].join('\n');
+
+            // Re-open an existing open issue rather than filing duplicates.
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'carrier-api-change',
+              state: 'open',
+            });
+
+            if (issues.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues[0].number,
+                body,
+              });
+              core.warning(`Updated existing issue #${issues[0].number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Carrier sandbox probe failures — ${new Date().toISOString().slice(0, 10)}`,
+                body,
+                labels: ['carrier-api-change'],
+              });
+              core.warning(`Opened issue #${issue.number}: ${issue.html_url}`);
+            }
+
+      - name: Fail the workflow if probes failed
+        if: steps.probes.outputs.exit_code != '0'
+        run: exit 1
