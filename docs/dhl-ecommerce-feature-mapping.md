@@ -117,3 +117,109 @@ provided separately — request from DHL.
 
 **Coverage.** 28 European countries. Not a domestic carrier — intended for
 cross-border B2C flows originating from a European hub (typically DE or NL).
+
+---
+
+# DHL eCommerce Americas — Feature Mapping
+
+API: **DHL eCommerce Americas Manifest API v4**
+Base URL (prod): `https://api.dhlecs.com`
+Base URL (sandbox): `https://api-sandbox.dhlecs.com`
+Auth: OAuth2 client credentials (`POST /auth/v4/accesstoken`).
+Carrier key: `dhl_ecommerce`
+Implementation status: **Manifest only (Beta)**
+
+---
+
+## Summary
+
+DHL eCommerce Americas (formerly DHL eCommerce Solutions) is a separate product
+and API from DHL eCommerce Europe. Only end-of-day manifest close is implemented.
+Booking, tracking, and label retrieval are not yet wired.
+
+---
+
+## Feature fit/gap
+
+### Booking
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Book shipment | ❌ | Not yet implemented — returns 501 |
+| Cancel shipment | ❌ | Not available via API |
+| Update shipment | ❌ | Not available via API |
+
+### Labels
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Print label | ❌ | Not yet implemented |
+| Label formats | ❌ | Not yet implemented |
+
+### Tracking
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Current status | ❌ | Not yet implemented |
+| Event history | ❌ | Not yet implemented |
+
+### Pickup scheduling
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Book pickup | ❌ | No API endpoint — handled by standing agreement |
+| Update pickup | ❌ | No API endpoint |
+| Cancel pickup | ❌ | No API endpoint |
+
+### Manifest
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Close manifest (specific packages) | ✅ | `POST /shipping/v4/manifest` with `packageIds` — only listed packages are manifested |
+| Close manifest (all open packages) | ✅ | `POST /shipping/v4/manifest` with empty `manifests[]` — last 20,000 open labels for the pickup account |
+| Manifest document | ✅ | Base64-encoded PDF returned in `GET /shipping/v4/manifest/{pickup}/{requestId}` |
+| Invalid package reporting | ✅ | Surfaced as `Warnings` in `ManifestResponse` |
+
+---
+
+## Endpoint mapping
+
+| carrier-gateway | DHL eCommerce Americas API | Status |
+|---|---|---|
+| `POST /api/bookings` | — | ❌ → 501 |
+| `DELETE /api/bookings/{id}` | — | ❌ → 501 |
+| `PATCH /api/bookings/{id}` | — | ❌ → 501 |
+| `GET /api/trackings/{id}` | — | ❌ → 501 |
+| `GET /api/labels/{id}` | — | ❌ → 501 |
+| `POST /api/pickups` | — | ❌ → 501 |
+| `PUT /api/pickups/{id}` | — | ❌ → 501 |
+| `DELETE /api/pickups/{id}` | — | ❌ → 501 |
+| `POST /api/manifests` | `POST /shipping/v4/manifest` + `GET /shipping/v4/manifest/{pickup}/{requestId}` | ✅ |
+
+---
+
+## Implementation notes
+
+**Async two-step flow.** Manifest creation is asynchronous. `POST /shipping/v4/manifest`
+returns a `requestId` immediately; the adapter polls `GET /shipping/v4/manifest/{pickup}/{requestId}`
+every 2 seconds (default) until `status` reaches `COMPLETED`. Default poll
+timeout is 60 seconds, configurable via `DHLECSAdapter.PollTimeout`.
+
+**Pickup account number.** Every manifest request requires a DHL eCommerce
+pickup account number (`DHLECS_PICKUP_ACCOUNT`). This is separate from the
+OAuth2 credentials and is issued by DHL when the account is set up.
+
+**Environment variables.**
+
+| Variable | Required | Description |
+|---|---|---|
+| `DHLECS_CLIENT_ID` | ✅ | OAuth2 client_id |
+| `DHLECS_CLIENT_SECRET` | ✅ | OAuth2 client_secret |
+| `DHLECS_PICKUP_ACCOUNT` | ✅ | DHL pickup account number (e.g. `5234567`) |
+
+**Specific vs. all-open manifesting.** Pass `trackingNumbers` in the
+`POST /api/manifests` request body to manifest only those package IDs. Omit
+`trackingNumbers` (or pass an empty array) to sweep all open packages for
+the pickup account. The all-open mode manifests the last 20,000 labels and
+may include packages not intended for the current run — use specific IDs
+where possible.
