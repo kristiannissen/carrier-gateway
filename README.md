@@ -132,6 +132,7 @@ curl http://localhost:8080/api/health
 | `GLS_CONTRACT_ID` | GLS shipper contact ID | — |
 | `DAO_API_KEY` | DAO API key | — |
 | `DAO_CUSTOMER_ID` | DAO customer ID | — |
+| `DAO_TEST_MODE` | `true` to add `test=1` on all DAO requests — mimics production without real bookings | `false` |
 | `DHL_CLIENT_ID` | DHL eConnect OAuth2 client ID | — |
 | `DHL_CLIENT_SECRET` | DHL eConnect OAuth2 client secret | — |
 | `DHL_CUSTOMER_ID` | DHL customerIdentification | — |

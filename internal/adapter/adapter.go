@@ -306,6 +306,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 
 	daoCustomerID := os.Getenv("DAO_CUSTOMER_ID")
 	daoAPIKey := os.Getenv("DAO_API_KEY")
+	daoTestMode := os.Getenv("DAO_TEST_MODE") == "true"
 	switch {
 	case mockMode:
 		adapters["dao"] = &MockDAOAdapter{}
@@ -314,8 +315,12 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		adapters["dao"] = &MockDAOAdapter{}
 		log.Warn("DAO adapter falling back to mock mode (DAO_CUSTOMER_ID or DAO_API_KEY not set)")
 	default:
-		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey, log)
-		log.Info("DAO adapter initialized in production mode (beta)")
+		adapters["dao"] = NewDAOAdapter(daoCustomerID, daoAPIKey, daoTestMode, log)
+		if daoTestMode {
+			log.Info("DAO adapter initialized in test mode (beta) — test=1 on all requests")
+		} else {
+			log.Info("DAO adapter initialized in production mode (beta)")
+		}
 	}
 
 	dhlClientID := os.Getenv("DHL_CLIENT_ID")

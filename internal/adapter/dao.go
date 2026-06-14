@@ -23,16 +23,20 @@ type DAOAdapter struct {
 	CustomerID string
 	APIKey     string
 	BaseURL    string
+	TestMode   bool // when true, adds test=1 to all requests — mimics production without real bookings
 	HTTPClient *http.Client
 	log        *zap.Logger
 }
 
 // NewDAOAdapter creates a new DAOAdapter instance.
-func NewDAOAdapter(customerID, apiKey string, log *zap.Logger) *DAOAdapter {
+// Set testMode to true to add test=1 on every request, which prevents real bookings
+// while returning production-equivalent responses.
+func NewDAOAdapter(customerID, apiKey string, testMode bool, log *zap.Logger) *DAOAdapter {
 	return &DAOAdapter{
 		CustomerID: customerID,
 		APIKey:     apiKey,
 		BaseURL:    "https://api.dao.as",
+		TestMode:   testMode,
 		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -46,6 +50,17 @@ func (a *DAOAdapter) daoBaseParams() url.Values {
 	params.Set("kundeid", a.CustomerID)
 	params.Set("kode", a.APIKey)
 	params.Set("format", "json")
+	return params
+}
+
+// daoBookingParams returns base params with test=1 appended when TestMode is enabled.
+// Only booking endpoints (leveringsordre, returordre, OpdaterVaegt) document support
+// for test=1 — do not use this for tracking, label, cancel, or contact-update calls.
+func (a *DAOAdapter) daoBookingParams() url.Values {
+	params := a.daoBaseParams()
+	if a.TestMode {
+		params.Set("test", "1")
+	}
 	return params
 }
 
@@ -146,7 +161,7 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 	var (
 		endpoint      string
-		params        = a.daoBaseParams()
+		params        = a.daoBookingParams()
 		barcode       string
 		labellessCode string
 	)
@@ -406,7 +421,7 @@ func (a *DAOAdapter) UpdateShipment(ctx context.Context, req UpdateRequest) (*Up
 
 // updateWeight calls OpdaterVaegt.php to change the parcel weight before first terminal scan.
 func (a *DAOAdapter) updateWeight(ctx context.Context, barcode string, weightKg float64) error {
-	params := a.daoBaseParams()
+	params := a.daoBookingParams() // OpdaterVaegt.php supports test=1
 	params.Set("stregkode", barcode)
 	params.Set("vaegt", strconv.Itoa(int(math.Round(weightKg*1000)))) // kg → grams
 

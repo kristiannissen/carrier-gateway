@@ -24,9 +24,9 @@ signature add-ons are not available.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Book shipment | ✅ | Home delivery (`leveringsordre.php`) and shop delivery (`leveringsordre.php` with `shopid`) |
+| Book shipment | ✅ | Home delivery (`DAODirekte/leveringsordre.php`), shop delivery (`DAOPakkeshop/leveringsordre.php`), return (`DAOPakkeshop/returordre.php`) |
 | Cancel shipment | ✅ | `AnnullerePakke.php` |
-| Update shipment | ✅ | Phone + email (`OpdaterKontaktinfo.php`), weight (`OpdaterVaegt.php`), service point (`OpdaterShopid.php`) |
+| Update shipment | ✅ | Phone + email (`OpdaterKontaktOplysning.php`), weight (`OpdaterVaegt.php`), service point (`OpdaterShopid.php`) |
 | Idempotency key | ❌ | Client-side only |
 
 ### Labels
@@ -78,7 +78,7 @@ signature add-ons are not available.
 | Customs / cross-border | ❌ | Denmark-only carrier — no customs needed |
 | Service point delivery | ✅ | `receiver.servicePointId` → `shopid` parameter. Post-booking service point change also supported via `OpdaterShopid.php`. |
 | Locker delivery | ✅ | `receiver.servicePointId` → `lockerId` (DAO locker network) |
-| Multi-colli | ✅ | Multiple colli per booking |
+| Multi-colli | ❌ | DAO API takes a single set of dimensions per request — only `Colli[0]` is sent |
 | Business delivery | ✅ | `DeliveryType=business` |
 | Weight update | ✅ | `OpdaterVaegt.php` — converts kg to grams internally. Must be before first terminal scan. |
 
@@ -88,9 +88,11 @@ signature add-ons are not available.
 
 | carrier-gateway | DAO API | Status |
 |---|---|---|
-| `POST /api/bookings` | `leveringsordre.php` | ✅ |
+| `POST /api/bookings` (home) | `DAODirekte/leveringsordre.php` | ✅ |
+| `POST /api/bookings` (shop) | `DAOPakkeshop/leveringsordre.php` | ✅ |
+| `POST /api/bookings` (return) | `DAOPakkeshop/returordre.php` | ✅ |
 | `DELETE /api/bookings/{id}` | `AnnullerePakke.php` | ✅ |
-| `PATCH /api/bookings/{id}` | `OpdaterKontaktinfo.php` / `OpdaterVaegt.php` / `OpdaterShopid.php` | ✅ |
+| `PATCH /api/bookings/{id}` | `OpdaterKontaktOplysning.php` / `OpdaterVaegt.php` / `OpdaterShopid.php` | ✅ |
 | `GET /api/trackings/{id}` | `TrackNTrace_v2.php` | ✅ |
 | `GET /api/labels/{id}` | `HentLabel.php` | ✅ |
 | `POST /api/pickups` | — | ❌ → 501 |
@@ -109,6 +111,12 @@ The integration is functional but not fully validated in production.
 the `float64` kg value from `UpdateRequest.Weight` before calling
 `OpdaterVaegt.php`. Weight updates must be applied before the first terminal
 scan.
+
+**Test mode.** Set `DAO_TEST_MODE=true` to add `test=1` on requests that support
+it. Per the DAO API spec, `test=1` is only documented on booking endpoints
+(`leveringsordre.php`, `returordre.php`) and `OpdaterVaegt.php`. It is
+intentionally not sent on cancel, tracking, label, contact-update, or
+shop-update calls, which do not list it in their parameter tables.
 
 **Notification add-ons.** SMS and email are passed through as contact updates
 rather than true notification triggers. The booking response includes an
