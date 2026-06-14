@@ -228,6 +228,16 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 	// (§6.1.4 of the API docs), so a single-key lookup here is insufficient.
 	// DPD is intentionally absent from this map.
 
+	// dhl_ecommerce_uk: statusCode values from DHL eCommerce UK Tracking API v1.
+	// The five codes are identical to those used by the unified DHL tracking API ("dhl").
+	"dhl_ecommerce_uk": {
+		"pre-transit": StatusBooked,
+		"transit":     StatusInTransit,
+		"delivered":   StatusDelivered,
+		"failure":     StatusFailed,
+		"unknown":     StatusUnknown,
+	},
+
 	"fedex": {
 		// Sourced from FedEx Track API v1 spec (fedex_track.json).
 		// Keys are derivedStatusCode / eventType values from ScanEvent.

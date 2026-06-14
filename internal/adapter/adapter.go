@@ -217,6 +217,16 @@ var capabilities = map[string]carrierCapabilities{
 	// DHL eCommerce Americas: manifest close is supported via the async Manifest API v4.
 	// Booking, tracking, and label retrieval are not yet implemented.
 	"dhl_ecommerce": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	// DHL eCommerce UK: booking, label, tracking, and cancellation are supported.
+	// No manifest API exists on the UK platform — CloseManifest returns ErrNotSupported.
+	// Cancellation requires the consignee postal code, cached at BookShipment time.
+	// Shipments booked outside this process cannot be cancelled via the API.
+	"dhl_ecommerce_uk": {
+		NativeIdempotency:    false,
+		Beta:                 true,
+		SupportsCancellation: true,
+		SupportsUpdate:       false,
+	},
 	// DPD: capabilities are registered dynamically per country key ("dpd_lt", "dpd_at", …)
 	// by registerDPD in InitAdapters. There is no static "dpd" entry — the key depends
 	// on which DPD_{COUNTRY}_API_TOKEN env vars are present at startup.
@@ -502,6 +512,33 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 			zap.String("baseURL", a.BaseURL),
 			zap.String("pickup", a.PickupAccountNumber),
 		)
+	}
+
+	dhlUKPickup := os.Getenv("DHLECS_UK_PICKUP_ACCOUNT")
+	dhlUKClientID := os.Getenv("DHLECS_UK_CLIENT_ID")
+	dhlUKClientSecret := os.Getenv("DHLECS_UK_CLIENT_SECRET")
+	dhlUKProductCode := os.Getenv("DHLECS_UK_ORDERED_PRODUCT")
+	if dhlUKProductCode == "" {
+		dhlUKProductCode = "220" // Signature At Address Next Day — override via DHLECS_UK_ORDERED_PRODUCT
+	}
+	dhlUKTradingLocationID := os.Getenv("DHLECS_UK_TRADING_LOCATION_ID")
+	switch {
+	case mockMode:
+		adapters["dhl_ecommerce_uk"] = &MockDHLEcomUKAdapter{}
+		log.Info("DHL eCommerce UK adapter initialized in mock mode (MOCK_MODE=true)")
+	case dhlUKClientID == "" || dhlUKClientSecret == "" || dhlUKPickup == "":
+		adapters["dhl_ecommerce_uk"] = &MockDHLEcomUKAdapter{}
+		log.Warn("DHL eCommerce UK adapter falling back to mock mode (DHLECS_UK_CLIENT_ID, DHLECS_UK_CLIENT_SECRET or DHLECS_UK_PICKUP_ACCOUNT not set)")
+	default:
+		a := NewDHLEcomUKAdapter(dhlUKPickup, dhlUKTradingLocationID, dhlUKClientID, dhlUKClientSecret, dhlUKProductCode, log)
+		a.ReturnAccount = os.Getenv("DHLECS_UK_RETURN_ACCOUNT")
+		a.ReturnProductCode = os.Getenv("DHLECS_UK_RETURN_PRODUCT")
+		log.Info("DHL eCommerce UK adapter initialized in production mode (beta)",
+			zap.String("baseURL", a.BaseURL),
+			zap.String("pickupAccount", a.PickupAccount),
+			zap.String("defaultProductCode", a.DefaultProductCode),
+		)
+		adapters["dhl_ecommerce_uk"] = a
 	}
 
 	return adapters
