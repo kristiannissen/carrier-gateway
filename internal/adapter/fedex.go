@@ -994,6 +994,40 @@ type fedexPickupScheduleOption struct {
 	ScheduleDay       string   `json:"scheduleDay"`
 }
 
+// fedexEndOfDayRequest is the body for PUT /ship/v1/endofday/.
+// closeReqType must be "GCDR" for a Ground end-of-day close.
+type fedexEndOfDayRequest struct {
+	CloseReqType              string             `json:"closeReqType"`
+	AccountNumber             fedexAccountNumber `json:"accountNumber"`
+	GroundServiceCategory     string             `json:"groundServiceCategory"`
+	CloseDate                 string             `json:"closeDate,omitempty"`
+	CloseDocumentSpecification *fedexCloseDocSpec `json:"closeDocumentSpecification,omitempty"`
+}
+
+// fedexCloseDocSpec requests specific document types in the close response.
+type fedexCloseDocSpec struct {
+	CloseDocumentTypes []string `json:"closeDocumentTypes"`
+}
+
+// fedexEndOfDayResponse is the top-level response from PUT /ship/v1/endofday/.
+type fedexEndOfDayResponse struct {
+	TransactionID string              `json:"transactionId"`
+	Output        fedexCloseOutput    `json:"output"`
+}
+
+type fedexCloseOutput struct {
+	CloseDocuments []fedexCloseDocument `json:"closeDocuments"`
+}
+
+type fedexCloseDocument struct {
+	Type  string            `json:"type"`
+	Parts []fedexClosePart  `json:"parts"`
+}
+
+type fedexClosePart struct {
+	Image string `json:"image"`
+}
+
 // ── ManifestAdapter methods ───────────────────────────────────────────────────
 
 // BookPickup schedules a FedEx collection via POST /pickup/v1/pickups.
@@ -1177,10 +1211,89 @@ func (a *FedExAdapter) CancelPickup(ctx context.Context, _ string, confirmationN
 	return nil
 }
 
-// CloseManifest is not supported for FedEx.
-// FedEx standard pickup accounts do not require an end-of-day manifest close.
-func (a *FedExAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
-	return nil, notSupported("FedEx", "manifest close", "FedEx does not require an end-of-day manifest close for standard pickup accounts")
+// CloseManifest closes FedEx Ground shipments for the day via PUT /ship/v1/endofday/.
+// This is required for FedEx Ground (FDXG) accounts before the driver arrives.
+// FedEx Express (FDXE) accounts do not require a close call; if no Ground
+// shipments are open the API returns success with an empty closeDocuments list,
+// which is surfaced as a warning rather than an error.
+func (a *FedExAdapter) CloseManifest(ctx context.Context, req ManifestRequest) (*ManifestResponse, error) {
+	closeDate := req.Date
+	if closeDate == "" {
+		closeDate = time.Now().Format("2006-01-02")
+	}
+
+	closeReq := fedexEndOfDayRequest{
+		CloseReqType:          "GCDR",
+		AccountNumber:         fedexAccountNumber{Value: a.AccountNumber},
+		GroundServiceCategory: "GROUND",
+		CloseDate:             closeDate,
+		CloseDocumentSpecification: &fedexCloseDocSpec{
+			CloseDocumentTypes: []string{"MANIFEST"},
+		},
+	}
+
+	body, err := json.Marshal(closeReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal FedEx close request: %w", err)
+	}
+
+	httpReq, err := a.newFedExRequest(ctx, http.MethodPut, "/ship/v1/endofday/", body)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("FedEx end-of-day close request failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read FedEx close response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("FedEx close API returned status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var closeResp fedexEndOfDayResponse
+	if err := json.Unmarshal(respBody, &closeResp); err != nil {
+		return nil, fmt.Errorf("failed to decode FedEx close response: %w", err)
+	}
+
+	result := &ManifestResponse{
+		Carrier:  req.Carrier,
+		Date:     closeDate,
+		Status:   "closed",
+		Warnings: []string{},
+	}
+
+	if len(closeResp.Output.CloseDocuments) == 0 {
+		result.Warnings = append(result.Warnings,
+			"FedEx returned no close documents — no open Ground shipments for "+closeDate)
+		a.log.Warn("FedEx end-of-day close returned no documents",
+			zap.String("closeDate", closeDate))
+		return result, nil
+	}
+
+	// Prefer MANIFEST type; fall back to first available document.
+	for _, doc := range closeResp.Output.CloseDocuments {
+		if doc.Type == "MANIFEST" && len(doc.Parts) > 0 {
+			result.ManifestDocument = doc.Parts[0].Image
+			result.ManifestDocumentFormat = "PDF"
+			break
+		}
+	}
+	if result.ManifestDocument == "" && len(closeResp.Output.CloseDocuments[0].Parts) > 0 {
+		result.ManifestDocument = closeResp.Output.CloseDocuments[0].Parts[0].Image
+		result.ManifestDocumentFormat = "PDF"
+	}
+
+	a.log.Info("FedEx Ground end-of-day close completed",
+		zap.String("closeDate", closeDate),
+		zap.Bool("hasDocument", result.ManifestDocument != ""))
+
+	return result, nil
 }
 
 // GetPickupAvailability checks FedEx pickup availability via POST /pickup/v1/pickups/availabilities.

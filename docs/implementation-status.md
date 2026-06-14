@@ -71,7 +71,7 @@ feature mapping file in this folder with full detail.
 | DHL eCommerce UK | ❌ | ❌ | No manifest API — shipments processed automatically by DHL |
 | DPD | ❌ | ❌ | No API support — pickup order acts as handover instruction |
 | Hermes | ❓ | ❓ | Not confirmed |
-| FedEx | ❌ | ❌ | No API support |
+| FedEx | ✅ | ✅ | Ground only — `PUT /ship/v1/endofday/`. Express accounts do not require a close. |
 | InPost | N/A | N/A | Locker network — no manifest |
 
 ---

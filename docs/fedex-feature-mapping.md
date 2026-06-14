@@ -1,6 +1,6 @@
 # FedEx — Feature Mapping
 
-API: **FedEx Ship API v1 + Track API v1 + Pickup API v1 + Location Search API v1**
+API: **FedEx Ship API v1 + Track API v1 + Pickup API v1 + Location Search API v1 + Ship EndofDayClose API v1**
 Base URL (prod): `https://apis.fedex.com`
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token)
 Coverage: Worldwide.
@@ -19,8 +19,10 @@ delivery (Hold at Location) is wired — set `receiver.servicePointId` to the
 FedEx `locationId` code (e.g. "YBZA") obtained from the Location Search API.
 Customs are wired for international shipments — populate `shipment.customs`
 with line items, HS codes, declared values, Incoterms, and EORI/VAT numbers.
-IOSS has no FedEx equivalent and is logged as a warning and dropped. Add-ons
-are not yet wired.
+IOSS has no FedEx equivalent and is logged as a warning and dropped.
+Ground end-of-day manifest close is now implemented via
+`PUT /ship/v1/endofday/`; Express accounts do not require a close call.
+Add-ons are not yet wired.
 
 ---
 
@@ -71,8 +73,9 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Close manifest | ❌ | Not supported — standard FedEx pickup accounts have no end-of-day manifest close (`501`) |
-| Manifest document | ❌ | Not available |
+| Close manifest (Ground) | ✅ | `PUT /ship/v1/endofday/` — closes open Ground (FDXG) shipments for the day; returns MANIFEST document |
+| Close manifest (Express) | N/A | FedEx Express does not require an end-of-day close — parcels are scanned at pickup |
+| Manifest document | ✅ | Base64-encoded PDF returned in `ManifestResponse.ManifestDocument` |
 
 ### Add-ons
 
@@ -109,7 +112,7 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 | `POST /api/pickups` | `POST /pickup/v1/pickups` | ✅ |
 | `PUT /api/pickups/{id}` | — | ❌ → 501 (cancel-and-rebook) |
 | `DELETE /api/pickups/{id}` | `PUT /pickup/v1/pickups/cancel` | ✅ |
-| `POST /api/manifests` | — | ❌ → 501 |
+| `POST /api/manifests` | `PUT /ship/v1/endofday/` | ✅ (Ground) / N/A (Express) |
 | Service point lookup (caller-side) | `POST /location/v1/locations` | ℹ️ Not a gateway endpoint — callers call FedEx directly to resolve a `locationId` |
 
 ---
@@ -135,6 +138,15 @@ confirmation code. The cancel endpoint requires all three values, and they
 cannot be recovered from the code alone, so encoding them into the token avoids
 external state. The `location` segment is empty for Ground (FDXG) pickups and
 populated for Express (FDXE) pickups.
+
+**Ground end-of-day close.** `CloseManifest` calls `PUT /ship/v1/endofday/`
+with `closeReqType=GCDR` and `groundServiceCategory=GROUND`. The `date` field
+in `ManifestRequest` sets `closeDate`; if omitted it defaults to today. The
+response includes a base64-encoded MANIFEST PDF in `ManifestResponse.ManifestDocument`.
+If no Ground shipments are open for the day, FedEx returns success with an
+empty `closeDocuments` list — the adapter surfaces this as a warning, not an
+error. FedEx Express (FDXE) accounts do not need a close call; calling
+`CloseManifest` on an Express-only account is safe and returns a warning.
 
 **Hold at Location (service point delivery).** Set `receiver.servicePointId`
 to the FedEx `locationId` code (4–5 alphanumeric characters, e.g. "YBZA").
