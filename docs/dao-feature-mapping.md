@@ -118,6 +118,52 @@ it. Per the DAO API spec, `test=1` is only documented on booking endpoints
 intentionally not sent on cancel, tracking, label, contact-update, or
 shop-update calls, which do not list it in their parameter tables.
 
+Start the server in test mode:
+
+```bash
+DAO_CUSTOMER_ID=your-id DAO_API_KEY=your-key DAO_TEST_MODE=true go run ./cmd/api
+```
+
+Test booking payload:
+
+```json
+{
+  "carrier": "dao",
+  "shipment": {
+    "sender": {
+      "name": "Unisport Group",
+      "street": "Industrivej",
+      "houseNumber": "10",
+      "city": "Copenhagen",
+      "postalCode": "2300",
+      "country": "DK",
+      "phone": "+4512345678",
+      "email": "logistics@unisport.dk"
+    },
+    "receiver": {
+      "name": "Jens Hansen",
+      "street": "Niels Finsensvej",
+      "houseNumber": "11",
+      "city": "Vejle",
+      "postalCode": "7100",
+      "country": "DK",
+      "phone": "+4587654321",
+      "email": "jens@hansen.dk"
+    },
+    "deliveryType": "home",
+    "totalWeight": 2.1,
+    "colli": [
+      {
+        "id": "box-001",
+        "weight": 2.1,
+        "dimensions": { "length": 34, "height": 5, "width": 20 }
+      }
+    ]
+  },
+  "idempotencyKey": "test-order-001"
+}
+```
+
 **Notification add-ons.** SMS and email are passed through as contact updates
 rather than true notification triggers. The booking response includes an
 `AddOnWarning` to flag this. Callers should not rely on DAO to send the

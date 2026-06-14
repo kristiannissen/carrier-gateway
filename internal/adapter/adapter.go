@@ -217,6 +217,12 @@ var capabilities = map[string]carrierCapabilities{
 	// DPD: capabilities are registered dynamically per country key ("dpd_lt", "dpd_at", …)
 	// by registerDPD in InitAdapters. There is no static "dpd" entry — the key depends
 	// on which DPD_{COUNTRY}_API_TOKEN env vars are present at startup.
+	"dpd_uk": {
+		NativeIdempotency:    false,
+		Beta:                 true,
+		SupportsCancellation: false, // cancellation endpoint not yet confirmed
+		SupportsUpdate:       false,
+	},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -413,6 +419,29 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	}
 
 	registerDPD(adapters, mockMode, log)
+
+	dpdUKUsername := os.Getenv("DPD_UK_USERNAME")
+	dpdUKPassword := os.Getenv("DPD_UK_PASSWORD")
+	dpdUKUserID := os.Getenv("DPD_UK_USER_ID")
+	dpdUKNetworkCode := os.Getenv("DPD_UK_NETWORK_CODE")
+	switch {
+	case mockMode:
+		adapters["dpd_uk"] = &MockDPDUKAdapter{}
+		log.Info("DPD UK adapter initialized in mock mode (MOCK_MODE=true)")
+	case dpdUKUsername == "" || dpdUKPassword == "" || dpdUKUserID == "":
+		adapters["dpd_uk"] = &MockDPDUKAdapter{}
+		log.Warn("DPD UK adapter falling back to mock mode (DPD_UK_USERNAME, DPD_UK_PASSWORD or DPD_UK_USER_ID not set)")
+	default:
+		adapters["dpd_uk"] = NewDPDUKAdapter(dpdUKUsername, dpdUKPassword, dpdUKUserID, dpdUKNetworkCode, log)
+		log.Info("DPD UK adapter initialized in production mode (beta)",
+			zap.String("networkCode", func() string {
+				if dpdUKNetworkCode == "" {
+					return "1^12 (default)"
+				}
+				return dpdUKNetworkCode
+			}()),
+		)
+	}
 
 	omnivaUsername := os.Getenv("OMNIVA_USERNAME")
 	omnivaPassword := os.Getenv("OMNIVA_PASSWORD")
