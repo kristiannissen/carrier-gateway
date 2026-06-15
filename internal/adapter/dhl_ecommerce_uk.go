@@ -67,7 +67,7 @@ type DHLEcomUKAdapter struct {
 	BaseURL    string
 	HTTPClient *http.Client
 
-	tokenCache dhlECSTokenCache // reuse token cache from dhl_ecommerce.go
+	tokenCache tokenCache
 
 	// postalCodeCache maps shipmentID → consignee postalCode for cancellation.
 	// Populated at BookShipment time; read at CancelShipment time.

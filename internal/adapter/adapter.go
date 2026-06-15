@@ -218,9 +218,6 @@ var capabilities = map[string]carrierCapabilities{
 	// DHL Express: cancel AWB is not available via API; pickup cancellation requires
 	// the dispatchConfirmationNumber from BookingResponse, not the AWB.
 	"dhl_express": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	// DHL eCommerce Americas: manifest close is supported via the async Manifest API v4.
-	// Booking, tracking, and label retrieval are not yet implemented.
-	"dhl_ecommerce": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	// DHL eCommerce UK: booking, label, tracking, and cancellation are supported.
 	// No manifest API exists on the UK platform — CloseManifest returns ErrNotSupported.
 	// Cancellation requires the consignee postal code, cached at BookShipment time.
@@ -498,25 +495,6 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	default:
 		adapters["evri"] = NewEvriAdapter(evriClientID, evriClientSecret, log)
 		log.Info("Evri adapter initialized in production mode (beta — tracking/cancel/update not supported)")
-	}
-
-	dhlECSPickup := os.Getenv("DHLECS_PICKUP_ACCOUNT")
-	dhlECSClientID := os.Getenv("DHLECS_CLIENT_ID")
-	dhlECSClientSecret := os.Getenv("DHLECS_CLIENT_SECRET")
-	switch {
-	case mockMode:
-		adapters["dhl_ecommerce"] = &MockDHLECSAdapter{}
-		log.Info("DHL eCommerce Americas adapter initialized in mock mode (MOCK_MODE=true)")
-	case dhlECSClientID == "" || dhlECSClientSecret == "" || dhlECSPickup == "":
-		adapters["dhl_ecommerce"] = &MockDHLECSAdapter{}
-		log.Warn("DHL eCommerce Americas adapter falling back to mock mode (DHLECS_CLIENT_ID, DHLECS_CLIENT_SECRET or DHLECS_PICKUP_ACCOUNT not set)")
-	default:
-		a := NewDHLECSAdapter(dhlECSPickup, dhlECSClientID, dhlECSClientSecret, log)
-		adapters["dhl_ecommerce"] = a
-		log.Info("DHL eCommerce Americas adapter initialized in production mode (beta)",
-			zap.String("baseURL", a.BaseURL),
-			zap.String("pickup", a.PickupAccountNumber),
-		)
 	}
 
 	dhlUKPickup := os.Getenv("DHLECS_UK_PICKUP_ACCOUNT")

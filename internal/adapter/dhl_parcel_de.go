@@ -61,7 +61,7 @@ type DHLParcelDEAdapter struct {
 	// Production: https://api-eu.dhl.com/parcel/de/user/v1/authenticate/apitoken
 	AuthURL    string
 	HTTPClient *http.Client
-	tokenCache dhlECSTokenCache
+	tokenCache tokenCache
 	log        *zap.Logger
 }
 

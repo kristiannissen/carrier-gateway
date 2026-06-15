@@ -32,8 +32,11 @@ The manifest documents what went on it.
 
 ## Scope
 
-**In scope:** PostNord, Bring, GLS, DAO, DHL eCommerce Europe, DHL Express,
-Hermes (HSI), FedEx.
+**Implemented:** Bring, DPD, FedEx.
+
+**In scope, not yet implemented:** GLS, DHL Express, PostNord.
+
+**Unknown / not yet researched:** DAO, DHL eCommerce Europe, Hermes (HSI).
 
 **Out of scope:** Instabee.
 
@@ -180,6 +183,33 @@ HTTP `501` with:
 
 ---
 
+### `GET /api/pickups/availability`
+
+Returns available collection timeslots for a given address before booking a
+pickup. Callers should invoke this before `POST /api/pickups` when the carrier
+requires a pre-flight check to avoid availability-zone errors (e.g. Omniva).
+
+```
+GET /api/pickups/availability?carrier=fedex&street=Industrivej&city=Copenhagen&postalCode=2300&country=DK
+```
+
+#### Response
+
+```json
+{
+  "carrier": "fedex",
+  "slots": [
+    {"date": "2026-06-13", "startTime": "14:00", "endTime": "18:00"},
+    {"date": "2026-06-14", "startTime": "08:00", "endTime": "12:00"}
+  ]
+}
+```
+
+Carriers that do not require or support availability queries return HTTP `501`.
+Callers may proceed directly to `POST /api/pickups` in that case.
+
+---
+
 ### `POST /api/manifests`
 
 Retrieves or generates the handover document for a carrier and shipping day.
@@ -228,17 +258,19 @@ submits the end-of-day instruction to the carrier.
 
 ## Carrier support
 
-| Carrier | Book pickup | Update pickup | Cancel pickup | Manifest document |
-|---|---|---|---|---|
-| **GLS** | ✅ `POST /rs/sporadiccollection` | ❓ Needs investigation | ❓ Needs investigation | ✅ `POST /rs/shipments/endofday` — must come before driver; acts as collection order. Returns PDF. |
-| **DHL Express** | ✅ `POST /pickups` | ❓ Needs investigation | ✅ `DELETE /pickups/{id}` | ✅ Retrievable post-collection via `GET /shipments/{id}/get-image?typeCode=MANIFEST`. |
-| **DPD** | ✅ `POST /pickup` | ❓ Needs investigation | ❓ Needs investigation | ✅ Same call as booking. |
-| **PostNord** | ✅ `POST /v3/pickups/ids` (SE/DK/FI) | ❌ Not in API | ❌ Not in API | ❌ Not in API — handled by PostNord EDI at scan time. |
-| **Bring** | ✅ `POST /api/create` | ❌ Not in API | ❌ Not in API | ❌ Not in API. |
-| **FedEx** | ❌ Not in docs | ❌ Not in docs | ❌ Not in docs | ❌ Not in docs. |
-| **DHL eCommerce** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown. |
-| **DAO** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown. |
-| **Hermes (HSI)** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown. |
+✅ = implemented and wired · ⚠️ = API supports it, not yet wired · ❌ = not available / returns 501 · ❓ = not yet researched
+
+| Carrier | Book pickup | Update pickup | Cancel pickup | Pickup availability | Close manifest |
+|---|---|---|---|---|---|
+| **Bring** | ✅ `POST /api/create` | ❌ 501 — not in API | ❌ 501 — not in API | ❌ 501 — not needed | ❌ 501 — not in API |
+| **DPD** | ✅ `POST /pickups` | ❌ 501 — not in API | ❌ 501 — not in Baltic API v1 | ❌ 501 — not needed | ❌ 501 — pickup serves as handover |
+| **FedEx** | ✅ `POST /pickup/v1/pickups` | ❌ 501 — not in API | ✅ `PUT /pickup/v1/pickups/cancel` | ✅ `POST /pickup/v1/pickups/availabilities` | ✅ `PUT /ship/v1/endofday/` (FedEx Ground) |
+| **GLS** | ⚠️ `POST /rs/sporadiccollection` — not yet wired | ❓ Needs investigation | ❓ Needs investigation | ❌ Not in API | ⚠️ `POST /rs/shipments/endofday` — not yet wired. **Must come before driver arrives; acts as collection order. Returns PDF.** |
+| **DHL Express** | ⚠️ `POST /pickups` — not yet wired | ❓ Needs investigation | ⚠️ `DELETE /pickups/{id}` — not yet wired | ❌ Not in API | ⚠️ `GET /shipments/{id}/get-image?typeCode=MANIFEST` — not yet wired |
+| **PostNord** | ⚠️ `POST /v3/pickups/ids` (SE/DK/FI) — not yet wired | ❌ Not in API | ❌ Not in API | ❌ Not in API | ❌ Not in API — handled by PostNord EDI at scan time |
+| **DAO** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown |
+| **DHL eCommerce** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown |
+| **Hermes (HSI)** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown |
 
 ---
 
@@ -261,59 +293,44 @@ against PostNord's actual cutoff windows before submitting.
 
 ---
 
-## Code changes
+## Implementation state
 
-### New files
+### Files added
 
 | File | Purpose |
 |---|---|
 | `internal/handler/manifests.go` | `POST /api/manifests` handler |
-| `internal/handler/pickups.go` | `POST /api/pickups`, `PUT /api/pickups/{id}`, `DELETE /api/pickups/{id}` handlers |
-| `internal/adapter/manifest.go` | `ManifestAdapter` interface + `ErrNotSupported` definition |
+| `internal/handler/pickups.go` | `POST /api/pickups`, `PUT /api/pickups/{id}`, `DELETE /api/pickups/{id}`, `GET /api/pickups/availability` handlers |
+| `internal/adapter/manifest.go` | `ManifestAdapter` interface, pickup/manifest types |
 
-### Existing files touched
+### Adapter status
 
-| File | Change |
+| Adapter | `ManifestAdapter` implemented |
 |---|---|
-| `internal/adapter/adapter.go` | Add `ManifestAdapter` interface alongside `CarrierAdapter` |
-| `internal/router/router.go` | Wire new routes |
-| `internal/adapter/gls.go` | Implement `ManifestAdapter` |
-| `internal/adapter/dhl_express.go` | Implement `ManifestAdapter` |
-| `internal/adapter/dpd.go` | Implement `ManifestAdapter` |
-| `internal/adapter/postnord.go` | Implement `ManifestAdapter` (pickup booking only; update and cancel return `ErrNotSupported`) |
-| `internal/adapter/bring.go` | Implement `ManifestAdapter` (pickup booking only; update and cancel return `ErrNotSupported`) |
-| `internal/adapter/mock_*.go` | Mock implementations for new interface |
-| `internal/validation/` | Pickup date/time validation — reject past dates, enforce carrier cutoff windows |
+| `bring.go` | ✅ BookPickup wired; Update/Cancel/CloseManifest/Availability return 501 |
+| `dpd.go` | ✅ BookPickup wired; Update/Cancel/CloseManifest/Availability return 501 |
+| `fedex.go` | ✅ BookPickup, CancelPickup, CloseManifest, GetPickupAvailability wired; Update returns 501 |
+| `gls.go` | ❌ Not yet implemented |
+| `dhl_express.go` | ❌ Not yet implemented |
+| `postnord.go` | ❌ Not yet implemented |
+| `dao.go` | ❌ Not yet implemented |
+| `hermes.go` | ❌ Not yet implemented |
 
 ### Interface design
 
-`ManifestAdapter` is defined separately from `CarrierAdapter`. All four methods
-are required on every implementation. Carriers that do not support a particular
-operation return `ErrNotSupported`; the handler translates this to HTTP `422`
-with a descriptive error message naming the carrier and the unsupported operation.
+`ManifestAdapter` is defined separately from `CarrierAdapter`. A carrier that
+does not implement `ManifestAdapter` at all returns HTTP `501` via a failed
+type assertion in the handler. A carrier that implements the interface but
+returns `ErrNotSupported` for a specific method also returns HTTP `501`.
 
 ```
-CarrierAdapter      — booking, tracking, labels, cancellation (existing)
-ManifestAdapter     — CloseManifest, BookPickup, UpdatePickup, CancelPickup (new)
+CarrierAdapter      — booking, tracking, labels, cancellation
+ManifestAdapter     — BookPickup, UpdatePickup, CancelPickup, GetPickupAvailability, CloseManifest
 ```
-
-`ErrNotSupported` always maps to HTTP `501` with a descriptive error body,
-regardless of which method returns it. This applies equally to `CloseManifest`,
-`BookPickup`, `UpdatePickup`, and `CancelPickup`.
 
 ```json
 {"error": "carrier postnord does not support manifest close"}
 ```
-
-`501` is the correct status: the server understood the request but the
-functionality is not implemented for the selected carrier. Using `501` ensures
-engineers hit an error path and cannot accidentally treat an unsupported
-operation as a success.
-
-### No changes to
-
-Booking, tracking, labels, notifications, customs, validation (except pickup
-date rules) — all unaffected.
 
 ---
 
