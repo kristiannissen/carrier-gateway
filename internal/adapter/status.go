@@ -230,6 +230,25 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 
 	// dhl_ecommerce_uk: statusCode values from DHL eCommerce UK Tracking API v1.
 	// The five codes are identical to those used by the unified DHL tracking API ("dhl").
+	// inpost: InPost Group Tracking API v1 event codes (format: "LMD.XXXX").
+	// The API returns eventCode in each tracking event; the top-level status field
+	// is null in observed responses. V1 schema is supported indefinitely.
+	// TODO: Obtain the authoritative event code list from the InPost Tracking Events
+	// documentation page (linked from the Tracking API overview) and extend this map.
+	// Codes below are inferred from the API spec example and common InPost status flows.
+	"inpost": {
+		"LMD.1001": StatusBooked,         // Shipment information received
+		"LMD.1002": StatusPickedUp,        // Parcel dropped off at locker / collected
+		"LMD.2000": StatusInTransit,       // In transit at sorting hub
+		"LMD.3000": StatusInTransit,       // Arrived at delivery facility
+		"LMD.4000": StatusOutForDelivery,  // Ready for collection at destination locker
+		"LMD.5000": StatusDelivered,       // Delivered / collected by recipient
+		"LMD.5100": StatusFailed,          // Delivery failed — parcel held
+		"LMD.6000": StatusReturned,        // Return to sender initiated
+	},
+
+	// dhl_ecommerce_uk: statusCode values from DHL eCommerce UK Tracking API v1.
+	// The five codes are identical to those used by the unified DHL tracking API ("dhl").
 	"dhl_ecommerce_uk": {
 		"pre-transit": StatusBooked,
 		"transit":     StatusInTransit,

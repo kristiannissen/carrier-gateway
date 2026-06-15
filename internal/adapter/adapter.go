@@ -200,7 +200,9 @@ var capabilities = map[string]carrierCapabilities{
 	"dao":      {NativeIdempotency: false, Beta: false, SupportsCancellation: true, SupportsUpdate: true},
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	"hermes":   {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	"inpost":   {NativeIdempotency: false, Demo: true, SupportsCancellation: false, SupportsUpdate: false},
+	// InPost: X-Deduplication-Id header provides server-side deduplication.
+	// Cancellation and update are not supported by the InPost Group API.
+	"inpost": {NativeIdempotency: true, SupportsCancellation: false, SupportsUpdate: false},
 	"omniva": {
 		NativeIdempotency:     false,
 		SupportsCancellation:  true,
@@ -372,16 +374,18 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		)
 	}
 
-	inpostAPIKey := os.Getenv("INPOST_API_KEY")
+	inpostClientID := os.Getenv("INPOST_CLIENT_ID")
+	inpostClientSecret := os.Getenv("INPOST_CLIENT_SECRET")
+	inpostOrgID := os.Getenv("INPOST_ORG_ID")
 	switch {
 	case mockMode:
 		adapters["inpost"] = &MockInPostAdapter{}
 		log.Info("InPost adapter initialized in mock mode (MOCK_MODE=true)")
-	case inpostAPIKey == "":
+	case inpostClientID == "" || inpostClientSecret == "" || inpostOrgID == "":
 		adapters["inpost"] = &MockInPostAdapter{}
-		log.Warn("InPost adapter falling back to mock mode (INPOST_API_KEY not set)")
+		log.Warn("InPost adapter falling back to mock mode (INPOST_CLIENT_ID, INPOST_CLIENT_SECRET or INPOST_ORG_ID not set)")
 	default:
-		adapters["inpost"] = NewInPostAdapter(inpostAPIKey, log)
+		adapters["inpost"] = NewInPostAdapter(inpostClientID, inpostClientSecret, inpostOrgID, log)
 		log.Info("InPost adapter initialized in production mode")
 	}
 
@@ -987,7 +991,7 @@ type Dimensions struct {
 //   - Bring: pickupPointId
 //   - GLS: parcelShopId
 //   - DAO: lockerId
-//   - InPost: targetLocker (service block)
+//   - InPost: destination.pointId (locker ID in the destination object)
 //   - DHL Express: onDemandDelivery.servicePointId (6-char code, e.g. "BRU001")
 type Address struct {
 	Name           string `json:"name"           validate:"required"`
