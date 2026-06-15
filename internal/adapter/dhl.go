@@ -57,6 +57,15 @@ type DHLAdapter struct {
 	// Production: https://api-eu.dhl.com/track
 	// Sandbox:    https://api-test.dhl.com/track
 	TrackingBaseURL string
+	// TrackingService is the optional DHL service hint passed as the `service`
+	// query parameter to the Unified Tracking API. When set, the API resolves
+	// the tracking number directly against that service (faster). When empty,
+	// the API auto-detects the service by probing all available services.
+	//
+	// Valid values: dgf, dsc, ecommerce, ecommerce-apac, ecommerce-europe,
+	// ecommerce-ppl, ecommerce-iberia, express, freight, parcel-de, parcel-nl,
+	// parcel-pl, parcel-uk, post-de, post-international, sameday, svb.
+	TrackingService string
 	HTTPClient      *http.Client
 	tokenCache      dhlTokenCache
 	log             *zap.Logger
@@ -66,6 +75,10 @@ type DHLAdapter struct {
 // clientID and clientSecret are the eConnect OAuth2 credentials used for booking.
 // customerID is the DHL customerIdentification value.
 // trackingAPIKey is the DHL-API-Key subscription key for the Unified Tracking API.
+//
+// TrackingService defaults to "ecommerce-europe". Override via the struct field
+// when tracking Express, Freight, Parcel-DE/NL, or other DHL service variants.
+// Set to "" to let the Unified Tracking API auto-detect the service.
 func NewDHLAdapter(clientID, clientSecret, customerID, trackingAPIKey string, log *zap.Logger) *DHLAdapter {
 	return &DHLAdapter{
 		ClientID:        clientID,
@@ -74,6 +87,7 @@ func NewDHLAdapter(clientID, clientSecret, customerID, trackingAPIKey string, lo
 		TrackingAPIKey:  trackingAPIKey,
 		BookingBaseURL:  "https://api.dhl.com",
 		TrackingBaseURL: "https://api-eu.dhl.com/track",
+		TrackingService: "ecommerce-europe",
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -504,8 +518,11 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 }
 
 // TrackShipment retrieves DHL tracking via the Unified Tracking API.
-// Endpoint: GET /track/shipments?trackingNumber=&service=ecommerce-europe
+// Endpoint: GET /track/shipments?trackingNumber=[&service=<TrackingService>]
 // Auth: DHL-API-Key subscription key header — separate from the eConnect OAuth2 credentials.
+//
+// The service hint is taken from a.TrackingService. When empty the API auto-detects,
+// which is slower but works across all DHL service variants.
 func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (*TrackingResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -514,9 +531,12 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		return nil, fmt.Errorf("DHL tracking requires DHL_TRACKING_API_KEY — obtain from developer.dhl.com")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/shipments?trackingNumber=%s&service=ecommerce-europe&language=en",
-			a.TrackingBaseURL, trackingNumber), nil)
+	trackURL := fmt.Sprintf("%s/shipments?trackingNumber=%s&language=en", a.TrackingBaseURL, trackingNumber)
+	if a.TrackingService != "" {
+		trackURL += "&service=" + a.TrackingService
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trackURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DHL tracking request: %w", err)
 	}

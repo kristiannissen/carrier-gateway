@@ -46,12 +46,12 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 | Event detail text | ✅ | `statusDetailed` used when present; falls back to `status` short title |
 | Estimated delivery | ✅ | `estimatedTimeOfDelivery` where returned; falls back to `estimatedDeliveryTimeFrame.estimatedFrom` |
 | Tracking API key | ⚠️ | Separate credential (`DHL_TRACKING_API_KEY`) from eConnect booking credentials |
-| Response schema | ⚠️ | No machine-readable spec available — field mapping is inferred from the DHL developer portal user guide, not a validated OpenAPI schema. The `DHL_Shipment Tracking_2_0.yaml` in APIdocs is a stub (references a WADL, contains no schemas). |
-| Status code normalization | ⚠️ | `normalizeStatus("dhl", statusCode)` maps carrier codes to gateway statuses, but the full set of DHL Unified Tracking status codes is not documented in available specs — mapping may be incomplete |
-| Proof of Delivery (POD) | ❌ | Not implemented. Available for DHL Express and DHL Freight after postal-code validation; no spec for response schema in available docs |
-| Piece-level tracking | ❌ | Not implemented. Mentioned as available in the Unified Tracking API user guide but no response schema documented |
-| Rate limiting | ⚠️ | Default quota is 250 calls/day, 1 per 5 seconds — insufficient for production. No throttle/retry logic in adapter. Request upgrade via DHL developer portal |
-| `service` parameter | ⚠️ | Hardcoded to `ecommerce-europe`. For DHL Parcel DE domestic tracking use `parcel-de`; for DHL Express use `express`. Value not validated by available docs |
+| Response schema | ✅ | OpenAPI 3.0 spec available at `APIdocs/dhl_unified_track_6.yaml` (v1.5.8). Field mapping is validated against this spec. |
+| Status code normalization | ✅ | `normalizeStatus("dhl", statusCode)` maps the five high-level `statusCode` values (`delivered`, `failure`, `pre-transit`, `transit`, `unknown`) from the spec. Full raw event code reference (per service variant) in `APIdocs/dhl_status_1.csv`. |
+| Proof of Delivery (POD) | ❌ | Not implemented. `proofOfDelivery.documentUrl` and `signatureUrl` are in the API response for DHL Express and DHL Freight after postal-code validation. `TrackingResponse` has no field for them yet. |
+| Piece-level tracking | ❌ | Not implemented. `details.pieceIds[]` and per-event `pieceIds[]` are in the spec but not mapped. |
+| Rate limiting | ⚠️ | Default quota is 250 calls/day, 1 per 5 seconds — insufficient for production. No throttle/retry logic in adapter. Request upgrade via DHL developer portal. |
+| `service` parameter | ✅ | Configurable via `DHLAdapter.TrackingService`. Defaults to `"ecommerce-europe"`. Set to `""` for API auto-detection, or to any of the 17 valid service values (`express`, `parcel-de`, `parcel-nl`, `freight`, `dgf`, etc.). |
 
 ### Pickup scheduling
 
@@ -113,24 +113,26 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 clientSecret). The DHL Unified Tracking API uses a separate API key
 (`DHL_TRACKING_API_KEY`). Both are required for full functionality.
 
-**Tracking spec gap.** No machine-readable OpenAPI spec for the DHL Unified
-Tracking API is available in the APIdocs folder — the `DHL_Shipment Tracking_2_0.yaml`
-file is an empty stub referencing a WADL. The response schema (field names,
-status code values, nesting) is inferred from the developer portal user guide
-(`dhl_tracking.md`) and live response observation. Before adding POD, piece-level
-tracking, or extended status normalization, obtain the actual OpenAPI spec from
-`developer.dhl.com` and add it to APIdocs.
+**Tracking spec.** `APIdocs/dhl_unified_track_6.yaml` is the full OpenAPI 3.0
+spec (v1.5.8) for the DHL Unified Tracking API. `APIdocs/dhl_status_1.csv`
+provides the exhaustive raw event status code reference for all service variants.
+These supersede the earlier `DHL_Shipment Tracking_2_0.yaml` stub (which is a
+WADL pointer with no schemas) and `dhl_tracking_unified.md` (narrative overview
+only). Use the YAML as the authoritative reference for POD fields, piece-level
+tracking, and extended status normalization work.
 
 **Tracking rate limits.** The initial quota on a new DHL API key is 250 calls/day
 with a 1 call/5 second burst limit. This is only suitable for development. Request
 a production upgrade via the DHL developer portal before going live. The adapter
 has no retry or throttle logic — a 429 response will surface as an error.
 
-**Parcel DE vs. eCommerce Europe.** The Unified Tracking API serves both products
-via the same endpoint but requires the correct `service` query parameter. The
-adapter hardcodes `service=ecommerce-europe`. For German domestic shipments
-(DHL Parcel DE) the value must be `parcel-de` — these will not resolve correctly
-with the current adapter.
+**Service hint (`TrackingService`).** `DHLAdapter.TrackingService` controls the
+`service` query parameter on tracking requests. It defaults to `"ecommerce-europe"`.
+Override it on the struct for other DHL service variants (e.g. `"parcel-de"` for
+German domestic, `"express"` for DHL Express, `"freight"` for road freight).
+Set to `""` to omit the hint entirely and let the API auto-detect — slower but
+correct when the service is unknown. All 17 valid values are listed in the struct
+godoc and in the `Service` enum of `APIdocs/dhl_unified_track_6.yaml`.
 
 **SEPA COD.** DHL eCommerce Europe COD uses SEPA bank transfer — not cash on
 delivery to a courier. Requires a valid IBAN and BIC. Only available on the
