@@ -19,7 +19,7 @@ feature mapping file in this folder with full detail.
 | DPD | Not fully implemented yet (Beta) | Pan-European | [dpd-group-feature-mapping.md](dpd-group-feature-mapping.md) |
 | DPD UK | Not fully implemented yet (Beta) | GB | — |
 | Hermes Germany | Not fully implemented yet (Beta) | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
-| FedEx | Not fully implemented yet (Beta) | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
+| FedEx | Implemented | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
 | Evri | Not fully implemented yet (Beta) | GB | — |
 | DHL eCommerce UK | Not fully implemented yet (Beta) | GB | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | Omniva | Implemented | EE, LV, LT | — |

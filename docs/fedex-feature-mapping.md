@@ -4,7 +4,7 @@ API: **FedEx Ship API v1 + Track API v1 + Pickup API v1 + Location Search API v1
 Base URL (prod): `https://apis.fedex.com`
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token)
 Coverage: Worldwide.
-Implementation status: **Not fully implemented yet** (Beta)
+Implementation status: **Implemented**
 
 ---
 
@@ -122,9 +122,7 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 
 ## Implementation notes
 
-**Beta status.** FedEx is marked Beta (`capabilities["fedex"].Beta = true`).
-Booking and tracking are live against the FedEx API; the booking response
-includes a `BetaWarning`.
+**Production status.** FedEx is fully promoted out of beta (`capabilities["fedex"].Beta = false`).
 
 **Label inline only.** Labels are returned as base64-encoded PDF inside the
 `BookShipment` response (`ColliResponse.LabelURL` as a data URI). The `FetchLabel`

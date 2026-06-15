@@ -214,7 +214,7 @@ var capabilities = map[string]carrierCapabilities{
 	// Pickup cancellation via PUT /pickup/v1/pickups/cancel. Update not supported — cancel-and-rebook.
 	// Ground end-of-day manifest close via PUT /ship/v1/endofday/. Express does not require a close.
 	// Customs declaration wired for international shipments. Service point delivery via HOLD_AT_LOCATION.
-	"fedex": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
+	"fedex": {NativeIdempotency: false, Beta: false, SupportsCancellation: true, SupportsUpdate: false},
 	// DHL Express: cancel AWB is not available via API; pickup cancellation requires
 	// the dispatchConfirmationNumber from BookingResponse, not the AWB.
 	"dhl_express": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
@@ -415,7 +415,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	default:
 		a := NewFedExAdapter(fedexClientID, fedexClientSecret, fedexAccountNumber, log)
 		adapters["fedex"] = a
-		log.Info("FedEx adapter initialized (beta — Ship/Track/Cancel API integration pending)",
+		log.Info("FedEx adapter initialized",
 			zap.String("baseURL", a.BaseURL),
 		)
 	}
