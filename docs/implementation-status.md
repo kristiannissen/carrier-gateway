@@ -132,6 +132,18 @@ feature mapping file in this folder with full detail.
 
 ---
 
+## Developer experience
+
+| Feature | Status | Notes |
+|---|---|---|
+| Built-in docs (`GET /docs`) | ✅ | Endpoint index + freight terminology glossary. No external docs required. |
+| Per-endpoint docs (`GET /docs/{slug}`) | ✅ | Full description, field list, example payload, and curl command. Slugs match endpoint names, e.g. `/docs/bookings`. |
+| Terminology glossary (`GET /docs/terminology`) | ✅ | 16 freight terms (COD, POD, AWB, Incoterms, HS Code, IOSS, de minimis, VAS, etc.) with one-line and extended definitions. |
+| Plain-text terminal output | ✅ | Send `Accept: text/plain` for curl-help-style output — term names left-aligned, definitions inline. |
+| Decoupled payloads | ✅ | Example JSON bodies are shown separately from their curl commands so they can be copied directly into any HTTP client. |
+
+---
+
 ## Priority gaps
 
 Issues that affect production operations and should be addressed next.
