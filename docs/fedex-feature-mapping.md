@@ -19,7 +19,7 @@ delivery (Hold at Location) is wired — set `receiver.servicePointId` to the
 FedEx `locationId` code (e.g. "YBZA") obtained from the Location Search API.
 Customs are wired for international shipments — populate `shipment.customs`
 with line items, HS codes, declared values, Incoterms, and EORI/VAT numbers.
-IOSS has no FedEx equivalent and is logged as a warning and dropped.
+IOSS is passed on the shipper's TINs with `tinType: BUSINESS_NATIONAL` and `usage: IOSS` — FedEx has no dedicated IOSS tinType but accepts it this way per their EU VAT documentation.
 Ground end-of-day manifest close is now implemented via
 `PUT /ship/v1/endofday/`; Express accounts do not require a close call.
 Email notification, signature required, insurance (declared value), return
@@ -168,7 +168,7 @@ when `shipment.customs.items` is non-empty. Field mapping:
 | `customs.exporterVatNumber` | `shipper.tins[tinType=FEDERAL]` |
 | `customs.importerOfRecord` | `recipients[0].tins[tinType=BUSINESS_NATIONAL]` (EORI) |
 | `customs.importerVatNumber` | `recipients[0].tins[tinType=FEDERAL]` |
-| `customs.iossNumber` | ⚠️ **Not supported** — FedEx has no IOSS `tinType`; logged as warning and dropped |
+| `customs.iossNumber` | `shipper.tins[tinType=BUSINESS_NATIONAL, usage=IOSS]` — no dedicated IOSS tinType; FedEx accepts via shipper TINs with `usage: IOSS` |
 | `customs.items[].description` | `commodities[].description` (required) |
 | `customs.items[].hsCode` | `commodities[].harmonizedCode` (falls back to `customs.hsCode`) |
 | `customs.items[].countryOfOrigin` | `commodities[].countryOfManufacture` (falls back to `customs.countryOfOrigin`) |

@@ -283,10 +283,13 @@ type fedexParty struct {
 }
 
 // fedexTIN is a tax identification number attached to a shipper or recipient
-// party. FedEx uses this for EORI, VAT, and similar registrations.
+// party. FedEx uses this for EORI, VAT, IOSS, and similar registrations.
+// Usage identifies the purpose when the tinType enum has no dedicated IOSS value —
+// FedEx accepts IOSS numbers on the shipper via tinType BUSINESS_NATIONAL + usage IOSS.
 type fedexTIN struct {
 	Number  string `json:"number"`
 	TINType string `json:"tinType"`
+	Usage   string `json:"usage,omitempty"`
 }
 
 // fedexMoney is a currency-qualified monetary amount.
@@ -690,23 +693,28 @@ func fedexCustomsBlock(c Customs, log *zap.Logger) *fedexCustomsClearanceDetail 
 	}
 	detail.Commodities = commodities
 
-	if c.IossNumber != "" && log != nil {
-		log.Warn("FedEx: IossNumber is not supported by the FedEx Ship API and has been omitted",
-			zap.String("iossNumber", c.IossNumber))
-	}
+	// IossNumber is handled at the shipper party level (fedexPartyTINs), not
+	// in the customs block — FedEx accepts IOSS via shipper.tins with usage IOSS.
 
 	return detail
 }
 
-// fedexPartyTINs returns the tins slice for a party from the provided EORI
-// and VAT numbers. Either may be empty; nil is returned when both are empty.
-func fedexPartyTINs(eori, vat string) []fedexTIN {
+// fedexPartyTINs returns the tins slice for the shipper party from EORI, VAT,
+// and IOSS numbers. Any may be empty; nil is returned when all are empty.
+//
+// FedEx has no dedicated IOSS tinType — the IOSS number is passed on the
+// shipper with tinType BUSINESS_NATIONAL and usage IOSS, per FedEx EU VAT
+// documentation (shipper\tins\number).
+func fedexPartyTINs(eori, vat, ioss string) []fedexTIN {
 	var tins []fedexTIN
 	if eori != "" {
 		tins = append(tins, fedexTIN{Number: eori, TINType: "BUSINESS_NATIONAL"})
 	}
 	if vat != "" {
 		tins = append(tins, fedexTIN{Number: vat, TINType: "FEDERAL"})
+	}
+	if ioss != "" {
+		tins = append(tins, fedexTIN{Number: ioss, TINType: "BUSINESS_NATIONAL", Usage: "IOSS"})
 	}
 	return tins
 }
@@ -772,10 +780,10 @@ func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*Boo
 	customs := r.Shipment.Customs
 
 	shipper := fedexPartyFrom(r.Shipment.Sender)
-	shipper.Tins = fedexPartyTINs("", customs.ExporterVATNumber)
+	shipper.Tins = fedexPartyTINs("", customs.ExporterVATNumber, customs.IossNumber)
 
 	recipient := fedexPartyFrom(r.Shipment.Receiver)
-	recipient.Tins = fedexPartyTINs(customs.ImporterOfRecord, customs.ImporterVATNumber)
+	recipient.Tins = fedexPartyTINs(customs.ImporterOfRecord, customs.ImporterVATNumber, "")
 
 	imageType := fedexImageType(r.LabelFormat)
 
