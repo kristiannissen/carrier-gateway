@@ -640,3 +640,348 @@ func inpostTestColli(id string, weightKg float64) Colli {
 		Dimensions: Dimensions{Length: 10, Width: 10, Height: 10},
 	}
 }
+
+// =========================================================================
+// Real adapter — BookPickup (ManifestAdapter)
+// =========================================================================
+
+func TestInPostAdapter_BookPickup_HappyPath(t *testing.T) {
+	t.Parallel()
+
+	const mockResponse = `{"id":"fd87b112-fd3f-4797-abe9-824ffc306d4d","carrierReference":{"trackingNumber":"853828","carrier":"INPOST"},"createdTime":"2025-01-15T10:00:00Z","lastModifiedTime":"2025-01-15T10:00:00Z"}`
+
+	var capturedPath, capturedMethod string
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedMethod = r.Method
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &capturedBody)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(mockResponse))
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	resp, err := a.BookPickup(t.Context(), PickupRequest{
+		Carrier: "inpost",
+		Pickup: PickupWindow{
+			Date:      "2025-01-20",
+			ReadyTime: "09:00",
+			CloseTime: "17:00",
+		},
+		Contact: PickupContact{
+			Name:  "Jan Kowalski",
+			Email: "jan@example.com",
+			Phone: "+48500111222",
+		},
+		Address: PickupAddress{
+			Country:    "PL",
+			City:       "Warsaw",
+			PostalCode: "00-001",
+			Street:     "Pana Tadeusza",
+		},
+		EstimatedParcels: 2,
+		EstimatedWeight:  5.0,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "/pickups/v1/organizations/test-org/one-time-pickups", capturedPath)
+	assert.Equal(t, http.MethodPost, capturedMethod)
+
+	// Confirm confirmation number is the pickup UUID, not the carrier tracking number.
+	assert.Equal(t, "fd87b112-fd3f-4797-abe9-824ffc306d4d", resp.ConfirmationNumber)
+	assert.Equal(t, "inpost", resp.Carrier)
+	assert.Equal(t, "booked", resp.Status)
+	assert.Equal(t, "2025-01-20", resp.Date)
+
+	// Verify body shape.
+	addr := inpostRequireNested(t, capturedBody, "address")
+	assert.Equal(t, "PL", addr["countryCode"])
+	assert.Equal(t, "Warsaw", addr["city"])
+
+	volume := inpostRequireNested(t, capturedBody, "volume")
+	assert.Equal(t, "PARCEL", volume["itemType"])
+	assert.InDelta(t, 2.0, volume["count"], 0)
+}
+
+func TestInPostAdapter_BookPickup_PLGate(t *testing.T) {
+	t.Parallel()
+
+	a := &InPostAdapter{OrgID: "test-org"}
+	_, err := a.BookPickup(t.Context(), PickupRequest{
+		Address: PickupAddress{Country: "DE"},
+		Pickup:  PickupWindow{Date: "2025-01-20"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "PL")
+}
+
+func TestInPostAdapter_BookPickup_PhoneSplit(t *testing.T) {
+	t.Parallel()
+
+	// Verify the contactPerson.phone object has prefix and number split correctly.
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &capturedBody)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"abc","carrierReference":{"trackingNumber":"853828"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	_, err := a.BookPickup(t.Context(), PickupRequest{
+		Carrier: "inpost",
+		Pickup:  PickupWindow{Date: "2025-01-20"},
+		Contact: PickupContact{Name: "Jan Nowak", Phone: "+48500111222"},
+		Address: PickupAddress{Country: "PL", City: "Warsaw", PostalCode: "00-001", Street: "ul. Testowa"},
+		EstimatedParcels: 1,
+	})
+	require.NoError(t, err)
+
+	contact := inpostRequireNested(t, capturedBody, "contactPerson")
+	phone := inpostRequireNested(t, contact, "phone")
+	assert.Equal(t, "+48", phone["prefix"])
+	assert.Equal(t, "500111222", phone["number"])
+}
+
+func TestInPostAdapter_CancelPickup_RequestShape(t *testing.T) {
+	t.Parallel()
+
+	var capturedPath, capturedMethod string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedMethod = r.Method
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	err := a.CancelPickup(t.Context(), "inpost", "fd87b112-fd3f-4797-abe9-824ffc306d4d")
+	require.NoError(t, err)
+
+	assert.Equal(t, "/pickups/v1/organizations/test-org/one-time-pickups/fd87b112-fd3f-4797-abe9-824ffc306d4d/cancel", capturedPath)
+	assert.Equal(t, http.MethodPut, capturedMethod)
+}
+
+func TestInPostAdapter_UpdatePickup_NotSupported(t *testing.T) {
+	t.Parallel()
+
+	a := &InPostAdapter{OrgID: "test-org"}
+	_, err := a.UpdatePickup(t.Context(), "some-id", PickupRequest{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotSupported)
+}
+
+func TestInPostAdapter_BookPickup_PickupTimeDefaults(t *testing.T) {
+	t.Parallel()
+
+	// When ReadyTime and CloseTime are absent, the adapter should fall back to 09:00 and 18:00.
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &capturedBody)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"abc","carrierReference":{"trackingNumber":"853828"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	_, err := a.BookPickup(t.Context(), PickupRequest{
+		Carrier: "inpost",
+		Pickup:  PickupWindow{Date: "2025-01-20"}, // no ReadyTime / CloseTime
+		Contact: PickupContact{Name: "Jan Nowak"},
+		Address: PickupAddress{Country: "PL", City: "W", PostalCode: "00-001", Street: "S"},
+		EstimatedParcels: 1,
+	})
+	require.NoError(t, err)
+
+	pt := inpostRequireNested(t, capturedBody, "pickupTime")
+	assert.Equal(t, "2025-01-20T09:00:00Z", pt["from"])
+	assert.Equal(t, "2025-01-20T18:00:00Z", pt["to"])
+}
+
+// =========================================================================
+// Real adapter — BookReturn / FetchReturnLabel (ReturnAdapter)
+// =========================================================================
+
+func TestInPostAdapter_BookReturn_HappyPath(t *testing.T) {
+	t.Parallel()
+
+	const mockResponse = `{"id":"7f2a0d9c-2b7f-4f19-9f1d-2c3b6dbb7a90","expirationDate":"2025-12-01T12:00:00Z","parcels":[{"trackingNumber":"63031234567891234567890","dropOffCode":"012345679"}]}`
+
+	var capturedPath, capturedMethod string
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedMethod = r.Method
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &capturedBody)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(mockResponse))
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	resp, err := a.BookReturn(t.Context(), ReturnRequest{
+		Carrier: "inpost",
+		Sender: Address{
+			Name:    "Jan Kowalski",
+			Email:   "jan@example.com",
+			Phone:   "+48500111222",
+			Country: "PL",
+		},
+		EnableDropOffCode: true,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "/returns/v1/organizations/test-org/shipments", capturedPath)
+	assert.Equal(t, http.MethodPost, capturedMethod)
+	assert.Equal(t, "7f2a0d9c-2b7f-4f19-9f1d-2c3b6dbb7a90", resp.ShipmentID)
+	assert.Equal(t, "63031234567891234567890", resp.TrackingNumber)
+	assert.Equal(t, "012345679", resp.DropOffCode)
+	assert.Equal(t, "booked", resp.Status)
+	assert.Equal(t, "inpost", resp.Carrier)
+
+	// Verify body contains enableDropOffCode.
+	v, ok := capturedBody["enableDropOffCode"]
+	require.True(t, ok)
+	assert.Equal(t, true, v)
+}
+
+func TestInPostAdapter_BookReturn_CountryGate(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		country string
+		wantErr bool
+	}{
+		{"PL", false},
+		{"IT", false},
+		{"GB", false},
+		{"DE", true},
+		{"FR", true},
+		{"US", true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.country, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusCreated)
+				_, _ = w.Write([]byte(`{"id":"x","parcels":[{"trackingNumber":"T1","dropOffCode":"1234"}]}`))
+			}))
+			t.Cleanup(srv.Close)
+
+			a := newPreseededInPostAdapter(srv)
+			_, err := a.BookReturn(t.Context(), ReturnRequest{
+				Sender: Address{Name: "Test", Country: tc.country},
+			})
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.country)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestInPostAdapter_BookReturn_GBSubdivisionCode(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &capturedBody)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"x","parcels":[{"trackingNumber":"T1","dropOffCode":"1234"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	_, err := a.BookReturn(t.Context(), ReturnRequest{
+		Sender: Address{Name: "Test", Country: "GB", State: "GB-ENG"},
+	})
+	require.NoError(t, err)
+
+	origin := inpostRequireNested(t, capturedBody, "origin")
+	assert.Equal(t, "GB", origin["countryCode"])
+	assert.Equal(t, "GB-ENG", origin["subdivisionCode"])
+}
+
+func TestInPostAdapter_BookReturn_WithParcel(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &capturedBody)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"id":"x","parcels":[{"trackingNumber":"T1","dropOffCode":"1234"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	_, err := a.BookReturn(t.Context(), ReturnRequest{
+		Sender: Address{Name: "Test", Country: "PL"},
+		Colli: []Colli{
+			{Weight: 2.5, Dimensions: Dimensions{Length: 35, Width: 25, Height: 10}},
+		},
+	})
+	require.NoError(t, err)
+
+	parcels, ok := capturedBody["parcels"].([]any)
+	require.True(t, ok, "parcels must be an array")
+	require.Len(t, parcels, 1)
+
+	p := parcels[0].(map[string]any)
+	w := p["weight"].(map[string]any)
+	assert.Equal(t, "KG", w["unit"])
+	// Weight encoded as decimal string: 2.5kg → "2.50"
+	assert.Equal(t, "2.50", w["amount"])
+}
+
+func TestInPostAdapter_FetchReturnLabel_AcceptHeaderDefaultsToA4(t *testing.T) {
+	t.Parallel()
+
+	var capturedAccept string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedAccept = r.Header.Get("Accept")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("fake-label"))
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	_, err := a.FetchReturnLabel(t.Context(), LabelRequest{
+		TrackingNumber: "63031234567891234567890",
+		Format:         LabelFormatPDF,
+	})
+	require.NoError(t, err)
+	// Returns endpoint uses A4 (not A6) as default.
+	assert.Equal(t, "application/pdf;format=A4", capturedAccept)
+}
+
+func TestInPostAdapter_FetchReturnLabel_EndpointPath(t *testing.T) {
+	t.Parallel()
+
+	var capturedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("fake-label"))
+	}))
+	t.Cleanup(srv.Close)
+
+	a := newPreseededInPostAdapter(srv)
+	_, err := a.FetchReturnLabel(t.Context(), LabelRequest{
+		TrackingNumber: "63031234567891234567890",
+		Format:         LabelFormatPDF,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "/returns/v1/organizations/test-org/shipments/63031234567891234567890/label", capturedPath)
+}

@@ -105,6 +105,18 @@ is currently only triggered via the booking call.
 
 ---
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `DHL_EXPRESS_USERNAME` | MyDHL API username |
+| `DHL_EXPRESS_PASSWORD` | MyDHL API password |
+| `DHL_EXPRESS_ACCOUNT_NUMBER` | DHL Express account number |
+| `DHL_EXPRESS_PRODUCT_CODE` | Product code for outbound shipments (e.g. `P`) |
+| `DHL_EXPRESS_RETURN_PRODUCT_CODE` | Product code for return shipments |
+
+---
+
 ## Implementation notes
 
 **No AWB cancellation.** DHL Express does not expose a cancel/void shipment

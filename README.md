@@ -48,7 +48,7 @@ curl -X POST http://localhost:8080/api/bookings \
 | `hermes` | Hermes Germany (DE) | Beta |
 | `fedex` | FedEx (worldwide) | Beta |
 | `evri` | Evri (GB) | Beta |
-| `inpost` | InPost (PL, UK, FR, IT) | Demo — mock only |
+| `inpost` | InPost (PL, IT, GB) | Production |
 
 Demo carriers return mock data and are not connected to any live API. DPD continental Europe is registered dynamically from `DPD_{COUNTRY}_API_TOKEN` env vars (e.g. `dpd_lt`, `dpd_at`). For full country coverage see [`docs/carriers.md`](docs/carriers.md). For a feature-by-feature breakdown across all carriers see [`docs/implementation-status.md`](docs/implementation-status.md).
 
@@ -125,47 +125,10 @@ curl http://localhost:8080/api/health
 | `PORT` | HTTP server port | `8080` |
 | `LOG_ENV` | `development` for console logging and debug payload dumps | — |
 | `MOCK_MODE` | `true` to force all carriers to use mock adapters | `false` |
-| `POSTNORD_API_KEY` | PostNord API key | — |
-| `POSTNORD_CUSTOMER_NUMBER` | PostNord account number (partyId) | — |
-| `POSTNORD_APPLICATION_ID` | PostNord application ID | — |
-| `BRING_API_KEY` | Bring API key | — |
-| `BRING_CUSTOMER_ID` | Mybring login email | — |
-| `BRING_CUSTOMER_NUMBER` | Bring customer account number | — |
-| `GLS_API_KEY` | GLS OAuth2 client ID | — |
-| `GLS_CLIENT_SECRET` | GLS OAuth2 client secret | — |
-| `GLS_CONTRACT_ID` | GLS shipper contact ID | — |
-| `DAO_API_KEY` | DAO API key | — |
-| `DAO_CUSTOMER_ID` | DAO customer ID | — |
-| `DAO_TEST_MODE` | `true` to add `test=1` on all DAO requests — mimics production without real bookings | `false` |
-| `DHL_CLIENT_ID` | DHL eConnect OAuth2 client ID | — |
-| `DHL_CLIENT_SECRET` | DHL eConnect OAuth2 client secret | — |
-| `DHL_CUSTOMER_ID` | DHL customerIdentification | — |
-| `DHL_TRACKING_API_KEY` | DHL Unified Tracking API subscription key | — |
-| `FEDEX_CLIENT_ID` | FedEx OAuth2 client ID | — |
-| `FEDEX_CLIENT_SECRET` | FedEx OAuth2 client secret | — |
-| `FEDEX_ACCOUNT_NUMBER` | FedEx account number | — |
-| `DHL_EXPRESS_USERNAME` | DHL Express MyDHL API username | — |
-| `DHL_EXPRESS_PASSWORD` | DHL Express MyDHL API password | — |
-| `DHL_EXPRESS_ACCOUNT_NUMBER` | DHL Express account number | — |
-| `DHL_EXPRESS_PRODUCT_CODE` | DHL Express product code (e.g. `P`) | — |
-| `DHL_EXPRESS_RETURN_PRODUCT_CODE` | DHL Express return product code | — |
-| `DPD_UK_USERNAME` | DPD UK username | — |
-| `DPD_UK_PASSWORD` | DPD UK password | — |
-| `DPD_UK_USER_ID` | DPD UK user ID | — |
-| `DPD_UK_NETWORK_CODE` | DPD UK network code | — |
-| `DPD_{COUNTRY}_API_TOKEN` | DPD continental Europe token per country (e.g. `DPD_LT_API_TOKEN`) | — |
-| `DPD_{COUNTRY}_BASE_URL` | DPD continental Europe base URL per country (e.g. `DPD_LT_BASE_URL`) | — |
-| `OMNIVA_USERNAME` | Omniva API username | — |
-| `OMNIVA_PASSWORD` | Omniva API password | — |
-| `OMNIVA_CUSTOMER_CODE` | Omniva customer code | — |
-| `OMNIVA_AGENT_ID` | Omniva agent ID | — |
-| `HERMES_CLIENT_ID` | Hermes HSI OAuth2 client ID | — |
-| `HERMES_CLIENT_SECRET` | Hermes HSI OAuth2 client secret | — |
-| `INPOST_API_KEY` | InPost ShipX API key | — |
-| `EVRI_CLIENT_ID` | Evri Classic API client ID | — |
-| `EVRI_CLIENT_SECRET` | Evri Classic API client secret | — |
 
-When a carrier's key is absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter. The `GET /api/health` response shows which mode each carrier is running in.
+Carrier-specific credentials are documented in each carrier's feature mapping file under `docs/`. For carriers without a dedicated file: Omniva uses `OMNIVA_USERNAME`, `OMNIVA_PASSWORD`, `OMNIVA_CUSTOMER_CODE`, `OMNIVA_AGENT_ID`; Evri uses `EVRI_CLIENT_ID`, `EVRI_CLIENT_SECRET`.
+
+When a carrier's credentials are absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter. The `GET /api/health` response shows which mode each carrier is running in.
 
 ---
 
@@ -178,6 +141,8 @@ docker run -p 8080:8080 --env-file .env carrier-gateway
 # Mock mode
 docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development carrier-gateway
 ```
+
+Carrier credentials for `.env` are listed in each carrier's feature mapping file under [`docs/`](docs/). The three global variables (`PORT`, `LOG_ENV`, `MOCK_MODE`) are the only ones needed to run in mock mode.
 
 ---
 
@@ -193,11 +158,15 @@ docker run -p 8080:8080 -e MOCK_MODE=true -e LOG_ENV=development carrier-gateway
 | `POST` | `/api/notifications` | Dispatch a webhook notification directly |
 | `GET` | `/api/labels/{trackingNumber}` | Fetch a shipping label |
 | `GET` | `/api/pickups/availability` | Check pickup availability for a carrier |
+| `GET` | `/api/pickups/cutoff-time` | Same-day pickup cutoff time (InPost) |
 | `POST` | `/api/pickups` | Book a pickup |
+| `GET` | `/api/pickups` | List pickups, paged (InPost) |
+| `GET` | `/api/pickups/{confirmationNumber}` | Get pickup by ID (InPost) |
 | `PUT` | `/api/pickups/{confirmationNumber}` | Update a pickup |
 | `DELETE` | `/api/pickups/{confirmationNumber}` | Cancel a pickup |
 | `POST` | `/api/manifests` | Close end-of-day manifest |
-| `POST` | `/api/returns` | Book a return (Omniva) |
+| `POST` | `/api/returns` | Book a return |
+| `GET` | `/api/returns/{id}` | Get return shipment info (InPost) |
 | `GET` | `/api/health` | Health check — uptime, mock mode, per-carrier status |
 
 Every response includes `X-Request-ID`. Pass it in your request to forward a correlation ID.
@@ -279,6 +248,9 @@ For cross-border shipments with customs, warnings, or notifications the response
 | `shipment.deliveryType` | string | `home`, `business`, `servicepoint`, or `return` |
 | `shipment.addOns` | array | `sms_notification`, `email_notification`, `flex_delivery`, `signature_required`, `cash_on_delivery`, `insurance` — see [`docs/implementation-status.md`](docs/implementation-status.md) for per-carrier support |
 | `shipment.customs` | object | Required for non-EU destinations — see [Cross-border](#cross-border-shipments-and-customs) |
+| `shipment.brand` | string | InPost: merchant brand name forwarded to the InPost API |
+| `shipment.returnAddress` | object | InPost PL: override the return-to-sender address (same shape as `sender`) |
+| `shipment.valueAddedServices` | array | InPost: `[{"id": "...", "value": "..."}]` — e.g. SMS notification, insurance |
 | `notifications` | object | `webhookUrl`, `webhookSecret`, `events` — dispatches a `booked` event on success |
 | `idempotencyKey` | string | Max 64 characters |
 
@@ -379,7 +351,7 @@ curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord&
   | jq -r '.data' | base64 -d > /dev/usb/lp0
 ```
 
-Supported formats: `PDF` (all carriers), `ZPL` and `ZPLGK` (PostNord, GLS). FedEx label fetch is not yet implemented — store the label from the booking response.
+Supported formats: `PDF` (all carriers), `ZPL` and `ZPLGK` (PostNord, GLS, InPost), `EPL2` (InPost PL domestic), `DPL` (InPost PL domestic, pilot — contact InPost Integrations team before use). FedEx label fetch is not yet implemented — store the label from the booking response.
 
 ### GET /api/health
 
@@ -472,7 +444,9 @@ carrier-gateway/
 │   │   ├── dhl.go
 │   │   ├── fedex.go
 │   │   ├── posti.go            # Demo — mock only
-│   │   ├── inpost.go           # Demo — mock only
+│   │   ├── inpost.go           # InPost Group API 2025 (PL/IT/GB)
+│   │   ├── inpost_pickups.go   # Pickup booking + query methods
+│   │   ├── inpost_returns.go   # Return booking + query methods
 │   │   ├── mock_*.go
 │   │   └── *_test.go
 │   ├── customs/
@@ -485,6 +459,8 @@ carrier-gateway/
 │   │   ├── labels.go
 │   │   ├── trackings.go
 │   │   ├── notifications.go
+│   │   ├── pickups.go
+│   │   ├── returns.go
 │   │   └── health.go
 │   ├── middleware/
 │   │   ├── request_id.go
@@ -558,9 +534,7 @@ The handler, router, and validation layer require no other changes.
 See [`docs/feature-roadmap.md`](docs/feature-roadmap.md) for the full spec. In priority order:
 
 1. **Batch booking** — concurrent per-carrier fan-out, partial failure response
-2. **Pickup scheduling** — tell the carrier when to collect
-3. **Manifest** — close the day and retrieve the handover document (required for GLS before driver arrives)
-4. **Tracking subscriptions** — register parcels and receive webhooks as statuses change (requires companion service — see [`docs/parcel-poller.md`](docs/parcel-poller.md))
+2. **Tracking subscriptions** — register parcels and receive webhooks as statuses change (requires companion service — see [`docs/parcel-poller.md`](docs/parcel-poller.md))
 
 ---
 

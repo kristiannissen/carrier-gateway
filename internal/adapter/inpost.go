@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+
+	"github.com/kristiannissen/carrier-gateway/internal/requestid"
 )
 
 // inpostTokenCache holds a cached OAuth 2.1 access token with its expiry time.
@@ -305,6 +307,7 @@ func inpostParcelCustomsClearance(c Customs) map[string]any {
 // inpostLabelAccept maps a LabelFormat to the InPost Accept header value.
 // ZPL defaults to 203 dpi; ZPL 300 dpi is requested via LabelFormatZPLGK.
 // EPL is 203 dpi and available for Poland domestic shipments only.
+// DPL is 203 dpi, Poland domestic pilot — contact InPost Integrations team.
 // PDF defaults to A6 format; the caller may override with the size parameter.
 func inpostLabelAccept(f LabelFormat, size string) string {
 	if size == "" {
@@ -317,8 +320,38 @@ func inpostLabelAccept(f LabelFormat, size string) string {
 		return "text/zpl;dpi=300"
 	case LabelFormatEPL:
 		return "text/epl2;dpi=203"
+	case LabelFormatDPL:
+		return "text/dpl;dpi=203"
 	default:
 		return "application/pdf;format=" + size
+	}
+}
+
+// inpostReturnDestination builds the returnDestination object for the InPost
+// Shipping API v2. Supported for domestic Poland shipments only.
+func inpostReturnDestination(a Address) map[string]any {
+	first, last := inpostSplitName(a.Name)
+	addr := map[string]any{
+		"countryCode": a.Country,
+		"city":        a.City,
+		"postalCode":  a.PostalCode,
+		"street":      a.Street,
+	}
+	if a.HouseNumber != "" {
+		addr["houseNumber"] = a.HouseNumber
+	}
+	if a.Supplement != "" {
+		addr["flatNumber"] = a.Supplement
+	}
+	return map[string]any{
+		"recipient": map[string]any{
+			"companyName": a.Name,
+			"firstName":   first,
+			"lastName":    last,
+			"email":       a.Email,
+			"phone":       a.Phone,
+		},
+		"address": addr,
 	}
 }
 
@@ -371,6 +404,31 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 	if strings.EqualFold(request.Shipment.ReturnFunctionality, "labelless") {
 		payload["enableDropOffCode"] = true
 	}
+	// Wire productVariant from ServiceTier when set.
+	if request.Shipment.ServiceTier != "" {
+		payload["productVariant"] = request.Shipment.ServiceTier
+	}
+	// Wire brand when set.
+	if request.Shipment.Brand != "" {
+		payload["brand"] = request.Shipment.Brand
+	}
+	// Wire valueAddedServices when present.
+	if len(request.Shipment.ValueAddedServices) > 0 {
+		vas := make([]map[string]any, 0, len(request.Shipment.ValueAddedServices))
+		for _, v := range request.Shipment.ValueAddedServices {
+			entry := map[string]any{"id": v.ID}
+			if v.Value != "" {
+				entry["value"] = v.Value
+			}
+			vas = append(vas, entry)
+		}
+		payload["valueAddedServices"] = vas
+	}
+	// Wire returnDestination when a return address is provided.
+	// The InPost API supports this for domestic Poland shipments only.
+	if request.Shipment.ReturnAddress != nil && strings.EqualFold(request.Shipment.Sender.Country, "PL") {
+		payload["returnDestination"] = inpostReturnDestination(*request.Shipment.ReturnAddress)
+	}
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -386,6 +444,9 @@ func (a *InPostAdapter) BookShipment(ctx context.Context, request BookingRequest
 	req.Header.Set("Authorization", "Bearer "+token)
 	if request.IdempotencyKey != "" {
 		req.Header.Set("X-Deduplication-Id", request.IdempotencyKey)
+	}
+	if id := requestid.FromContext(ctx); id != "" {
+		req.Header.Set("X-Request-Id", id)
 	}
 
 	resp, err := a.HTTPClient.Do(req)
@@ -450,6 +511,9 @@ func (a *InPostAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*Labe
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 	httpReq.Header.Set("Accept", accept)
+	if id := requestid.FromContext(ctx); id != "" {
+		httpReq.Header.Set("X-Request-Id", id)
+	}
 
 	return fetchLabelFromURL(ctx, a.HTTPClient, httpReq, req, "inpost")
 }
@@ -481,6 +545,9 @@ func (a *InPostAdapter) TrackShipment(ctx context.Context, trackingNumber string
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("x-inpost-event-version", "V1")
+	if id := requestid.FromContext(ctx); id != "" {
+		req.Header.Set("X-Request-Id", id)
+	}
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {

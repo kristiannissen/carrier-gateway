@@ -21,6 +21,10 @@ const (
 	LabelFormatZPL   LabelFormat = "ZPL"
 	LabelFormatEPL   LabelFormat = "EPL"
 	LabelFormatZPLGK LabelFormat = "ZPLGK"
+	// LabelFormatDPL is the Datamax Programming Language format (203 dpi).
+	// Available for Poland domestic shipments only — currently in pilot phase.
+	// Contact the InPost Integrations team before enabling in production.
+	LabelFormatDPL LabelFormat = "DPL"
 )
 
 // LabelRequest specifies which label to fetch and in what format.
@@ -49,6 +53,7 @@ var mimeTypes = map[LabelFormat]string{
 	LabelFormatZPL:   "application/x-zpl",
 	LabelFormatEPL:   "application/x-epl",
 	LabelFormatZPLGK: "application/x-zpl",
+	LabelFormatDPL:   "application/x-dpl",
 }
 
 // MimeTypeForFormat returns the MIME type for the given label format.
@@ -201,7 +206,9 @@ var capabilities = map[string]carrierCapabilities{
 	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	"hermes":   {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	// InPost: X-Deduplication-Id header provides server-side deduplication.
-	// Cancellation and update are not supported by the InPost Group API.
+	// Cancellation and post-booking update are not supported by the InPost Group API.
+	// Pickups are available in Poland only (implements ManifestAdapter — BookPickup + CancelPickup).
+	// Returns are available in PL, IT, and GB (implements ReturnAdapter).
 	"inpost": {NativeIdempotency: true, SupportsCancellation: false, SupportsUpdate: false},
 	"omniva": {
 		NativeIdempotency:     false,
@@ -835,6 +842,17 @@ type BookingRequest struct {
 	Notifications *NotificationPreferences `json:"notifications,omitempty"`
 }
 
+// ValueAddedService is a carrier-specific optional service attached to a shipment.
+// InPost: maps to the valueAddedServices array in the Shipping API v2.
+// The IDs and values are carrier-specific and are configured in the Merchant Portal.
+// Example: {ID: "priority", Value: "STANDARD"}.
+type ValueAddedService struct {
+	// ID is the carrier-specific service identifier (e.g. "priority").
+	ID string `json:"id"`
+	// Value is the optional service variant (e.g. "STANDARD"). Carrier-specific.
+	Value string `json:"value,omitempty"`
+}
+
 // AddOnType identifies a carrier-agnostic optional service.
 type AddOnType string
 
@@ -951,6 +969,19 @@ type Shipment struct {
 	// Customs holds cross-border declaration data. Required for non-EU
 	// destinations and EU B2B shipments above the de minimis threshold.
 	Customs Customs `json:"customs,omitempty"`
+	// Brand is the brand or marketplace name this shipment is manifested for.
+	// InPost: maps to the brand field in the Shipping API v2. When empty the
+	// carrier uses the default brand configured in the Merchant Portal.
+	Brand string `json:"brand,omitempty"`
+	// ReturnAddress is the address to which the shipment should be returned if
+	// delivery fails or the parcel is unclaimed. Carriers that do not support a
+	// configurable return address ignore this field.
+	// InPost: supported for domestic Poland shipments only (returnDestination).
+	ReturnAddress *Address `json:"returnAddress,omitempty"`
+	// ValueAddedServices is a list of carrier-specific optional services.
+	// InPost: maps to the valueAddedServices array. IDs and values are configured
+	// in the Merchant Portal (e.g. {ID: "priority", Value: "STANDARD"}).
+	ValueAddedServices []ValueAddedService `json:"valueAddedServices,omitempty"`
 }
 
 // Colli represents an individual package in a shipment.

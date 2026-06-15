@@ -96,6 +96,15 @@ by the HSI API. Pickup scheduling and manifest are not confirmed.
 
 ---
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `HERMES_CLIENT_ID` | Hermes HSI OAuth2 client ID |
+| `HERMES_CLIENT_SECRET` | Hermes HSI OAuth2 client secret |
+
+---
+
 ## Implementation notes
 
 **No public documentation.** The Hermes HSI API is not publicly documented.

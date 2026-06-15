@@ -64,6 +64,9 @@ type PickupRequest struct {
 	// TrackingNumbers holds carrier item IDs required by carriers that reference
 	// already-booked shipments at pickup scheduling time (e.g. PostNord /v3/pickups/ids).
 	TrackingNumbers []string `json:"trackingNumbers,omitempty"`
+	// ItemType specifies the category of items for pickup.
+	// Accepted values: "" or "PARCEL" (default), "RECYCLABLE_PACKAGING" (InPost PL only).
+	ItemType string `json:"itemType,omitempty"`
 }
 
 // PickupResponse is returned after a successful BookPickup or UpdatePickup call.

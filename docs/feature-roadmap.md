@@ -18,6 +18,39 @@ See `manifest-pickup-requirements.md` for full detail on features 2 and 3.
 
 ---
 
+## `GET /api/health`
+
+Returns the operational status of the gateway. Intended for load balancer
+health checks and ops dashboards. Always returns `200 OK` while the process
+is reachable.
+
+### Response
+
+```json
+{
+  "status": "ok",
+  "uptime": "3h22m10s",
+  "mockMode": false,
+  "carriers": {
+    "postnord": "production",
+    "bring": "production",
+    "gls": "beta"
+  }
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | string | Always `"ok"` |
+| `uptime` | string | Time since process start, e.g. `"3h22m10s"` |
+| `mockMode` | bool | `true` when `MOCK_MODE=true` — no real carrier API calls are made |
+| `carriers` | object | Each registered carrier mapped to its mode: `"production"`, `"mock"`, or `"beta"` |
+
+A carrier is `"mock"` when `mockMode` is `true`, `"beta"` when flagged via
+`adapter.IsBeta`, and `"production"` otherwise.
+
+---
+
 ## 1. Batch booking
 
 ### Workflow

@@ -107,6 +107,17 @@ Pickup scheduling via the eConnect API is not available — DHL eCommerce Europe
 
 ---
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `DHL_CLIENT_ID` | DHL eConnect OAuth2 client ID |
+| `DHL_CLIENT_SECRET` | DHL eConnect OAuth2 client secret |
+| `DHL_CUSTOMER_ID` | DHL customerIdentification |
+| `DHL_TRACKING_API_KEY` | DHL Unified Tracking API subscription key (separate credential) |
+
+---
+
 ## Implementation notes
 
 **Two separate credentials.** The eConnect booking API uses OAuth2 (clientID +

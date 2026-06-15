@@ -119,7 +119,7 @@ Status column reflects the current state of the gateway implementation:
 
 | Carrier | Key | Status | Notes |
 |---|---|---|---|
-| InPost | `inpost` | Partial | Parcel locker network. BookShipment, FetchLabel, and TrackShipment implemented. CancelShipment and UpdateShipment return 501. Dominant in PL, expanding into UK, FR, IT. ShipX API. |
+| InPost | `inpost` | Implemented | Parcel locker network. Shipping, labels, tracking, pickups (PL only), and returns (PL/IT/GB) implemented. Pickup query endpoints (GetPickupByID, ListPickups, GetCutoffTime) and return query endpoint (GetReturnShipment) also implemented. OAuth 2.1. CancelShipment and UpdateShipment return 501 (not supported by the InPost API). |
 | DPD Poland | `dpd_pl` | Not implemented | See DPD under Multi-country. |
 | Poczta Polska | — | Not implemented | Polish national postal carrier. No public API documentation confirmed. |
 
@@ -209,7 +209,7 @@ Carriers with a single API covering multiple European markets.
 | DHL eCommerce Europe | 28 European countries | `dhl_ecommerce` | Partial | eConnect API. BookShipment, TrackShipment, FetchLabel implemented. Cancel and update not supported via API. |
 | DHL Express | Worldwide | `dhl_express` | Partial | MyDHL API. BookShipment, TrackShipment, FetchLabel implemented. CancelShipment and UpdateShipment not supported via API. |
 | FedEx | Worldwide | `fedex` | Partial | FedEx Ship API v1. BookShipment, BookPickup, CancelPickup, CloseManifest, GetPickupAvailability implemented. FetchLabel reprint pending (spec not yet available). UpdateShipment not supported. |
-| InPost | PL, UK, FR, IT (expanding) | `inpost` | Partial | ShipX API. BookShipment, FetchLabel, TrackShipment implemented. CancelShipment and UpdateShipment return 501. |
+| InPost | PL (shipping + pickups + returns), IT + GB (returns) | `inpost` | Implemented | InPost Group API 2025. BookShipment, FetchLabel, TrackShipment, BookPickup (PL), CancelPickup (PL), GetPickupByID, ListPickups, GetCutoffTime, BookReturn (PL/IT/GB), FetchReturnLabel, GetReturnShipment implemented. OAuth 2.1. CancelShipment and UpdateShipment return 501 (not supported by the API). |
 
 ---
 

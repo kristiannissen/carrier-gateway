@@ -154,6 +154,28 @@ explicit manifest close is required or available.
 
 ---
 
+## Environment variables
+
+### DPD continental Europe (dynamic per country)
+
+| Variable | Description |
+|---|---|
+| `DPD_{COUNTRY}_API_TOKEN` | Bearer token for the given country (e.g. `DPD_LT_API_TOKEN`) |
+| `DPD_{COUNTRY}_BASE_URL` | API base URL for the given country (e.g. `DPD_LT_BASE_URL`) |
+
+Both vars must be set together. The adapter key becomes `dpd_{country}` (e.g. `dpd_lt`).
+
+### DPD UK (static)
+
+| Variable | Description |
+|---|---|
+| `DPD_UK_USERNAME` | DPD UK username |
+| `DPD_UK_PASSWORD` | DPD UK password |
+| `DPD_UK_USER_ID` | DPD UK user ID |
+| `DPD_UK_NETWORK_CODE` | DPD UK network code |
+
+---
+
 ## Implementation notes
 
 **Carrier keys.** Use `"dpd_lt"`, `"dpd_at"`, `"dpd_be"` etc. in the

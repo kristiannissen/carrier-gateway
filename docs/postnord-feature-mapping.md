@@ -101,6 +101,18 @@ shipments. Manifest is not available via API.
 
 ## Implementation notes
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `POSTNORD_API_KEY` | PostNord API key |
+| `POSTNORD_CUSTOMER_NUMBER` | Account number (partyId) |
+| `POSTNORD_APPLICATION_ID` | Application ID (optional) |
+
+---
+
+## Implementation notes
+
 **Item IDs for pickup.** PostNord `/v3/pickups/ids` requires the carrier item
 IDs returned in the booking response, not human-readable tracking numbers. The
 adapter must store or receive these IDs via the `trackingNumbers` field on

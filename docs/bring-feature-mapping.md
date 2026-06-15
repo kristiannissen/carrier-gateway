@@ -96,6 +96,17 @@ are not supported (cancel and rebook). Manifest is not available via API.
 
 ---
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `BRING_API_KEY` | Bring API key |
+| `BRING_CUSTOMER_ID` | Mybring login email |
+| `BRING_CUSTOMER_NUMBER` | Bring customer account number |
+| `BRING_COMPANY_NAME` | Sender company name (optional) |
+
+---
+
 ## Implementation notes
 
 **Customs for Norway.** Shipments from EU into Norway require customs data.

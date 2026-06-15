@@ -120,6 +120,16 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 
 ---
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `FEDEX_CLIENT_ID` | FedEx OAuth2 client ID |
+| `FEDEX_CLIENT_SECRET` | FedEx OAuth2 client secret |
+| `FEDEX_ACCOUNT_NUMBER` | FedEx account number |
+
+---
+
 ## Implementation notes
 
 **Production status.** FedEx is fully promoted out of beta (`capabilities["fedex"].Beta = false`).

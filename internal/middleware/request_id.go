@@ -7,10 +7,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
-)
 
-// requestIDKey is an unexported context key to avoid collisions with other packages.
-type requestIDKey struct{}
+	"github.com/kristiannissen/carrier-gateway/internal/requestid"
+)
 
 // RequestIDHeader is the HTTP header used to propagate the correlation ID.
 // Callers may send this header to forward an existing trace ID from an
@@ -28,7 +27,7 @@ func RequestID(next http.Handler) http.Handler {
 		if id == "" {
 			id = newRequestID()
 		}
-		ctx := context.WithValue(r.Context(), requestIDKey{}, id)
+		ctx := requestid.NewContext(r.Context(), id)
 		w.Header().Set(RequestIDHeader, id)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -36,9 +35,9 @@ func RequestID(next http.Handler) http.Handler {
 
 // FromContext retrieves the request ID from ctx.
 // Returns an empty string if none is present.
+// Deprecated: call requestid.FromContext directly.
 func FromContext(ctx context.Context) string {
-	id, _ := ctx.Value(requestIDKey{}).(string)
-	return id
+	return requestid.FromContext(ctx)
 }
 
 // newRequestID generates a random 16-byte hex string.

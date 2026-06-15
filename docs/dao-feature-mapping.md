@@ -102,6 +102,16 @@ signature add-ons are not available.
 
 ---
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `DAO_API_KEY` | DAO API key |
+| `DAO_CUSTOMER_ID` | DAO customer ID |
+| `DAO_TEST_MODE` | `true` to add `test=1` on booking requests — prevents real orders |
+
+---
+
 ## Implementation notes
 
 **Production status.** DAO is marked as implemented (`capabilities["dao"].Beta = false`).

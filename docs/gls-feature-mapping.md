@@ -101,6 +101,16 @@ not yet wired. Post-booking update is not yet implemented.
 
 ---
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `GLS_API_KEY` | GLS OAuth2 client ID |
+| `GLS_CLIENT_SECRET` | GLS OAuth2 client secret |
+| `GLS_CONTRACT_ID` | GLS shipper contact ID |
+
+---
+
 ## Implementation notes
 
 **Manifest is required.** Unlike other carriers where manifest is optional,

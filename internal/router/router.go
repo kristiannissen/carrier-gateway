@@ -42,11 +42,16 @@ func NewRouter(registry *adapter.Registry, notifSvc *notification.Service, log *
 	r.HandleFunc("/api/labels/{trackingNumber}", h.GetLabel).Methods("GET")
 	r.HandleFunc("/api/notifications", h.SendNotification).Methods("POST")
 	r.HandleFunc("/api/pickups/availability", h.GetPickupAvailability).Methods("GET")
+	r.HandleFunc("/api/pickups/cutoff-time", h.GetCutoffTime).Methods("GET")
 	r.HandleFunc("/api/pickups", h.BookPickup).Methods("POST")
+	r.HandleFunc("/api/pickups", h.ListPickups).Methods("GET")
+	r.HandleFunc("/api/pickups/{confirmationNumber}", h.GetPickup).Methods("GET")
 	r.HandleFunc("/api/pickups/{confirmationNumber}", h.UpdatePickup).Methods("PUT")
 	r.HandleFunc("/api/pickups/{confirmationNumber}", h.CancelPickup).Methods("DELETE")
 	r.HandleFunc("/api/manifests", h.CloseManifest).Methods("POST")
-	r.HandleFunc("/api/returns", h.BookOmnivaReturn).Methods("POST")
+	r.HandleFunc("/api/returns", h.BookReturn).Methods("POST")
+	r.HandleFunc("/api/returns/{id}", h.GetReturnShipment).Methods("GET")
+	r.HandleFunc("/api/returns/{trackingNumber}/label", h.GetReturnLabel).Methods("GET")
 	r.HandleFunc("/api/health", h.HealthCheck).Methods("GET")
 
 	// Built-in documentation — no auth required, no middleware side-effects.

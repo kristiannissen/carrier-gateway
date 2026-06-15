@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
@@ -234,6 +235,163 @@ func (c *Config) GetPickupAvailability(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Error("failed to write pickup availability response", zap.Error(err))
+	}
+}
+
+// GetPickup handles GET /api/pickups/{confirmationNumber}?carrier=.
+// Returns details for a single pickup order. Carrier must implement PickupQuerier.
+func (c *Config) GetPickup(w http.ResponseWriter, r *http.Request) {
+	log := c.loggerFor(r)
+
+	orderID := mux.Vars(r)["confirmationNumber"]
+	if orderID == "" {
+		c.writeError(w, r, http.StatusBadRequest, "missing order ID", "confirmationNumber path parameter is required")
+		return
+	}
+	carrier := r.URL.Query().Get("carrier")
+	if carrier == "" {
+		c.writeError(w, r, http.StatusBadRequest, "missing carrier", "carrier query parameter is required")
+		return
+	}
+
+	ca, err := c.Registry.Select(carrier)
+	if err != nil {
+		c.writeError(w, r, http.StatusBadRequest, "unsupported carrier", err.Error())
+		return
+	}
+	pq, ok := ca.(adapter.PickupQuerier)
+	if !ok {
+		c.writeError(w, r, http.StatusNotImplemented, "not supported",
+			fmt.Sprintf("carrier %s does not support pickup queries", carrier))
+		return
+	}
+
+	info, err := pq.GetPickupByID(r.Context(), orderID)
+	if err != nil {
+		log.Error("failed to get pickup",
+			zap.Error(err),
+			zap.String("carrier", carrier),
+			zap.String("orderID", orderID),
+		)
+		if errors.Is(err, adapter.ErrNotSupported) {
+			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
+		} else {
+			c.writeError(w, r, http.StatusInternalServerError, "get pickup failed", err.Error())
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(info); err != nil {
+		log.Error("failed to write get-pickup response", zap.Error(err))
+	}
+}
+
+// ListPickups handles GET /api/pickups?carrier=&page=&size=&sort=.
+// Returns a paged list of pickup orders. Carrier must implement PickupQuerier.
+func (c *Config) ListPickups(w http.ResponseWriter, r *http.Request) {
+	log := c.loggerFor(r)
+
+	carrier := r.URL.Query().Get("carrier")
+	if carrier == "" {
+		c.writeError(w, r, http.StatusBadRequest, "missing carrier", "carrier query parameter is required")
+		return
+	}
+
+	ca, err := c.Registry.Select(carrier)
+	if err != nil {
+		c.writeError(w, r, http.StatusBadRequest, "unsupported carrier", err.Error())
+		return
+	}
+	pq, ok := ca.(adapter.PickupQuerier)
+	if !ok {
+		c.writeError(w, r, http.StatusNotImplemented, "not supported",
+			fmt.Sprintf("carrier %s does not support pickup listing", carrier))
+		return
+	}
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+
+	list, err := pq.ListPickups(r.Context(), adapter.ListPickupsRequest{
+		Carrier: carrier,
+		Page:    page,
+		Size:    size,
+		Sort:    r.URL.Query()["sort"],
+	})
+	if err != nil {
+		log.Error("failed to list pickups",
+			zap.Error(err),
+			zap.String("carrier", carrier),
+		)
+		if errors.Is(err, adapter.ErrNotSupported) {
+			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
+		} else {
+			c.writeError(w, r, http.StatusInternalServerError, "list pickups failed", err.Error())
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(list); err != nil {
+		log.Error("failed to write list-pickups response", zap.Error(err))
+	}
+}
+
+// GetCutoffTime handles GET /api/pickups/cutoff-time?carrier=&postalCode=&countryCode=.
+// Returns the latest hour at which a same-day pickup can be created for the given
+// postal code. Carrier must implement PickupQuerier.
+func (c *Config) GetCutoffTime(w http.ResponseWriter, r *http.Request) {
+	log := c.loggerFor(r)
+
+	carrier := r.URL.Query().Get("carrier")
+	if carrier == "" {
+		c.writeError(w, r, http.StatusBadRequest, "missing carrier", "carrier query parameter is required")
+		return
+	}
+	postalCode := r.URL.Query().Get("postalCode")
+	if postalCode == "" {
+		c.writeError(w, r, http.StatusBadRequest, "missing postalCode", "postalCode query parameter is required")
+		return
+	}
+	countryCode := r.URL.Query().Get("countryCode")
+	if countryCode == "" {
+		c.writeError(w, r, http.StatusBadRequest, "missing countryCode", "countryCode query parameter is required")
+		return
+	}
+
+	ca, err := c.Registry.Select(carrier)
+	if err != nil {
+		c.writeError(w, r, http.StatusBadRequest, "unsupported carrier", err.Error())
+		return
+	}
+	pq, ok := ca.(adapter.PickupQuerier)
+	if !ok {
+		c.writeError(w, r, http.StatusNotImplemented, "not supported",
+			fmt.Sprintf("carrier %s does not support cutoff-time queries", carrier))
+		return
+	}
+
+	result, err := pq.GetCutoffTime(r.Context(), postalCode, countryCode)
+	if err != nil {
+		log.Error("failed to get cutoff time",
+			zap.Error(err),
+			zap.String("carrier", carrier),
+		)
+		if errors.Is(err, adapter.ErrNotSupported) {
+			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
+		} else {
+			c.writeError(w, r, http.StatusInternalServerError, "get cutoff time failed", err.Error())
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Error("failed to write cutoff-time response", zap.Error(err))
 	}
 }
 

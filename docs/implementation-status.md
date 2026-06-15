@@ -23,7 +23,7 @@ feature mapping file in this folder with full detail.
 | Evri | Not fully implemented yet (Beta) | GB | — |
 | DHL eCommerce UK | Not fully implemented yet (Beta) | GB | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | Omniva | Implemented | EE, LV, LT | — |
-| InPost | Not fully implemented yet (Demo) | PL, UK, FR, IT | [inpost-feature-mapping.md](inpost-feature-mapping.md) |
+| InPost | Implemented | PL (shipping + pickups + returns), IT + GB (returns) | [inpost-feature-mapping.md](inpost-feature-mapping.md) |
 
 ---
 
@@ -33,13 +33,13 @@ feature mapping file in this folder with full detail.
 
 | Feature | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book shipment** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ Demo |
+| **Book shipment** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Cancel shipment** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ |
 | **Update shipment** | ⚠️ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Tracking + events** | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ Demo |
-| **Labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ Demo |
-| **Return labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **Idempotency (native)** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Tracking + events** | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ |
+| **Labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Return labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Idempotency (native)** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
 
 ---
 
@@ -47,10 +47,10 @@ feature mapping file in this folder with full detail.
 
 | Feature | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book pickup** | ⚠️ | ✅ | ❌ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | N/A |
-| **Update pickup** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | N/A |
-| **Cancel pickup** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | N/A |
-| **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | N/A |
+| **Book pickup** | ⚠️ | ✅ | ❌ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | ✅ PL only |
+| **Update pickup** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | ❌ |
+| **Cancel pickup** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | ✅ PL only |
+| **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | ❌ |
 
 **PostNord pickup note:** Domestic DK/SE/FI only. Requires item IDs from booking response.
 **DHL Express pickup note:** Implicit at booking (returns `dispatchConfirmationNumber`). Standalone `POST /api/pickups` not yet wired.
@@ -110,7 +110,7 @@ feature mapping file in this folder with full detail.
 | DPD | ✅ | customs inter block with EORI/VAT in shipment payload |
 | Hermes | ❌ | Germany domestic only |
 | FedEx | ✅ | `customsClearanceDetail` wired — commodities, HS codes, EORI/VAT, Incoterms, declared value. IOSS passed via `shipper.tins[usage=IOSS]`. |
-| InPost | ❌ | Not wired |
+| InPost | ✅ | Shipment-level + per-parcel customs; GB subdivision codes; max 10 line items |
 
 ---
 
@@ -128,7 +128,7 @@ feature mapping file in this folder with full detail.
 | DPD | ✅ | `pudo.pudoId` in shipment payload |
 | Hermes | ✅ | HSI routing API |
 | FedEx | ✅ | `receiver.servicePointId` → `HOLD_AT_LOCATION` + `holdAtLocationDetail.locationId` (Hold at Location) |
-| InPost | ✅ | `service.targetLocker` (locker code) |
+| InPost | ✅ | `receiver.servicePointId` → `destination.pointId` (locker ID) |
 
 ---
 
@@ -166,8 +166,9 @@ Issues that affect production operations and should be addressed next.
    Express is not wired. Pickup is currently triggered only via the booking
    call.
 
-6. **InPost go-live** — remove `Demo: true` flag and run integration tests
-   against ShipX staging.
+6. **InPost go-live** — set `INPOST_CLIENT_ID`, `INPOST_CLIENT_SECRET`, `INPOST_ORG_ID`
+   and run integration tests against `stage-api.inpost-group.com` before switching to
+   production. Adapter is fully implemented.
 
 7. **DPD tracking** — `GET /shipments/{id}` returns a numeric internal status
    code only. Full event tracking requires the separate DPD Tracking API
