@@ -58,7 +58,7 @@ Status column reflects the current state of the gateway implementation:
 
 | Carrier | Status | Notes |
 |---|---|---|
-| DHL (Deutsche Post / DHL Paket) | Not implemented yet | Domestic German parcel product — separate from DHL Express and DHL eCommerce Europe. Largest carrier in Germany by volume. |
+| DHL Parcel DE | Not fully implemented yet | Domestic German parcel product (DHL Paket) — separate from DHL Express and DHL eCommerce Europe. Pickup scheduling implemented (`dhl_parcel_de.go`); shipment booking, tracking, and labels not yet implemented. |
 | DPD Germany | Not implemented yet | See DPD under multi-country. |
 | Hermes Germany (HSI) | Not fully implemented yet | German home delivery network. API via HSI. No public documentation — integration based on directly obtained API specs. |
 
