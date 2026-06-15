@@ -580,9 +580,22 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 			} `json:"status"`
 			EstimatedTimeOfDelivery    string `json:"estimatedTimeOfDelivery"`
 			EstimatedDeliveryTimeFrame struct {
-				EstimatedFrom string `json:"estimatedFrom"`
-				EstimatedTo   string `json:"estimatedTo"`
+				EstimatedFrom    string `json:"estimatedFrom"`
+				EstimatedThrough string `json:"estimatedThrough"`
 			} `json:"estimatedDeliveryTimeFrame"`
+			Details struct {
+				ProofOfDelivery struct {
+					DocumentURL  string `json:"documentUrl"`
+					SignatureURL string `json:"signatureUrl"`
+					Signed       struct {
+						Name             string `json:"name"`
+						GivenName        string `json:"givenName"`
+						FamilyName       string `json:"familyName"`
+						OrganizationName string `json:"organizationName"`
+					} `json:"signed"`
+					Timestamp string `json:"timestamp"`
+				} `json:"proofOfDelivery"`
+			} `json:"details"`
 			Events []struct {
 				Timestamp      string `json:"timestamp"`
 				StatusCode     string `json:"statusCode"`
@@ -633,7 +646,7 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		estimatedDelivery = s.EstimatedDeliveryTimeFrame.EstimatedFrom
 	}
 
-	return &TrackingResponse{
+	result := &TrackingResponse{
 		ShipmentID:        s.ID,
 		TrackingNumber:    s.ID,
 		Carrier:           "dhl",
@@ -642,7 +655,30 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		OriginalStatus:    s.Status.StatusCode,
 		EstimatedDelivery: estimatedDelivery,
 		Events:            events,
-	}, nil
+	}
+
+	// Map Proof of Delivery when the carrier has provided it.
+	// Available for DHL Express and DHL Freight after successful postal-code validation.
+	// The API returns an empty proofOfDelivery object before delivery is confirmed —
+	// only populate the field when at least one URL is present.
+	pod := s.Details.ProofOfDelivery
+	if pod.DocumentURL != "" || pod.SignatureURL != "" {
+		signedBy := pod.Signed.Name
+		if signedBy == "" {
+			signedBy = strings.TrimSpace(pod.Signed.GivenName + " " + pod.Signed.FamilyName)
+		}
+		if signedBy == "" {
+			signedBy = pod.Signed.OrganizationName
+		}
+		result.ProofOfDelivery = &ProofOfDelivery{
+			DocumentURL:  pod.DocumentURL,
+			SignatureURL: pod.SignatureURL,
+			SignedBy:     signedBy,
+			Timestamp:    pod.Timestamp,
+		}
+	}
+
+	return result, nil
 }
 
 // FetchLabel retrieves a DHL shipping label via GET /ccc/label-reprint.

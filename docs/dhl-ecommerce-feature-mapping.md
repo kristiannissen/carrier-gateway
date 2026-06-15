@@ -48,7 +48,7 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 | Tracking API key | ⚠️ | Separate credential (`DHL_TRACKING_API_KEY`) from eConnect booking credentials |
 | Response schema | ✅ | OpenAPI 3.0 spec available at `APIdocs/dhl_unified_track_6.yaml` (v1.5.8). Field mapping is validated against this spec. |
 | Status code normalization | ✅ | `normalizeStatus("dhl", statusCode)` maps the five high-level `statusCode` values (`delivered`, `failure`, `pre-transit`, `transit`, `unknown`) from the spec. Full raw event code reference (per service variant) in `APIdocs/dhl_status_1.csv`. |
-| Proof of Delivery (POD) | ❌ | Not implemented. `proofOfDelivery.documentUrl` and `signatureUrl` are in the API response for DHL Express and DHL Freight after postal-code validation. `TrackingResponse` has no field for them yet. |
+| Proof of Delivery (POD) | ✅ | `proofOfDelivery.documentUrl`, `signatureUrl`, `signed` (name), and `timestamp` mapped to `TrackingResponse.ProofOfDelivery`. Available from DHL Express and DHL Freight after postal-code validation. Field is omitted when the carrier has not yet confirmed delivery. |
 | Piece-level tracking | ❌ | Not implemented. `details.pieceIds[]` and per-event `pieceIds[]` are in the spec but not mapped. |
 | Rate limiting | ⚠️ | Default quota is 250 calls/day, 1 per 5 seconds — insufficient for production. No throttle/retry logic in adapter. Request upgrade via DHL developer portal. |
 | `service` parameter | ✅ | Configurable via `DHLAdapter.TrackingService`. Defaults to `"ecommerce-europe"`. Set to `""` for API auto-detection, or to any of the 17 valid service values (`express`, `parcel-de`, `parcel-nl`, `freight`, `dgf`, etc.). |
@@ -118,8 +118,17 @@ spec (v1.5.8) for the DHL Unified Tracking API. `APIdocs/dhl_status_1.csv`
 provides the exhaustive raw event status code reference for all service variants.
 These supersede the earlier `DHL_Shipment Tracking_2_0.yaml` stub (which is a
 WADL pointer with no schemas) and `dhl_tracking_unified.md` (narrative overview
-only). Use the YAML as the authoritative reference for POD fields, piece-level
-tracking, and extended status normalization work.
+only). Use the YAML as the authoritative reference for piece-level tracking and
+extended status normalization work.
+
+**Proof of Delivery.** `TrackingResponse.ProofOfDelivery` is populated when the
+carrier returns `proofOfDelivery.documentUrl` or `signatureUrl` in the tracking
+response. Available for DHL Express and DHL Freight after successful postal-code
+validation — the API returns an empty object before delivery is confirmed, which
+the adapter treats as absent. The digital signature (hand-held device capture) is
+typically available the next business day after delivery. `signedBy` is resolved
+from `signed.name`, falling back to `givenName + familyName`, then
+`organizationName`.
 
 **Tracking rate limits.** The initial quota on a new DHL API key is 250 calls/day
 with a 1 call/5 second burst limit. This is only suitable for development. Request

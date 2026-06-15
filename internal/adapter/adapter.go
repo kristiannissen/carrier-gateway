@@ -1134,6 +1134,20 @@ const (
 	StatusUnknown TrackingStatus = "unknown"
 )
 
+// ProofOfDelivery contains electronic proof of delivery details returned by
+// carriers that support ePOD (e.g. DHL Express and DHL Freight).
+// Fields are omitted when the carrier has not yet recorded delivery confirmation.
+type ProofOfDelivery struct {
+	// DocumentURL is a link to the ePOD document (e.g. https://webpod.dhl.com/pod?token=...).
+	DocumentURL string `json:"documentUrl,omitempty"`
+	// SignatureURL is a link to the digital signature image.
+	SignatureURL string `json:"signatureUrl,omitempty"`
+	// SignedBy is the name of the person who signed for the shipment.
+	SignedBy string `json:"signedBy,omitempty"`
+	// Timestamp is the date and time the POD was recorded (ISO 8601).
+	Timestamp string `json:"timestamp,omitempty"`
+}
+
 // TrackingResponse represents the tracking status of a shipment.
 type TrackingResponse struct {
 	ShipmentID     string `json:"shipmentId,omitempty"`
@@ -1144,10 +1158,13 @@ type TrackingResponse struct {
 	// NormalizedStatus is the carrier-agnostic status. Always present.
 	NormalizedStatus TrackingStatus `json:"normalizedStatus"`
 	// OriginalStatus is the unmodified raw status string from the carrier.
-	OriginalStatus    string          `json:"originalStatus"`
-	Events            []TrackingEvent `json:"events"`
-	EstimatedDelivery string          `json:"estimatedDelivery,omitempty"`
-	Colli             []ColliTracking `json:"colli,omitempty"`
+	OriginalStatus    string           `json:"originalStatus"`
+	Events            []TrackingEvent  `json:"events"`
+	EstimatedDelivery string           `json:"estimatedDelivery,omitempty"`
+	Colli             []ColliTracking  `json:"colli,omitempty"`
+	// ProofOfDelivery is populated when the carrier has recorded ePOD.
+	// Currently surfaced for DHL Express and DHL Freight.
+	ProofOfDelivery *ProofOfDelivery `json:"proofOfDelivery,omitempty"`
 	// NotificationsSent lists notifications successfully dispatched during this tracking call.
 	NotificationsSent []NotificationRecord `json:"notificationsSent,omitempty"`
 	// NotificationsFailed lists notifications that failed during this tracking call.
