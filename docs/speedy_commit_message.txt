@@ -1,0 +1,35 @@
+feat(adapter): add Speedy carrier integration
+
+Implements CarrierAdapter, ManifestAdapter (BookPickup), PickupQuerier
+(GetCutoffTime), ReturnAdapter, and ReturnQuerier for the Speedy Web
+API v1 (https://api.speedy.bg/v1).
+
+New files:
+  internal/adapter/speedy.go       — production adapter
+  internal/adapter/mock_speedy.go  — mock for tests and local dev
+  internal/adapter/speedy_test.go  — unit tests (httptest + mock)
+  docs/speedy_adapter.md           — integration reference
+
+Modified files:
+  internal/adapter/adapter.go  — registerSpeedy() wired into InitAdapters
+  internal/adapter/status.go   — "speedy" tracking status code map added
+
+Supported operations:
+  BookShipment    → POST /shipment
+  CancelShipment  → POST /shipment/cancel
+  TrackShipment   → POST /track
+  FetchLabel      → POST /print  (PDF, ZPL)
+  BookPickup      → POST /pickup
+  GetCutoffTime   → POST /pickup/terms
+  BookReturn      → POST /shipment (standard shipment, sender/receiver swapped)
+  FetchReturnLabel→ POST /print
+  GetReturnShipment → POST /shipment/{id}/secondary
+
+Not supported by the Speedy API (returns ErrNotSupported):
+  UpdatePickup, CancelPickup, CloseManifest, GetPickupAvailability,
+  GetPickupByID, ListPickups, UpdateShipment
+
+Config:
+  SPEEDY_USERNAME   — required
+  SPEEDY_PASSWORD   — required
+  SPEEDY_SERVICE_ID — optional, default 505

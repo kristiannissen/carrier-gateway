@@ -257,6 +257,27 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"unknown":     StatusUnknown,
 	},
 
+	// speedy: integer operationCode from TrackedParcel.operations[].operationCode,
+	// converted to string before lookup.
+	// Source: Speedy Web API Appendix 1 — Track And Trace Operation Codes.
+	// TODO: Expand with the full code list from Appendix 1 once confirmed against
+	// a live account or from the Speedy API team (api.support@speedy.bg).
+	"speedy": {
+		"1":  StatusBooked,         // Shipment created / data received
+		"10": StatusPickedUp,       // Shipment picked up from sender
+		"11": StatusPickedUp,       // Shipment accepted at depot
+		"21": StatusInTransit,      // In transit (domestic hub)
+		"22": StatusInTransit,      // In transit (international)
+		"31": StatusOutForDelivery, // Out for delivery
+		"32": StatusOutForDelivery, // Second delivery attempt
+		"41": StatusDelivered,      // Delivered to recipient
+		"42": StatusDelivered,      // Delivered to office / pickup point
+		"51": StatusFailed,         // Delivery failed — recipient absent
+		"52": StatusFailed,         // Delivery failed — address incorrect
+		"61": StatusReturned,       // Returned to sender
+		"62": StatusReturned,       // Return in progress
+	},
+
 	"fedex": {
 		// Sourced from FedEx Track API v1 spec (fedex_track.json).
 		// Keys are derivedStatusCode / eventType values from ScanEvent.

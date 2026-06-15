@@ -255,6 +255,17 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsCancellation: false,
 		SupportsUpdate:       false,
 	},
+	// Speedy: SE European courier. Cancellation is supported before pickup is ordered.
+	// Pickup scheduling (BookPickup) is supported; update/cancel pickup and manifest
+	// close are not available in the Speedy API. Returns are booked as standard
+	// shipments with sender/receiver swapped.
+	"speedy": {
+		NativeIdempotency:     false,
+		Beta:                  true,
+		SupportsCancellation:  true,
+		SupportsUpdate:        false,
+		SupportsReturnBooking: true,
+	},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -454,6 +465,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 
 	registerDPD(adapters, mockMode, log)
 	registerGLSNL(adapters, mockMode, log)
+	registerSpeedy(adapters, mockMode, log)
 
 	dpdUKUsername := os.Getenv("DPD_UK_USERNAME")
 	dpdUKPassword := os.Getenv("DPD_UK_PASSWORD")
@@ -700,6 +712,42 @@ func registerGLSNL(adapters map[string]CarrierAdapter, mockMode bool, log *zap.L
 		log.Info("GLS NL-style adapter initialized in production mode (beta)",
 			zap.String("carrier", carrierKey),
 			zap.String("baseURL", baseURL),
+		)
+	}
+}
+
+// registerSpeedy registers the Speedy adapter under the key "speedy".
+//
+// Required env vars:
+//
+//	SPEEDY_USERNAME   — API username
+//	SPEEDY_PASSWORD   — API password
+//
+// Optional:
+//
+//	SPEEDY_SERVICE_ID — default courier service code (integer); defaults to 505.
+func registerSpeedy(adapters map[string]CarrierAdapter, mockMode bool, log *zap.Logger) {
+	username := os.Getenv("SPEEDY_USERNAME")
+	password := os.Getenv("SPEEDY_PASSWORD")
+
+	serviceID := speedyDefaultServiceID
+	if v := os.Getenv("SPEEDY_SERVICE_ID"); v != "" {
+		if id, err := strconv.Atoi(v); err == nil {
+			serviceID = id
+		}
+	}
+
+	switch {
+	case mockMode:
+		adapters["speedy"] = NewMockSpeedyAdapter()
+		log.Info("Speedy adapter initialized in mock mode (MOCK_MODE=true)")
+	case username == "" || password == "":
+		adapters["speedy"] = NewMockSpeedyAdapter()
+		log.Warn("Speedy adapter falling back to mock mode (SPEEDY_USERNAME or SPEEDY_PASSWORD not set)")
+	default:
+		adapters["speedy"] = NewSpeedyAdapter(username, password, serviceID, log)
+		log.Info("Speedy adapter initialized in production mode",
+			zap.Int("defaultServiceID", serviceID),
 		)
 	}
 }
