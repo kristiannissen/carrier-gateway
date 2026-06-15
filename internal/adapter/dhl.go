@@ -379,6 +379,11 @@ func (a *DHLAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 		}
 	}
 
+	// Bulky — shipments outside standard dimensions or requiring manual sorting.
+	if hasAddOn(request.Shipment.AddOns, AddOnBulky) {
+		features["bulky"] = true
+	}
+
 	// DHL eConnect spec defines cPAN.addresses.sender and .recipient as arrays.
 	senderBlock := a.dhlSenderBlock(request.Shipment.Sender)
 	// Customer reference number goes on the sender entry.

@@ -897,6 +897,9 @@ const (
 	// in a consolidated shipment together during delivery.
 	// Omniva maps this to addService MULTIPLE_PARCELS_DELIVERY_TOGETHER.
 	AddOnMultiParcelTogether AddOnType = "multi_parcel_together"
+	// AddOnBulky marks the parcel as outside standard dimensions or requiring
+	// manual sorting. DHL eCommerce Europe maps this to features.bulky = true.
+	AddOnBulky AddOnType = "bulky"
 )
 
 // AddOn represents an optional service attached to a shipment.

@@ -13,7 +13,7 @@ Implementation status: **Not fully implemented yet** (Beta)
 DHL eCommerce Europe covers the cross-border B2C parcel product (DHL Parcel
 Connect and variants). Booking, tracking, labels, and returns are implemented.
 Cancellation and post-booking update are not available via the eConnect API.
-Pickup scheduling and manifest are unknown — no documentation confirmed.
+Pickup scheduling via the eConnect API is not available — DHL eCommerce Europe uses standing collection agreements. For DHL Parcel DE domestic pickup scheduling, use `DHLParcelDEAdapter` (`dhl_parcel_de.go`). Manifest is not available via eConnect.
 
 ---
 
@@ -57,9 +57,9 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Book pickup | ❓ | Not documented — pickup is handled by standing collection agreement |
-| Update pickup | ❓ | Unknown |
-| Cancel pickup | ❓ | Unknown |
+| Book pickup | ❌ | No pickup endpoint in the eConnect API — DHL eCommerce Europe uses standing collection agreements. For DHL Parcel DE domestic pickup, use `DHLParcelDEAdapter`. |
+| Update pickup | ❌ | Not available via eConnect API |
+| Cancel pickup | ❌ | Not available via eConnect API |
 
 ### Manifest
 
@@ -78,7 +78,7 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 | Signature required | ⚠️ | Accepted but silently skipped — not mapped to a wire-format field |
 | Cash on delivery | ✅ | SEPA COD — requires `codAmount`, `codCurrency`, `codAccountNumber` (IBAN), `codBic` |
 | Insurance | ✅ | Additional insurance via contract |
-| Bulky | ⚠️ | Available in API schema but not wired in adapter |
+| Bulky | ✅ | `AddOnBulky` → `features.bulky = true`. Required for shipments outside standard dimensions or that prevent automated sorting. |
 
 ### Other features
 
@@ -100,10 +100,10 @@ Pickup scheduling and manifest are unknown — no documentation confirmed.
 | `PATCH /api/bookings/{id}` | — | ❌ → 501 |
 | `GET /api/trackings/{id}` | DHL Unified Tracking API | ✅ |
 | `GET /api/labels/{id}` | `GET /ccc/label-reprint` | ✅ |
-| `POST /api/pickups` | ❓ | ❓ |
-| `PUT /api/pickups/{id}` | ❓ | ❓ |
-| `DELETE /api/pickups/{id}` | ❓ | ❓ |
-| `POST /api/manifests` | ❓ | ❓ |
+| `POST /api/pickups` | — | ❌ → use `DHLParcelDEAdapter` for Parcel DE pickup |
+| `PUT /api/pickups/{id}` | — | ❌ → use `DHLParcelDEAdapter` |
+| `DELETE /api/pickups/{id}` | — | ❌ → use `DHLParcelDEAdapter` |
+| `POST /api/manifests` | — | ❌ → 501 (no manifest API) |
 
 ---
 
@@ -427,3 +427,91 @@ automatically recreates the shipment.
 | International air | `F520579` | `F520582` |
 
 UAT base URL: `https://api-uat.dhl.com/parceluk` — set `DHLEcomUKAdapter.BaseURL` directly or use a sandbox constructor.
+
+---
+
+# DHL Parcel DE — Pickup Scheduling
+
+API: **DHL Parcel DE Pickup API v3.0.0**
+Base URL (prod): `https://api-eu.dhl.com/parcel/de/transportation/pickup/v3`
+Auth: ROPC Bearer token (`POST /parcel/de/user/v1/authenticate/apitoken`, `grant_type=password`).
+Carrier key: `dhl_parcel_de`
+Implementation status: **Pickup scheduling implemented (Beta)**
+
+---
+
+## Summary
+
+DHL Parcel DE (DHL Paket) is the domestic German parcel product — separate from
+DHL Express and DHL eCommerce Europe. This adapter covers pickup scheduling only
+via `DHLParcelDEAdapter` (`dhl_parcel_de.go`). Shipment booking, tracking, and
+labels are not yet implemented.
+
+Authentication uses ROPC (Resource Owner Password Credentials), a third separate
+credential set from the eConnect OAuth2 (booking) and Unified Tracking API key.
+
+---
+
+## Feature fit/gap
+
+### Pickup scheduling
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Book pickup (Bedarfsabholung) | ✅ | Agreed location (AsID), ≤10 parcels, free of charge. Auto-selected when `AsID` is set on adapter. |
+| Book pickup (Einmalige Abholung) | ✅ | Agreed location (AsID), >10 parcels or bulky goods. Auto-selected by DHL when `AsID` is set and parcel count exceeds threshold. |
+| Book pickup (Einzelabholung) | ✅ | Any German address, paid service. Auto-selected when `BillingNumber` is set and `AsID` is empty. Requires street, postal code, and city in `PickupRequest.Address`. |
+| Update pickup | ✅ | Cancel + rebook — no dedicated update endpoint in the API. Response status is `"updated"`. |
+| Cancel pickup | ✅ | `DELETE /orders?orderID=...` |
+| Get pickup availability | ❌ | Returns `ErrNotSupported` — proceed to `BookPickup` directly; the API validates the date. |
+
+### Manifest
+
+| Feature | Implemented | Notes |
+|---|---|---|
+| Close manifest | ❌ | Returns `ErrNotSupported` — DHL Parcel DE processes shipments automatically |
+
+---
+
+## Endpoint mapping
+
+| carrier-gateway | DHL Parcel DE Pickup API | Status |
+|---|---|---|
+| `POST /api/pickups` | `POST /orders` | ✅ |
+| `PUT /api/pickups/{id}` | `DELETE /orders` + `POST /orders` | ✅ (cancel + rebook) |
+| `DELETE /api/pickups/{id}` | `DELETE /orders?orderID=...` | ✅ |
+| `POST /api/manifests` | — | ❌ → 501 |
+
+---
+
+## Implementation notes
+
+**Three credential sets.** DHL Parcel DE pickup uses ROPC auth — separate from
+both the eConnect OAuth2 credentials (booking) and the Unified Tracking API key
+(tracking). Configure `Username`, `Password`, `ClientID`, and `ClientSecret` on
+`DHLParcelDEAdapter`.
+
+**Pickup type auto-detection.** The adapter selects the pickup type from adapter
+configuration, not from the request:
+
+- `AsID` set → Bedarfsabholung (BDA) or Einmalige Abholung (EMA); DHL determines
+  which based on parcel count and transport type.
+- `AsID` empty + `BillingNumber` set → Einzelabholung (EZA) at the address in
+  `PickupRequest.Address`.
+- Neither set → error at `BookPickup` time.
+
+**Transport type.** Defaults to `"PAKET"`. Override via
+`DHLParcelDEAdapter.DefaultTransportationType` for pallets, roll containers, or
+bulky goods (`ROLLBEHAELTER`, `WECHSELBEHAELTER`, `PALETTEN`, `SPERRGUT`).
+
+**Environment variables.**
+
+| Variable | Required | Description |
+|---|---|---|
+| `DHL_PARCEL_DE_USERNAME` | ✅ | ROPC username (DHL customer portal login) |
+| `DHL_PARCEL_DE_PASSWORD` | ✅ | ROPC password |
+| `DHL_PARCEL_DE_CLIENT_ID` | ✅ | OAuth2 client_id |
+| `DHL_PARCEL_DE_CLIENT_SECRET` | ✅ | OAuth2 client_secret |
+| `DHL_PARCEL_DE_AS_ID` | ❌ | Agreed service point ID (e.g. `AS1234567890`) — required for BDA/EMA |
+| `DHL_PARCEL_DE_BILLING_NUMBER` | ❌ | Billing number (e.g. `123456789001AB`) — required for EZA |
+| `DHL_PARCEL_DE_TRANSPORT_TYPE` | ❌ | Transport type (default: `PAKET`) |
