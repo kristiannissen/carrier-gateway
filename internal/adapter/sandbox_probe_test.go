@@ -109,6 +109,7 @@ func assertNotAuthOrServerError(t *testing.T, carrier string, err error) {
 // TestSandboxProbe exercises each carrier sandbox.
 // Sub-tests are independent: a single carrier failure does not block others.
 func TestSandboxProbe(t *testing.T) {
+	t.Parallel()
 	t.Run("PostNord", testPostNordSandbox)
 	t.Run("Bring", testBringSandbox)
 	t.Run("GLS", testGLSSandbox)
@@ -122,6 +123,7 @@ func TestSandboxProbe(t *testing.T) {
 // testPostNordSandbox probes the PostNord tracking API with a dummy number.
 // Tracking is read-only. A "not found" response is fine; a 401/5xx is not.
 func testPostNordSandbox(t *testing.T) {
+	t.Parallel()
 	skipUnless(t, "POSTNORD_API_KEY", "POSTNORD_CUSTOMER_NUMBER")
 
 	a := NewPostNordAdapter(
@@ -144,6 +146,7 @@ func testPostNordSandbox(t *testing.T) {
 // testBringSandbox probes the Bring tracking API to verify auth and endpoint
 // routing are intact. A "not found" response for the dummy number is acceptable.
 func testBringSandbox(t *testing.T) {
+	t.Parallel()
 	skipUnless(t, "BRING_API_KEY", "BRING_CUSTOMER_ID")
 
 	a := NewBringAdapter(
@@ -168,6 +171,7 @@ func testBringSandbox(t *testing.T) {
 // GLS uses client_credentials; a 401 means the auth scheme or credentials changed.
 // contactID is the GLS-assigned shipper contact ID (set via GLS_CONTACT_ID secret).
 func testGLSSandbox(t *testing.T) {
+	t.Parallel()
 	skipUnless(t, "GLS_API_KEY", "GLS_CLIENT_SECRET", "GLS_CONTACT_ID")
 
 	a := NewGLSAdapter(
@@ -187,6 +191,7 @@ func testGLSSandbox(t *testing.T) {
 // testDAOSandbox probes the DAO API in test mode (test=1 on all requests).
 // test=1 creates an accepted booking without issuing a real label or charge.
 func testDAOSandbox(t *testing.T) {
+	t.Parallel()
 	skipUnless(t, "DAO_CUSTOMER_ID", "DAO_API_KEY")
 
 	a := NewDAOAdapter(
@@ -207,6 +212,7 @@ func testDAOSandbox(t *testing.T) {
 // testDHLSandbox probes the DHL eConnect OAuth token endpoint.
 // A successful bearer token confirms the auth URL and credential format are intact.
 func testDHLSandbox(t *testing.T) {
+	t.Parallel()
 	skipUnless(t, "DHL_CLIENT_ID", "DHL_CLIENT_SECRET")
 
 	a := NewDHLAdapter(
@@ -228,6 +234,7 @@ func testDHLSandbox(t *testing.T) {
 // Set DHL_EXPRESS_BASE_URL=https://express.api.dhl.com/mydhlapi-test to use
 // the test environment without creating real shipments.
 func testDHLExpressSandbox(t *testing.T) {
+	t.Parallel()
 	skipUnless(t, "DHL_EXPRESS_USERNAME", "DHL_EXPRESS_PASSWORD")
 
 	a := NewDHLExpressAdapter(
@@ -257,6 +264,7 @@ func testDHLExpressSandbox(t *testing.T) {
 // testFedExSandbox probes the FedEx OAuth token endpoint on the sandbox base URL.
 // A successful token confirms the auth URL, grant type, and credential format.
 func testFedExSandbox(t *testing.T) {
+	t.Parallel()
 	skipUnless(t, "FEDEX_CLIENT_ID", "FEDEX_CLIENT_SECRET")
 
 	a := NewFedExAdapter(
@@ -278,6 +286,7 @@ func testFedExSandbox(t *testing.T) {
 // testEvriSandbox probes the Evri Classic API auth endpoint.
 // A 401 means the credential format or token endpoint path changed.
 func testEvriSandbox(t *testing.T) {
+	t.Parallel()
 	skipUnless(t, "EVRI_CLIENT_ID", "EVRI_CLIENT_SECRET")
 
 	a := NewEvriAdapter(

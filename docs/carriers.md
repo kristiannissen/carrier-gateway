@@ -91,6 +91,7 @@ Status column reflects the current state of the gateway implementation:
 | Carrier | Status | Notes |
 |---|---|---|
 | PostNL | Not implemented yet | Dutch national postal carrier. Also handles cross-border European B2C parcel delivery from NL as an origin. REST API well-documented at developer.postnl.nl. |
+| GLS Netherlands | Not fully implemented yet (Beta) | GLS NL regional API (api-portal.gls.nl). Username/password auth. Carrier key: `gls_nl`. Distinct from the unified GLS Group adapter (`gls`). Booking, cancel, pickup, and manifest supported; no tracking or label reprint. |
 | DPD Netherlands | Not implemented yet | See DPD under multi-country. |
 
 ---

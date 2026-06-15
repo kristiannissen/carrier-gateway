@@ -12,6 +12,7 @@ feature mapping file in this folder with full detail.
 | PostNord | Implemented | DK, SE, NO, FI | [postnord-feature-mapping.md](postnord-feature-mapping.md) |
 | Bring | Implemented | NO, SE, DK, FI | [bring-feature-mapping.md](bring-feature-mapping.md) |
 | GLS | Implemented | DE, DK, SE, NL, BE, FR, ES, PT, IT, AT + more | [gls-feature-mapping.md](gls-feature-mapping.md) |
+| GLS NL (regional) | Not fully implemented yet (Beta) | NL, BE + other GLS national portals | [gls-nl-feature-mapping.md](gls-nl-feature-mapping.md) |
 | DAO | Implemented | DK only | [dao-feature-mapping.md](dao-feature-mapping.md) |
 | DHL Express | Not fully implemented yet (Beta) | Worldwide | [dhl-express-feature-mapping.md](dhl-express-feature-mapping.md) |
 | DHL eCommerce Europe | Not fully implemented yet (Beta) | 28 European countries | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
@@ -30,30 +31,31 @@ feature mapping file in this folder with full detail.
 
 ✅ = Implemented and live  ⚠️ = Partial or caveated  ❌ = Not supported or not wired  ❓ = Unknown / not confirmed
 
-| Feature | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book shipment** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ Demo |
-| **Cancel shipment** | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ |
-| **Update shipment** | ⚠️ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Tracking + events** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ Demo |
-| **Labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ⚠️ Demo |
-| **Return labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
-| **Idempotency (native)** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Feature | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Book shipment** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ Demo |
+| **Cancel shipment** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **Update shipment** | ⚠️ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Tracking + events** | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ Demo |
+| **Labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ Demo |
+| **Return labels** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Idempotency (native)** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ---
 
 ## Pickup scheduling
 
-| Feature | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book pickup** | ⚠️ | ✅ | ❌ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | N/A |
-| **Update pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | N/A |
-| **Cancel pickup** | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | N/A |
-| **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | N/A |
+| Feature | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| **Book pickup** | ⚠️ | ✅ | ❌ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | N/A |
+| **Update pickup** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | N/A |
+| **Cancel pickup** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | N/A |
+| **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | N/A |
 
 **PostNord pickup note:** Domestic DK/SE/FI only. Requires item IDs from booking response.
 **DHL Express pickup note:** Implicit at booking (returns `dispatchConfirmationNumber`). Standalone `POST /api/pickups` not yet wired.
 **GLS pickup note:** `POST /rs/sporadiccollection` exists in ShipIT API but not yet wired.
+**GLS NL pickup note:** `POST /CreatePickup` — requires three address blocks; all default to the single pickup address when only one is provided.
 **FedEx pickup note:** Update not supported — cancel-and-rebook. Confirmation number is an opaque token encoding code + date + Express location.
 
 ---
@@ -65,6 +67,7 @@ feature mapping file in this folder with full detail.
 | PostNord | ❌ | ❌ | Handled by EDI scan at collection |
 | Bring | ❌ | ❌ | No API support |
 | GLS | ❌ | ❌ | **Required** — `POST /rs/shipments/endofday` exists but not wired. Must be called before driver arrives. |
+| GLS NL | ✅ | ❌ | Per-unit `POST /ConfirmLabel` — CloseManifest iterates over all tracking numbers. No manifest PDF. |
 | DAO | ❌ | ❌ | No API support |
 | DHL Express | ❌ | ✅ | Post-collection only via `GET /shipments/{id}/get-image?typeCode=MANIFEST` |
 | DHL eCommerce EU | ❓ | ❓ | Not confirmed |
@@ -78,14 +81,14 @@ feature mapping file in this folder with full detail.
 
 ## Add-ons
 
-| Add-on | PostNord | Bring | GLS | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| SMS notification | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ❓ | ❌ | ✅ | ✅ | ❌ | ❌ |
-| Email notification | ✅ | ✅ | ❌ | ⚠️ | ✅ | ❓ | ⚠️ | ✅ | ✅ | ❌ | ❌ |
-| Flex delivery | ✅ | ✅ | ❌ | ❌ | ✅ | ⚠️ | ❌ | ❓ | ❌ | ❌ | ❌ |
-| Signature required | ✅ | ✅ | ❌ | ❌ | ⚠️ | ⚠️ | ✅ | ❓ | ✅ | ❌ | ❌ |
-| Cash on delivery | ❌ | ✅ | ❌ | ❌ | ⚠️ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
-| Insurance | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❓ | ❌ | ❌ | ❌ |
+| Add-on | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| SMS notification | ✅ | ✅ | ❌ | ❌ | ⚠️ | ⚠️ | ❓ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| Email notification | ✅ | ✅ | ❌ | ✅ | ⚠️ | ✅ | ❓ | ⚠️ | ✅ | ✅ | ✅ | ❌ |
+| Flex delivery | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ | ⚠️ | ❌ | ❓ | ❌ | ❌ | ❌ |
+| Signature required | ✅ | ✅ | ❌ | ❌ | ❌ | ⚠️ | ⚠️ | ✅ | ❓ | ✅ | ✅ | ❌ |
+| Cash on delivery | ❌ | ✅ | ❌ | ❌ | ❌ | ⚠️ | ✅ | ❌ | ✅ | ✅ | ⚠️ | ❌ |
+| Insurance | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❓ | ❌ | ✅ | ❌ |
 
 **DHL eCom EU `flex_delivery` and `signature_required`** are accepted but silently skipped — logged as warnings. Marked ⚠️ until properly wired.
 
@@ -143,9 +146,9 @@ Issues that affect production operations and should be addressed next.
 3. **FedEx label reprint** — `FetchLabel` returns `ErrNotSupported`. Labels
    must be stored from the booking response. Spec review pending.
 
-4. **FedEx customs** — international FedEx shipments require customs data that
-   the adapter does not yet map. Shipments from EU to non-EU destinations will
-   be rejected or miss customs documentation.
+4. **FedEx COD** — `shipmentCODDetail` is wired but FedEx only supports COD on
+   Ground services. Express shipments with `AddOnCashOnDelivery` will be
+   rejected by FedEx at the API level.
 
 5. **DHL Express standalone pickup booking** — `POST /api/pickups` for DHL
    Express is not wired. Pickup is currently triggered only via the booking

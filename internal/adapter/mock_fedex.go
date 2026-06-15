@@ -112,9 +112,18 @@ func (m *MockFedExAdapter) CancelPickup(_ context.Context, _ string, confirmatio
 	return nil
 }
 
-// CloseManifest returns unsupported for FedEx.
-func (m *MockFedExAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
-	return nil, notSupported("FedEx", "manifest close", "FedEx does not require an end-of-day manifest close for standard pickup accounts")
+// CloseManifest mocks a FedEx Ground end-of-day close.
+func (m *MockFedExAdapter) CloseManifest(_ context.Context, req ManifestRequest) (*ManifestResponse, error) {
+	closeDate := req.Date
+	if closeDate == "" {
+		closeDate = "2026-06-15"
+	}
+	return &ManifestResponse{
+		Carrier:  req.Carrier,
+		Date:     closeDate,
+		Status:   "closed",
+		Warnings: []string{},
+	}, nil
 }
 
 // GetPickupAvailability returns mock pickup slots for FedEx.

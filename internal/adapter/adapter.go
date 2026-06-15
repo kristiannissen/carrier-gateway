@@ -211,8 +211,9 @@ var capabilities = map[string]carrierCapabilities{
 	// FedEx: cancellation via PUT /ship/v1/shipments/cancel.
 	// Pickup scheduling via POST /pickup/v1/pickups (Express/Ground).
 	// Pickup availability via POST /pickup/v1/pickups/availabilities.
-	// Pickup cancellation via PUT /pickup/v1/pickups/cancel.
-	// Update and manifest close are not supported — cancel-and-rebook for changes.
+	// Pickup cancellation via PUT /pickup/v1/pickups/cancel. Update not supported — cancel-and-rebook.
+	// Ground end-of-day manifest close via PUT /ship/v1/endofday/. Express does not require a close.
+	// Customs declaration wired for international shipments. Service point delivery via HOLD_AT_LOCATION.
 	"fedex": {NativeIdempotency: false, Beta: true, SupportsCancellation: true, SupportsUpdate: false},
 	// DHL Express: cancel AWB is not available via API; pickup cancellation requires
 	// the dispatchConfirmationNumber from BookingResponse, not the AWB.
@@ -444,6 +445,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	}
 
 	registerDPD(adapters, mockMode, log)
+	registerGLSNL(adapters, mockMode, log)
 
 	dpdUKUsername := os.Getenv("DPD_UK_USERNAME")
 	dpdUKPassword := os.Getenv("DPD_UK_PASSWORD")
@@ -626,6 +628,93 @@ func registerDPD(adapters map[string]CarrierAdapter, mockMode bool, log *zap.Log
 	}
 }
 
+// registerGLSNL scans environment variables for GLS_{CC}_USERNAME where CC is
+// exactly a 2-letter ISO country code and registers one GLSNLAdapter per country
+// under the key "gls_{cc}" (e.g. "gls_nl", "gls_be").
+//
+// This is the factory for GLS national subsidiaries that use username/password
+// authentication (api-portal.gls.nl and compatible portals). It is distinct from
+// the unified GLS Group OAuth2 adapter registered under the key "gls".
+//
+// Adding a new GLS country requires only new env vars — no code change:
+//
+//	GLS_NL_USERNAME=...  GLS_NL_PASSWORD=...  GLS_NL_BASE_URL=https://api.mygls.nl
+//	GLS_BE_USERNAME=...  GLS_BE_PASSWORD=...  GLS_BE_BASE_URL=https://api.mygls.be
+func registerGLSNL(adapters map[string]CarrierAdapter, mockMode bool, log *zap.Logger) {
+	seen := make(map[string]bool)
+	for _, env := range os.Environ() {
+		// Match GLS_{CC}_USERNAME= where CC is exactly 2 uppercase letters.
+		// The 2-char constraint prevents collision with GLS_API_KEY, GLS_CLIENT_SECRET, etc.
+		if !strings.HasPrefix(env, "GLS_") || !strings.Contains(env, "_USERNAME=") {
+			continue
+		}
+		eqIdx := strings.Index(env, "=")
+		key := env[:eqIdx]      // e.g. "GLS_NL_USERNAME"
+		username := env[eqIdx+1:] // e.g. "myuser"
+
+		// key must be "GLS_{CC}_USERNAME" with exactly a 2-letter country code.
+		parts := strings.SplitN(key, "_", 3) // ["GLS", "NL", "USERNAME"]
+		if len(parts) != 3 || parts[2] != "USERNAME" || len(parts[1]) != 2 {
+			continue
+		}
+		country := parts[1]                  // "NL"
+		carrierKey := "gls_" + strings.ToLower(country) // "gls_nl"
+
+		if seen[carrierKey] {
+			continue
+		}
+		seen[carrierKey] = true
+
+		if mockMode {
+			adapters[carrierKey] = NewMockGLSNLAdapter()
+			log.Info("GLS NL-style adapter initialized in mock mode",
+				zap.String("carrier", carrierKey),
+			)
+			continue
+		}
+
+		if username == "" {
+			adapters[carrierKey] = NewMockGLSNLAdapter()
+			log.Warn("GLS NL-style adapter falling back to mock (username empty)",
+				zap.String("carrier", carrierKey),
+			)
+			continue
+		}
+
+		password := os.Getenv("GLS_" + country + "_PASSWORD")
+		if password == "" {
+			adapters[carrierKey] = NewMockGLSNLAdapter()
+			log.Warn("GLS NL-style adapter falling back to mock (password not set)",
+				zap.String("carrier", carrierKey),
+				zap.String("missing", "GLS_"+country+"_PASSWORD"),
+			)
+			continue
+		}
+
+		baseURL := os.Getenv("GLS_" + country + "_BASE_URL")
+		if baseURL == "" {
+			adapters[carrierKey] = NewMockGLSNLAdapter()
+			log.Warn("GLS NL-style adapter falling back to mock (base URL not set)",
+				zap.String("carrier", carrierKey),
+				zap.String("missing", "GLS_"+country+"_BASE_URL"),
+			)
+			continue
+		}
+
+		adapters[carrierKey] = NewGLSNLAdapter(username, password, baseURL, strings.ToLower(country), log)
+		capabilities[carrierKey] = carrierCapabilities{
+			NativeIdempotency:    false,
+			Beta:                 true,
+			SupportsCancellation: true,
+			SupportsUpdate:       false,
+		}
+		log.Info("GLS NL-style adapter initialized in production mode (beta)",
+			zap.String("carrier", carrierKey),
+			zap.String("baseURL", baseURL),
+		)
+	}
+}
+
 // Customs holds cross-border declaration data required for non-EU
 // destinations and EU B2B shipments above the de minimis threshold.
 // It is optional for domestic and intra-EU B2C shipments below 150 EUR.
@@ -755,6 +844,10 @@ type BookingRequest struct {
 	Shipment       Shipment `json:"shipment"       validate:"required"`
 	CallbackURL    string   `json:"callbackUrl,omitempty"`
 	IdempotencyKey string   `json:"idempotencyKey,omitempty"`
+	// LabelFormat specifies the desired label output format for the booking response.
+	// When empty the carrier adapter picks its default (typically PDF).
+	// Supported values depend on the carrier — see each adapter's feature mapping.
+	LabelFormat LabelFormat `json:"labelFormat,omitempty"`
 	// Notifications configures optional event-driven webhook dispatch.
 	// When set, the gateway fires a "booked" notification after a successful booking.
 	Notifications *NotificationPreferences `json:"notifications,omitempty"`

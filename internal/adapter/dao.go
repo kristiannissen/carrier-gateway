@@ -235,7 +235,7 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 	barcode, _, _, _, labellessCode, err = daoParseBookingResponse(body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dao: parse booking response: %w", err)
 	}
 
 	result := &BookingResponse{

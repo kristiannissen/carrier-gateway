@@ -45,7 +45,7 @@ func (c *fedexTokenCache) valid() bool {
 //   - Cross-border: FEDEX_INTERNATIONAL_PRIORITY
 //
 // Pending implementation:
-//   - FetchLabel: inline in Ship API response; reprint endpoint TBD
+//   - FetchLabel: label reprint endpoint spec pending — labels must be saved from the booking response.
 type FedExAdapter struct {
 	// ClientID is the API Key from the FedEx Developer Portal project.
 	ClientID string
@@ -216,8 +216,11 @@ type fedexRequestedShipment struct {
 
 // fedexSpecialServicesRequested carries shipment-level special service flags.
 type fedexSpecialServicesRequested struct {
-	SpecialServiceTypes  []string                   `json:"specialServiceTypes"`
-	HoldAtLocationDetail *fedexHoldAtLocationDetail `json:"holdAtLocationDetail,omitempty"`
+	SpecialServiceTypes     []string                         `json:"specialServiceTypes"`
+	HoldAtLocationDetail    *fedexHoldAtLocationDetail       `json:"holdAtLocationDetail,omitempty"`
+	ReturnShipmentDetail    *fedexReturnShipmentDetail       `json:"returnShipmentDetail,omitempty"`
+	ShipmentCODDetail       *fedexShipmentCODDetail          `json:"shipmentCODDetail,omitempty"`
+	EmailNotificationDetail *fedexEmailNotificationDetail    `json:"emailNotificationDetail,omitempty"`
 }
 
 // fedexHoldAtLocationDetail specifies the Hold-at-Location destination.
@@ -226,6 +229,51 @@ type fedexSpecialServicesRequested struct {
 // in the gateway request.
 type fedexHoldAtLocationDetail struct {
 	LocationID string `json:"locationId"`
+}
+
+// fedexReturnShipmentDetail configures a printed return label.
+// ReturnType must be PRINT_RETURN_LABEL for inline label generation.
+type fedexReturnShipmentDetail struct {
+	ReturnType string    `json:"returnType"`
+	Rma        *fedexRMA `json:"rma,omitempty"`
+}
+
+// fedexRMA is an optional return merchant authorisation reference
+// printed on the return label.
+type fedexRMA struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+// fedexShipmentCODDetail carries Cash on Delivery parameters.
+// FedEx COD is supported for Ground services only.
+// CodCollectionType accepted values: ANY, CASH, GUARANTEED_FUNDS, COMPANY_CHECK, PERSONAL_CHECK.
+type fedexShipmentCODDetail struct {
+	CodCollectionType   string     `json:"codCollectionType"`
+	CodCollectionAmount fedexMoney `json:"codCollectionAmount"`
+}
+
+// fedexEmailNotificationDetail enables proactive shipment-event email notifications.
+// AggregationType controls whether notifications fire per shipment or per package.
+type fedexEmailNotificationDetail struct {
+	AggregationType             string                            `json:"aggregationType,omitempty"`
+	EmailNotificationRecipients []fedexEmailNotificationRecipient `json:"emailNotificationRecipients"`
+}
+
+// fedexEmailNotificationRecipient is a single email notification target.
+// NotificationEventTypes controls which events trigger an email.
+type fedexEmailNotificationRecipient struct {
+	EmailNotificationRecipientType string   `json:"emailNotificationRecipientType"`
+	EmailAddress                   string   `json:"emailAddress"`
+	NotificationType               string   `json:"notificationType,omitempty"`
+	NotificationFormatType         string   `json:"notificationFormatType,omitempty"`
+	NotificationEventTypes         []string `json:"notificationEventTypes"`
+}
+
+// fedexPackageSpecialServices holds per-package optional services.
+type fedexPackageSpecialServices struct {
+	// SignatureOptionType controls the signature requirement on delivery.
+	// Accepted values: SERVICE_DEFAULT, NO_SIGNATURE_REQUIRED, INDIRECT, DIRECT, ADULT.
+	SignatureOptionType string `json:"signatureOptionType,omitempty"`
 }
 
 type fedexParty struct {
@@ -326,8 +374,10 @@ type fedexLabelSpec struct {
 }
 
 type fedexPackageLineItem struct {
-	Weight     fedexWeight      `json:"weight"`
-	Dimensions *fedexDimensions `json:"dimensions,omitempty"`
+	Weight                 fedexWeight                  `json:"weight"`
+	Dimensions             *fedexDimensions             `json:"dimensions,omitempty"`
+	DeclaredValue          *fedexMoney                  `json:"declaredValue,omitempty"`
+	PackageSpecialServices *fedexPackageSpecialServices `json:"packageSpecialServices,omitempty"`
 }
 
 // fedexShipResponse is the top-level response from POST /ship/v1/shipments.
@@ -470,18 +520,94 @@ func fedexPartyFrom(addr Address) fedexParty {
 	}
 }
 
-// fedexHoldAtLocation returns a special services block for Hold-at-Location
-// delivery when servicePointID is non-empty, or nil for standard delivery.
-func fedexHoldAtLocation(servicePointID string) *fedexSpecialServicesRequested {
-	if servicePointID == "" {
+// fedexImageType maps a gateway LabelFormat to the FedEx imageType string.
+// Defaults to "PDF" for unrecognised or empty formats.
+func fedexImageType(f LabelFormat) string {
+	switch f {
+	case LabelFormatZPL, LabelFormatZPLGK:
+		return "ZPLII"
+	case LabelFormatPNG:
+		return "PNG"
+	case LabelFormatEPL:
+		return "EPL2"
+	default:
+		return "PDF"
+	}
+}
+
+// fedexLabelStockType returns an appropriate label stock type for the given imageType.
+// Thermal/ZPL printers use roll stock; PDF uses paper.
+func fedexLabelStockType(imageType string) string {
+	switch imageType {
+	case "ZPLII", "EPL2":
+		return "STOCK_4X6"
+	default:
+		return "PAPER_7X475"
+	}
+}
+
+// fedexShipmentSpecialServices builds the shipment-level special services block
+// from the gateway Shipment. Returns nil when no special services are needed.
+//
+// Handled services:
+//   - HOLD_AT_LOCATION when Receiver.ServicePointID is set
+//   - RETURN_SHIPMENT when DeliveryType is "return"
+//   - COD when AddOnCashOnDelivery is present (Ground only)
+//   - Email notifications when AddOnEmailNotification is present and Receiver.Email is set
+func fedexShipmentSpecialServices(s Shipment) *fedexSpecialServicesRequested {
+	var types []string
+	var ss fedexSpecialServicesRequested
+
+	if s.Receiver.ServicePointID != "" {
+		types = append(types, "HOLD_AT_LOCATION")
+		ss.HoldAtLocationDetail = &fedexHoldAtLocationDetail{
+			LocationID: s.Receiver.ServicePointID,
+		}
+	}
+
+	if s.DeliveryType == "return" {
+		types = append(types, "RETURN_SHIPMENT")
+		ss.ReturnShipmentDetail = &fedexReturnShipmentDetail{
+			ReturnType: "PRINT_RETURN_LABEL",
+		}
+	}
+
+	if cod, ok := getAddOn(s.AddOns, AddOnCashOnDelivery); ok && cod.CODAmount > 0 {
+		cur := cod.CODCurrency
+		if cur == "" {
+			cur = "EUR"
+		}
+		types = append(types, "COD")
+		ss.ShipmentCODDetail = &fedexShipmentCODDetail{
+			CodCollectionType:   "ANY",
+			CodCollectionAmount: fedexMoney{Amount: cod.CODAmount, Currency: cur},
+		}
+	}
+
+	if hasAddOn(s.AddOns, AddOnEmailNotification) && s.Receiver.Email != "" {
+		ss.EmailNotificationDetail = &fedexEmailNotificationDetail{
+			AggregationType: "PER_SHIPMENT",
+			EmailNotificationRecipients: []fedexEmailNotificationRecipient{
+				{
+					EmailNotificationRecipientType: "RECIPIENT",
+					EmailAddress:                   s.Receiver.Email,
+					NotificationFormatType:         "HTML",
+					NotificationEventTypes: []string{
+						"ON_SHIPMENT",
+						"ON_ESTIMATED_DELIVERY",
+						"ON_DELIVERY",
+						"ON_EXCEPTION",
+					},
+				},
+			},
+		}
+	}
+
+	if len(types) == 0 && ss.EmailNotificationDetail == nil {
 		return nil
 	}
-	return &fedexSpecialServicesRequested{
-		SpecialServiceTypes: []string{"HOLD_AT_LOCATION"},
-		HoldAtLocationDetail: &fedexHoldAtLocationDetail{
-			LocationID: servicePointID,
-		},
-	}
+	ss.SpecialServiceTypes = types
+	return &ss
 }
 
 // fedexCustomsBlock builds a CustomsClearanceDetail from the gateway Customs
@@ -585,10 +711,29 @@ func fedexPartyTINs(eori, vat string) []fedexTIN {
 	return tins
 }
 
-// fedexPackageItems converts gateway Colli to FedEx RequestedPackageLineItems.
-// Dimensions are converted from float64 cm to integer cm by rounding up to
-// avoid underreporting.
-func fedexPackageItems(colli []Colli) []fedexPackageLineItem {
+// fedexPackageItems converts gateway Colli to FedEx RequestedPackageLineItems,
+// applying per-shipment add-ons (insurance, signature) to every package.
+//
+// Declared value is divided evenly across packages and rounded to two decimal
+// places. Dimensions are rounded up from float64 cm to integer cm to avoid
+// underreporting.
+func fedexPackageItems(colli []Colli, addOns []AddOn) []fedexPackageLineItem {
+	var sigOption string
+	if hasAddOn(addOns, AddOnSignatureRequired) {
+		sigOption = "DIRECT"
+	}
+
+	var declaredPerPkg *fedexMoney
+	if ins, ok := getAddOn(addOns, AddOnInsurance); ok && ins.InsuranceValue > 0 {
+		n := float64(len(colli))
+		perPkg := math.Round(ins.InsuranceValue/n*100) / 100
+		cur := ins.InsuranceCurrency
+		if cur == "" {
+			cur = "EUR"
+		}
+		declaredPerPkg = &fedexMoney{Amount: perPkg, Currency: cur}
+	}
+
 	items := make([]fedexPackageLineItem, len(colli))
 	for i, c := range colli {
 		item := fedexPackageLineItem{
@@ -603,6 +748,14 @@ func fedexPackageItems(colli []Colli) []fedexPackageLineItem {
 				Units:  "CM",
 			}
 		}
+		if declaredPerPkg != nil {
+			item.DeclaredValue = declaredPerPkg
+		}
+		if sigOption != "" {
+			item.PackageSpecialServices = &fedexPackageSpecialServices{
+				SignatureOptionType: sigOption,
+			}
+		}
 		items[i] = item
 	}
 	return items
@@ -613,8 +766,8 @@ func fedexPackageItems(colli []Colli) []fedexPackageLineItem {
 // BookShipment books a FedEx shipment via POST /ship/v1/shipments.
 //
 // Service type is derived from sender/receiver countries (see fedexServiceType).
-// Labels are returned inline as base64-encoded PDF in the response and surfaced
-// as data URIs in each ColliResponse.LabelURL.
+// Labels are returned inline as base64-encoded data URIs in each ColliResponse.LabelURL.
+// The label format is taken from r.LabelFormat (PDF, PNG, ZPL, EPL); defaults to PDF.
 func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*BookingResponse, error) {
 	customs := r.Shipment.Customs
 
@@ -623,6 +776,8 @@ func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*Boo
 
 	recipient := fedexPartyFrom(r.Shipment.Receiver)
 	recipient.Tins = fedexPartyTINs(customs.ImporterOfRecord, customs.ImporterVATNumber)
+
+	imageType := fedexImageType(r.LabelFormat)
 
 	shipReq := fedexShipRequest{
 		AccountNumber:        fedexAccountNumber{Value: a.AccountNumber},
@@ -636,11 +791,11 @@ func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*Boo
 			ShippingChargesPayment: fedexPayment{PaymentType: "SENDER"},
 			TotalWeight:            fedexWeight{Units: "KG", Value: r.Shipment.TotalWeight},
 			LabelSpecification: fedexLabelSpec{
-				ImageType:      "PDF",
-				LabelStockType: "PAPER_7X475",
+				ImageType:      imageType,
+				LabelStockType: fedexLabelStockType(imageType),
 			},
-			RequestedPackageLineItems: fedexPackageItems(r.Shipment.Colli),
-			SpecialServicesRequested:  fedexHoldAtLocation(r.Shipment.Receiver.ServicePointID),
+			RequestedPackageLineItems: fedexPackageItems(r.Shipment.Colli, r.Shipment.AddOns),
+			SpecialServicesRequested:  fedexShipmentSpecialServices(r.Shipment),
 			CustomsClearanceDetail:    fedexCustomsBlock(customs, a.log),
 		},
 	}
@@ -652,7 +807,7 @@ func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*Boo
 
 	httpReq, err := a.newFedExRequest(ctx, http.MethodPost, "/ship/v1/shipments", body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fedex: create ship request: %w", err)
 	}
 
 	resp, err := a.HTTPClient.Do(httpReq)
@@ -690,7 +845,11 @@ func (a *FedExAdapter) BookShipment(ctx context.Context, r BookingRequest) (*Boo
 		}
 		if len(piece.PackageDocuments) > 0 {
 			if doc := piece.PackageDocuments[0]; doc.EncodedLabel != "" {
-				cr.LabelURL = "data:application/pdf;base64," + doc.EncodedLabel
+				mime := MimeTypeForFormat(r.LabelFormat)
+				if mime == "" {
+					mime = "application/pdf"
+				}
+				cr.LabelURL = "data:" + mime + ";base64," + doc.EncodedLabel
 			}
 		}
 		colli = append(colli, cr)
@@ -740,7 +899,7 @@ func (a *FedExAdapter) TrackShipment(ctx context.Context, trackingNumber string)
 
 	httpReq, err := a.newFedExRequest(ctx, http.MethodPost, "/track/v1/trackingnumbers", body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fedex: create track request: %w", err)
 	}
 
 	resp, err := a.HTTPClient.Do(httpReq)
@@ -853,7 +1012,7 @@ func (a *FedExAdapter) CancelShipment(ctx context.Context, trackingNumber string
 
 	httpReq, err := a.newFedExRequest(ctx, http.MethodPut, "/ship/v1/shipments/cancel", body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fedex: create cancel request: %w", err)
 	}
 
 	resp, err := a.HTTPClient.Do(httpReq)
@@ -1104,7 +1263,7 @@ func (a *FedExAdapter) BookPickup(ctx context.Context, req PickupRequest) (*Pick
 
 	httpReq, err := a.newFedExRequest(ctx, http.MethodPost, "/pickup/v1/pickups", body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fedex: create pickup request: %w", err)
 	}
 
 	resp, err := a.HTTPClient.Do(httpReq)
@@ -1239,7 +1398,7 @@ func (a *FedExAdapter) CloseManifest(ctx context.Context, req ManifestRequest) (
 
 	httpReq, err := a.newFedExRequest(ctx, http.MethodPut, "/ship/v1/endofday/", body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fedex: create end-of-day request: %w", err)
 	}
 
 	resp, err := a.HTTPClient.Do(httpReq)
@@ -1320,7 +1479,7 @@ func (a *FedExAdapter) GetPickupAvailability(ctx context.Context, req PickupAvai
 
 	httpReq, err := a.newFedExRequest(ctx, http.MethodPost, "/pickup/v1/pickups/availabilities", body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fedex: create pickup availability request: %w", err)
 	}
 
 	resp, err := a.HTTPClient.Do(httpReq)

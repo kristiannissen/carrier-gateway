@@ -11,8 +11,8 @@ Implementation status: **Not fully implemented yet** (Beta)
 ## Summary
 
 FedEx covers booking, cancellation, tracking, and pickup scheduling. Labels are
-returned inline in the booking response (PDF only); the standalone label reprint
-endpoint is not yet wired (spec pending). Post-booking update is not supported.
+returned inline in the booking response; the standalone label reprint endpoint
+is not yet wired (spec pending). Post-booking update is not supported.
 Pickup scheduling covers book, cancel, and availability check via the FedEx
 Pickup API v1; update is not supported (cancel-and-rebook). Service point
 delivery (Hold at Location) is wired — set `receiver.servicePointId` to the
@@ -22,7 +22,10 @@ with line items, HS codes, declared values, Incoterms, and EORI/VAT numbers.
 IOSS has no FedEx equivalent and is logged as a warning and dropped.
 Ground end-of-day manifest close is now implemented via
 `PUT /ship/v1/endofday/`; Express accounts do not require a close call.
-Add-ons are not yet wired.
+Email notification, signature required, insurance (declared value), return
+labels, and ZPL/PNG label formats are all supported by the FedEx Ship API and
+ready to wire — see add-ons and labels tables below. COD is supported for
+Ground only. SMS notification and flex delivery have no FedEx API equivalent.
 
 ---
 
@@ -41,10 +44,10 @@ Add-ons are not yet wired.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Label inline at booking | ✅ | PDF only — `EncodedLabel` in booking response per package |
+| Label inline at booking | ✅ | `EncodedLabel` in booking response per package |
 | Label reprint (FetchLabel) | ❌ | `FetchLabel` returns `ErrNotSupported` — label reprint endpoint spec not yet available |
-| Label format | ⚠️ | PDF only via booking. ZPL/PNG not wired. |
-| Return label | ❌ | Not yet implemented |
+| Label format | ✅ | `labelSpecification.imageType`: `PDF`, `PNG`, `ZPLII`, `EPL2`. Set `BookingRequest.LabelFormat`; defaults to PDF. |
+| Return label | ✅ | `shipmentSpecialServices.returnShipmentDetail` + `returnType: PRINT_RETURN_LABEL`. Set `Shipment.DeliveryType: "return"`. |
 
 ### Tracking
 
@@ -81,12 +84,12 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 
 | Add-on | Implemented | Notes |
 |---|---|---|
-| SMS notification | ❌ | Not wired |
-| Email notification | ❌ | Not wired |
-| Flex delivery | ❌ | Not wired |
-| Signature required | ❌ | Not wired (FedEx supports DIRECT, INDIRECT, ADULT signature options) |
-| Cash on delivery | ❌ | Not wired |
-| Insurance (declared value) | ❌ | Not wired |
+| SMS notification | ❌ | No SMS field in FedEx Ship API |
+| Email notification | ✅ | `shipmentSpecialServices.emailNotificationDetail` — ON_SHIPMENT, ON_ESTIMATED_DELIVERY, ON_DELIVERY, ON_EXCEPTION. Requires `Receiver.Email`. |
+| Flex delivery | ❌ | No equivalent in FedEx Ship API |
+| Signature required | ✅ | `packageSpecialServices.signatureOptionType: DIRECT`. Applied to all packages. |
+| Cash on delivery | ⚠️ | `shipmentSpecialServices.shipmentCODDetail` — Ground only. `codCollectionType: ANY`. |
+| Insurance (declared value) | ✅ | `requestedPackageLineItems[].declaredValue` — value divided evenly across packages. |
 
 ### Other features
 
