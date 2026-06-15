@@ -4,7 +4,7 @@ API: **Omniva OMX API v1.7**
 Docs: `omniva_api.pdf` + `omniva_openapi.json`
 Auth: HTTP Basic Auth (username + password)
 Coverage: Estonia, Latvia, Lithuania — B2C, B2B, C2C, parcel machines, post offices, courier
-Implementation status: **Not implemented**
+Implementation status: **Implemented** — `internal/adapter/omniva.go`
 
 ---
 
