@@ -49,5 +49,12 @@ func NewRouter(registry *adapter.Registry, notifSvc *notification.Service, log *
 	r.HandleFunc("/api/returns", h.BookOmnivaReturn).Methods("POST")
 	r.HandleFunc("/api/health", h.HealthCheck).Methods("GET")
 
+	// Built-in documentation — no auth required, no middleware side-effects.
+	// GET /docs              → endpoint index + freight terminology glossary
+	// GET /docs/{slug}       → full docs for one endpoint (e.g. /docs/bookings)
+	// GET /docs/terminology  → freight glossary only
+	r.HandleFunc("/docs", h.DocsIndex).Methods("GET")
+	r.HandleFunc("/docs/{slug}", h.DocsEndpoint).Methods("GET")
+
 	return r
 }
