@@ -64,6 +64,14 @@ var limits = map[string]carrierLimits{
 		maxHeight:   120,
 	},
 	"inpost": {},
+	// Econt: pack type supports up to 50 kg. Pallet/cargo types support higher
+	// limits but are not currently mapped through the gateway (pack is the default).
+	"econt": {
+		maxWeightKg: 50,
+		maxLength:   200,
+		maxWidth:    200,
+		maxHeight:   180,
+	},
 }
 
 // carrierName returns the display name for a carrier key used in error messages.

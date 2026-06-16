@@ -296,6 +296,26 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"RS": StatusReturned,       // Return to sender/shipper
 		"HL": StatusInTransit,      // At FedEx facility (hold)
 	},
+
+	// econt: ShortDeliveryStatusEn values from ShipmentStatus.shortDeliveryStatusEn.
+	// Fine-grained event normalization is handled by normalizeEcontEventType in econt.go
+	// using trackingEvents[].destinationType. This map covers the top-level status field.
+	"econt": {
+		"Prepared in eEcont":              StatusBooked,
+		"Accepted in Econt":               StatusPickedUp,
+		"In route":                        StatusInTransit,
+		"In courier":                      StatusOutForDelivery,
+		"In pick up courier":              StatusPickedUp,
+		"Accepted in office":              StatusInTransit,
+		"In delivery courier's office":    StatusOutForDelivery,
+		"Arrived in office":               StatusInTransit,
+		"Arrival departure from hub":      StatusInTransit,
+		"Delivered":                       StatusDelivered,
+		"Cancelled after sending":         StatusFailed,
+		"Cancelled before sending":        StatusFailed,
+		"Is returning to sender":          StatusReturned,
+		"Returned to sender":              StatusReturned,
+	},
 }
 
 // normalizeStatus maps a carrier-specific raw status string to a TrackingStatus.

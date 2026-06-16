@@ -30,6 +30,9 @@ var carrierCustomsRules = map[string]carrierCustomsRule{
 	// GLS Customs API v3: no documented item cap enforced pre-flight;
 	// the API validates server-side.
 	"gls": {maxItems: 0, requiresEORIForNonEU: false},
+	// Econt: TARIC codes (cn field) and currency are required per customs line item
+	// for cross-border shipments. No published item count cap; API validates server-side.
+	"econt": {maxItems: 0, requiresEORIForNonEU: false},
 }
 
 // ValidateCarrierCustomsRules checks carrier-specific constraints on the customs

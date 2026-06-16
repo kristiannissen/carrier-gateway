@@ -49,6 +49,7 @@ curl -X POST http://localhost:8080/api/bookings \
 | `fedex` | FedEx (worldwide) | Beta |
 | `evri` | Evri (GB) | Beta |
 | `inpost` | InPost (PL, IT, GB) | Production |
+| `econt` | Econt Express (BG + SE Europe) | Beta |
 
 Demo carriers return mock data and are not connected to any live API. DPD continental Europe is registered dynamically from `DPD_{COUNTRY}_API_TOKEN` env vars (e.g. `dpd_lt`, `dpd_at`). For full country coverage see [`docs/carriers.md`](docs/carriers.md). For a feature-by-feature breakdown across all carriers see [`docs/implementation-status.md`](docs/implementation-status.md).
 

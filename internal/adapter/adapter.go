@@ -217,6 +217,17 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsReturnBooking: true,
 		SupportsEventPolling:  true,
 	},
+	// Econt: Bulgarian carrier. Basic Auth only; all calls are HTTP POST JSON.
+	// Cancellation (deleteLabels) works only before the shipment is accepted by Econt.
+	// Update uses checkPossibleShipmentEditions + updateLabel — not available once in transit.
+	// FetchLabel is a two-step call: getShipmentStatuses → pdfURL download.
+	// No manifest endpoint; no push webhooks (polling via getShipmentStatuses required).
+	"econt": {
+		NativeIdempotency:    false,
+		Beta:                 true,
+		SupportsCancellation: true,
+		SupportsUpdate:       true,
+	},
 	// FedEx: cancellation via PUT /ship/v1/shipments/cancel.
 	// Pickup scheduling via POST /pickup/v1/pickups (Express/Ground).
 	// Pickup availability via POST /pickup/v1/pickups/availabilities.
@@ -545,6 +556,26 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 			zap.String("defaultProductCode", a.DefaultProductCode),
 		)
 		adapters["dhl_ecommerce_uk"] = a
+	}
+
+	econtUsername := os.Getenv("ECONT_USERNAME")
+	econtPassword := os.Getenv("ECONT_PASSWORD")
+	switch {
+	case mockMode:
+		adapters["econt"] = &MockEcontAdapter{}
+		log.Info("Econt adapter initialized in mock mode (MOCK_MODE=true)")
+	case econtUsername == "" || econtPassword == "":
+		adapters["econt"] = &MockEcontAdapter{}
+		log.Warn("Econt adapter falling back to mock mode (ECONT_USERNAME or ECONT_PASSWORD not set)")
+	default:
+		a := NewEcontAdapter(econtUsername, econtPassword, log)
+		if v := os.Getenv("ECONT_BASE_URL"); v != "" {
+			a.BaseURL = v
+		}
+		adapters["econt"] = a
+		log.Info("Econt adapter initialized in production mode (beta)",
+			zap.String("baseURL", a.BaseURL),
+		)
 	}
 
 	return adapters

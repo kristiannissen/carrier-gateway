@@ -79,6 +79,19 @@ var carrierRestrictedItems = map[string][]restrictedItem{
 		{keyword: "perishable", severity: severityWarn, reason: "perishables require cold-chain packaging — verify with DAO"},
 		{keyword: "alcohol", severity: severityWarn, reason: "alcohol shipments within Denmark require age verification compliance"},
 	},
+	// Econt: prohibited and restricted goods per Econt General Terms of Service.
+	// Source: https://www.econt.com/services/forbidden-items/
+	"econt": {
+		{keyword: "explosive", severity: severityBlock, reason: "explosives are prohibited by Econt"},
+		{keyword: "ammunition", severity: severityBlock, reason: "ammunition is prohibited by Econt"},
+		{keyword: "weapon", severity: severityBlock, reason: "weapons are prohibited by Econt"},
+		{keyword: "firearm", severity: severityBlock, reason: "firearms are prohibited by Econt"},
+		{keyword: "flammable liquid", severity: severityBlock, reason: "flammable liquids are prohibited by Econt"},
+		{keyword: "narcotic", severity: severityBlock, reason: "narcotics are prohibited by Econt"},
+		{keyword: "lithium battery", severity: severityWarn, reason: "lithium batteries require UN3480/UN3481 compliance labelling — verify with Econt before shipping"},
+		{keyword: "lithium ion", severity: severityWarn, reason: "lithium-ion batteries require UN3480/UN3481 compliance labelling — verify with Econt before shipping"},
+		{keyword: "perishable", severity: severityWarn, reason: "perishables must use Econt refrigerated pack service (REF) — add AddOnInsurance or contact Econt"},
+	},
 	"dhl": {
 		{keyword: "explosive", severity: severityBlock, reason: "explosives are prohibited by DHL"},
 		{keyword: "ammunition", severity: severityBlock, reason: "ammunition is prohibited by DHL"},
