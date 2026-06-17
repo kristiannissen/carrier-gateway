@@ -50,6 +50,7 @@ curl -X POST http://localhost:8080/api/bookings \
 | `evri` | Evri (GB) | Beta |
 | `inpost` | InPost (PL, IT, GB) | Production |
 | `econt` | Econt Express (BG + SE Europe) | Beta |
+| `matkahuolto` | Matkahuolto (FI) | Beta |
 
 Demo carriers return mock data and are not connected to any live API. DPD continental Europe is registered dynamically from `DPD_{COUNTRY}_API_TOKEN` env vars (e.g. `dpd_lt`, `dpd_at`). For full country coverage see [`docs/carriers.md`](docs/carriers.md). For a feature-by-feature breakdown across all carriers see [`docs/implementation-status.md`](docs/implementation-status.md).
 
@@ -127,7 +128,7 @@ curl http://localhost:8080/api/health
 | `LOG_ENV` | `development` for console logging and debug payload dumps | — |
 | `MOCK_MODE` | `true` to force all carriers to use mock adapters | `false` |
 
-Carrier-specific credentials are documented in each carrier's feature mapping file under `docs/`. For carriers without a dedicated file: Omniva uses `OMNIVA_USERNAME`, `OMNIVA_PASSWORD`, `OMNIVA_CUSTOMER_CODE`, `OMNIVA_AGENT_ID`; Evri uses `EVRI_CLIENT_ID`, `EVRI_CLIENT_SECRET`; Speedy uses `SPEEDY_USERNAME`, `SPEEDY_PASSWORD`, and optionally `SPEEDY_SERVICE_ID` (default `505`).
+Carrier-specific credentials are documented in each carrier's feature mapping file under `docs/`. For carriers without a dedicated file: Omniva uses `OMNIVA_USERNAME`, `OMNIVA_PASSWORD`, `OMNIVA_CUSTOMER_CODE`, `OMNIVA_AGENT_ID`; Evri uses `EVRI_CLIENT_ID`, `EVRI_CLIENT_SECRET`; Speedy uses `SPEEDY_USERNAME`, `SPEEDY_PASSWORD`, and optionally `SPEEDY_SERVICE_ID` (default `505`); Matkahuolto uses `MATKAHUOLTO_USER_ID`, `MATKAHUOLTO_PASSWORD`, and optionally `MATKAHUOLTO_SENDER_ID`.
 
 When a carrier's credentials are absent and `MOCK_MODE` is not set, that carrier falls back to its mock adapter. The `GET /api/health` response shows which mode each carrier is running in.
 

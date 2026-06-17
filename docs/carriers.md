@@ -50,7 +50,7 @@ Status column reflects the current state of the gateway implementation:
 | Carrier | Key | Status | Notes |
 |---|---|---|---|
 | Posti | — | Not implemented | Finnish national postal carrier. |
-| Matkahuolto | — | Not implemented | Finnish parcel and bus courier. Significant pickup point network in Finland — relevant for servicepoint delivery. |
+| Matkahuolto | `matkahuolto` | Partial | Finnish parcel and bus courier. BookShipment, TrackShipment, FetchLabel, CancelShipment, and returns implemented. UpdateShipment not supported (returns 501). Label is bundled in the booking response — no separate fetch endpoint. See [matkahuolto-feature-mapping.md](matkahuolto-feature-mapping.md). |
 
 ---
 

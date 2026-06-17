@@ -300,6 +300,36 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 	// econt: ShortDeliveryStatusEn values from ShipmentStatus.shortDeliveryStatusEn.
 	// Fine-grained event normalization is handled by normalizeEcontEventType in econt.go
 	// using trackingEvents[].destinationType. This map covers the top-level status field.
+	// matkahuolto: integer event codes from the Matkahuolto Tracking Interface v1.3.
+	// Source: Matkahuolto Tracking Interface specification, section 2.2 Event codes.
+	// Codes are returned as numeric strings in <EventCode>.
+	"matkahuolto": {
+		"02":  StatusBooked,         // Electronic advance notice received
+		"08":  StatusPickedUp,       // Picked up from sender
+		"10":  StatusPickedUp,       // Received at departing parcel point
+		"12":  StatusInTransit,      // Consolidated
+		"15":  StatusInTransit,      // Received for carriage
+		"25":  StatusInTransit,      // Loaded for main transport
+		"35":  StatusInTransit,      // Received at destination terminal
+		"40":  StatusInTransit,      // Waiting to be loaded for delivery
+		"41":  StatusInTransit,      // Waiting to be loaded for parcel point
+		"45":  StatusOutForDelivery, // Loaded for delivery
+		"46":  StatusOutForDelivery, // Loaded for delivery to parcel point
+		"47":  StatusInTransit,      // Delivered to parcel point (awaiting collection)
+		"48":  StatusInTransit,      // Received at parcel point
+		"50":  StatusOutForDelivery, // Ready to be collected at parcel point
+		"55":  StatusInTransit,      // First arrival notification sent
+		"56":  StatusInTransit,      // Second arrival notification sent
+		"57":  StatusInTransit,      // Manual arrival notification sent
+		"60":  StatusDelivered,      // Handed over to the recipient
+		"61":  StatusDelivered,      // Handed over to the proxy
+		"62":  StatusFailed,         // Handover cancelled
+		"65":  StatusDelivered,      // COD paid to sender (shipment delivered)
+		"70":  StatusReturned,       // Returned uncollected
+		"97":  StatusFailed,         // Delivery attempt unsuccessful
+		"104": StatusDelayed,        // Deviation added
+	},
+
 	"econt": {
 		"Prepared in eEcont":              StatusBooked,
 		"Accepted in Econt":               StatusPickedUp,

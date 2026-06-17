@@ -277,6 +277,19 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsUpdate:        false,
 		SupportsReturnBooking: true,
 	},
+	// Matkahuolto: Finnish parcel and bus courier. XML-based shipment interface
+	// (POST /mhshipmentxml) for booking and cancellation; REST tracking interface
+	// (GET /public/tracking) for event history. Label is bundled in the booking
+	// response (base64 PDF) — no separate label endpoint exists. UpdateShipment
+	// returns ErrNotSupported (MessageType=C requires the full original payload).
+	// Returns are supported via ShipmentType=R + product codes 81/91.
+	"matkahuolto": {
+		NativeIdempotency:     false,
+		Beta:                  true,
+		SupportsCancellation:  true,
+		SupportsUpdate:        false,
+		SupportsReturnBooking: true,
+	},
 }
 
 // SupportsNativeIdempotency reports whether the given carrier accepts an
@@ -556,6 +569,24 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 			zap.String("defaultProductCode", a.DefaultProductCode),
 		)
 		adapters["dhl_ecommerce_uk"] = a
+	}
+
+	mhUserID := os.Getenv("MATKAHUOLTO_USER_ID")
+	mhPassword := os.Getenv("MATKAHUOLTO_PASSWORD")
+	mhSenderID := os.Getenv("MATKAHUOLTO_SENDER_ID")
+	switch {
+	case mockMode:
+		adapters["matkahuolto"] = &MockMatkahuoltoAdapter{}
+		log.Info("Matkahuolto adapter initialized in mock mode (MOCK_MODE=true)")
+	case mhUserID == "" || mhPassword == "":
+		adapters["matkahuolto"] = &MockMatkahuoltoAdapter{}
+		log.Warn("Matkahuolto adapter falling back to mock mode (MATKAHUOLTO_USER_ID or MATKAHUOLTO_PASSWORD not set)")
+	default:
+		a := NewMatkahuoltoAdapter(mhUserID, mhPassword, mhSenderID, log)
+		adapters["matkahuolto"] = a
+		log.Info("Matkahuolto adapter initialized in production mode (beta)",
+			zap.String("baseURL", a.BaseURL),
+		)
 	}
 
 	econtUsername := os.Getenv("ECONT_USERNAME")
