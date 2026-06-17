@@ -81,7 +81,7 @@ Status column reflects the current state of the gateway implementation:
 | Carrier | Key | Status | Notes |
 |---|---|---|---|
 | GLS Netherlands | `gls_nl` | Partial | Regional API (api-portal.gls.nl). BookShipment, CancelShipment, BookPickup, CancelPickup, and CloseManifest implemented. TrackShipment, FetchLabel (reprint), and UpdateShipment return 501. Distinct from the unified GLS Group adapter (`gls`). |
-| PostNL | — | Not implemented | Dutch national postal carrier. Also handles cross-border European B2C parcel delivery from NL as an origin. REST API at developer.postnl.nl. |
+| PostNL | `postnl` | Partial | BookShipment, TrackShipment, FetchLabel, BookReturn, and FetchReturnLabel implemented. CancelShipment and UpdateShipment return 501 (not supported by PostNL PNP v4 API). Supports domestic NL parcel, letterbox, packet, and letter product types. EU and non-EU international shipments via `internationalShipmentData.bundle`. Add-ons: insurance, stated-address-only, return-when-not-home, signature, delivery-code, age-check (16+/18+), evening delivery, guaranteed-before, dangerous goods LQ. Returns via `/shipment/delivery/v4/return/generate` (NL domestic only). Credentials: `POSTNL_API_KEY`, `POSTNL_CUSTOMER_NUMBER`, `POSTNL_CUSTOMER_CODE`. |
 | DPD Netherlands | `dpd_nl` | Not implemented | See DPD under Multi-country. |
 
 ---

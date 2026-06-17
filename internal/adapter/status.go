@@ -27,6 +27,58 @@ package adapter
 // DHL: statusCode enum from the DHL Unified Tracking API spec (well-documented).
 // Values: delivered, failure, pre-transit, transit, unknown.
 var normalizedStatuses = map[string]map[string]TrackingStatus{
+	// postnl: PostNL ShippingStatus v2 event codes and composite phase:status keys.
+	//
+	// The adapter first tries the composite key "PhaseCode:StatusCode", then
+	// falls back to the plain StatusCode. PhaseCode 1–4 covers the shipment
+	// lifecycle: 1=Collection, 2=Sorting, 3=Distribution, 4=Delivered.
+	//
+	// Event code prefixes:
+	//   A = pre-announcement / electronic notification
+	//   B = received by PostNL
+	//   J = distribution / out for delivery
+	//   V = delivered / attempted delivery
+	//   Z = return / undeliverable
+	//
+	// Source: postln_barcodes.json examples and PostNL ShippingStatus v2 documentation.
+	// TODO: Obtain the complete PostNL ShippingStatus event code enum from developer.postnl.nl
+	// and extend the mapping. Codes below are sourced from the API spec examples.
+	"postnl": {
+		// Composite phase:statusCode keys (tried first by the adapter).
+		"1:1": StatusBooked,         // Pre-announced — data received, not yet at PostNL
+		"2:2": StatusPickedUp,       // Received at PostNL sorting centre
+		"2:3": StatusInTransit,      // Sorting in progress
+		"3:7": StatusOutForDelivery, // Out for delivery
+		"4:11": StatusDelivered,     // Delivered to recipient
+
+		// Standalone StatusCode fallbacks.
+		"1":  StatusBooked,
+		"2":  StatusPickedUp,
+		"3":  StatusInTransit,
+		"7":  StatusOutForDelivery,
+		"11": StatusDelivered,
+		"12": StatusFailed,         // Delivery attempt failed
+		"13": StatusReturned,       // Returned to sender
+
+		// Event codes (returned in Event[].Code).
+		"A01": StatusBooked,         // Electronic pre-announcement
+		"A07": StatusBooked,         // Shipment data received
+		"B01": StatusPickedUp,       // Accepted at PostNL depot
+		"B02": StatusInTransit,      // Processed at sorting centre
+		"J01": StatusInTransit,      // Sorted, dispatched to delivery depot
+		"J05": StatusOutForDelivery, // Driver en route to recipient
+		"V01": StatusDelivered,      // Delivered to recipient
+		"V03": StatusDelivered,      // Delivered to neighbour
+		"V04": StatusDelivered,      // Delivered to safe place
+		"V05": StatusDelivered,      // Delivered to PostNL service point (recipient request)
+		"V06": StatusDelivered,      // Collected by recipient from service point
+		"X01": StatusFailed,         // Delivery attempted — recipient not home
+		"X04": StatusFailed,         // Delivery failed — address incorrect
+		"X07": StatusFailed,         // Delivery refused
+		"Z01": StatusReturned,       // Return initiated
+		"Z04": StatusReturned,       // Returned to sender
+	},
+
 	"postnord": {
 		// Confirmed from live production test (tracking 00073215400599388772).
 		"INFORMED": StatusBooked,

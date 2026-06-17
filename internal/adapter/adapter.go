@@ -199,6 +199,16 @@ type carrierCapabilities struct {
 
 // capabilities maps carrier keys to their known API capabilities.
 var capabilities = map[string]carrierCapabilities{
+	// PostNL: NL national postal carrier. PNP v4 API.
+	// Cancellation and update are not available via the API.
+	// Returns are supported via /shipment/delivery/v4/return/generate.
+	"postnl": {
+		NativeIdempotency:     false,
+		Beta:                  true,
+		SupportsCancellation:  false,
+		SupportsUpdate:        false,
+		SupportsReturnBooking: true,
+	},
 	"postnord": {NativeIdempotency: true, SupportsCancellation: true, SupportsUpdate: true},
 	"bring":    {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
 	"gls":      {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
@@ -344,6 +354,21 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	default:
 		adapters["postnord"] = NewPostNordAdapter(postNordAPIKey, postNordCustomerNumber, postNordAppID, log)
 		log.Info("PostNord adapter initialized in production mode")
+	}
+
+	postNLAPIKey := os.Getenv("POSTNL_API_KEY")
+	postNLCustomerNumber := os.Getenv("POSTNL_CUSTOMER_NUMBER")
+	postNLCustomerCode := os.Getenv("POSTNL_CUSTOMER_CODE")
+	switch {
+	case mockMode:
+		adapters["postnl"] = &MockPostNLAdapter{}
+		log.Info("PostNL adapter initialized in mock mode (MOCK_MODE=true)")
+	case postNLAPIKey == "":
+		adapters["postnl"] = &MockPostNLAdapter{}
+		log.Warn("PostNL adapter falling back to mock mode (POSTNL_API_KEY not set)")
+	default:
+		adapters["postnl"] = NewPostNLAdapter(postNLAPIKey, postNLCustomerNumber, postNLCustomerCode, log)
+		log.Info("PostNL adapter initialized in production mode (beta)")
 	}
 
 	bringAPIKey := os.Getenv("BRING_API_KEY")
@@ -1010,6 +1035,36 @@ const (
 	// AddOnBulky marks the parcel as outside standard dimensions or requiring
 	// manual sorting. DHL eCommerce Europe maps this to features.bulky = true.
 	AddOnBulky AddOnType = "bulky"
+	// AddOnStatedAddressOnly instructs the carrier to deliver only to the stated
+	// address and not to a neighbour or safe place.
+	// PostNL maps this to services.statedAddressOnly = true.
+	AddOnStatedAddressOnly AddOnType = "stated_address_only"
+	// AddOnReturnWhenNotHome instructs the carrier to return the parcel to the
+	// sender when the recipient is not home.
+	// PostNL maps this to services.returnWhenNotHome = true.
+	AddOnReturnWhenNotHome AddOnType = "return_when_not_home"
+	// AddOnDeliveryCode requests a numeric code that the recipient must present
+	// at the door to complete delivery. Incompatible with AddOnSignatureRequired.
+	// PostNL maps this to services.deliveryConfirmation = "deliveryCode".
+	// Requires InsuranceValue and receiver email (PostNL service rule).
+	AddOnDeliveryCode AddOnType = "delivery_code"
+	// AddOnEveningDelivery requests delivery during the evening window.
+	// Mutually exclusive with AddOnGuaranteedBefore.
+	// PostNL maps this to services.deliveryWindow.service = "evening".
+	AddOnEveningDelivery AddOnType = "evening_delivery"
+	// AddOnGuaranteedBefore requests delivery guaranteed before a specific time.
+	// Set Instructions to the cutoff time: "10:00", "12:00", or "17:00".
+	// Mutually exclusive with AddOnEveningDelivery.
+	// PostNL maps this to services.deliveryWindow.guaranteedBefore.
+	AddOnGuaranteedBefore AddOnType = "guaranteed_before"
+	// AddOnAgeCheck requires the carrier to verify the recipient's age before
+	// delivery. Set Instructions to "16+" or "18+". Defaults to "18+" when empty.
+	// Implicitly adds signature confirmation (PostNL service rule).
+	// PostNL maps this to services.minimalAgeCheck.
+	AddOnAgeCheck AddOnType = "age_check"
+	// AddOnDangerousGoodsLQ marks the shipment as containing limited-quantity
+	// dangerous goods (ADR LQ). PostNL maps this to services.adrlq = true.
+	AddOnDangerousGoodsLQ AddOnType = "dangerous_goods_lq"
 )
 
 // AddOn represents an optional service attached to a shipment.
