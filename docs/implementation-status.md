@@ -17,6 +17,7 @@ feature mapping file in this folder with full detail.
 | DHL Express | Not fully implemented yet (Beta) | Worldwide | [dhl-express-feature-mapping.md](dhl-express-feature-mapping.md) |
 | DHL eCommerce Europe | Not fully implemented yet (Beta) | 28 European countries | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | DPD | Not fully implemented yet (Beta) | Pan-European | [dpd-group-feature-mapping.md](dpd-group-feature-mapping.md) |
+| DPD NL | Not fully implemented yet (Beta) | NL | [dpd-nl-feature-mapping.md](dpd-nl-feature-mapping.md) |
 | DPD UK | Not fully implemented yet (Beta) | GB | — |
 | Hermes Germany | Not fully implemented yet (Beta) | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
 | FedEx | Implemented | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
