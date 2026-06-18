@@ -143,6 +143,29 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"70": StatusBooked,         // Pakke er registreret
 	},
 
+	// dpd_nl: status strings from ParcelLifecycleService v2.0.
+	//
+	// The status field in statusInfo and eventCode in parcelEventCode use string
+	// identifiers. The mapping below is sourced from common DPD NL integrations.
+	// TODO: Obtain the authoritative enum from the live WSDL schema at
+	// https://wsshipper.dpd.nl/soap/WSDL/ParcelLifecycleServiceV20.wsdl or from
+	// DPD NL integration support and extend this mapping.
+	"dpd_nl": {
+		"CREATED":          StatusBooked,          // Label registered, not yet collected
+		"REGISTERED":       StatusBooked,          // Alternative registration status
+		"COLLECTED":        StatusPickedUp,        // Collected by DPD from sender
+		"TRANSIT":          StatusInTransit,       // Moving through DPD network
+		"IN_TRANSIT":       StatusInTransit,       // In transit between depots
+		"DEPOT":            StatusInTransit,       // At DPD depot
+		"OUT_FOR_DELIVERY": StatusOutForDelivery,  // On delivery vehicle
+		"DELIVERED":        StatusDelivered,       // Delivered to recipient or service point
+		"NOT_DELIVERED":    StatusFailed,          // Delivery attempted, not successful
+		"EXCEPTION":        StatusFailed,          // Delivery exception
+		"MISSING":          StatusFailed,          // Parcel missing in network
+		"RETURNED":         StatusReturned,        // Being returned to sender
+		"RETURN_DELIVERED": StatusReturned,        // Returned to sender, delivered
+	},
+
 	"dhl": {
 		// Full enum from DHL Unified Tracking API v1.5.8 specification.
 		"delivered":   StatusDelivered,

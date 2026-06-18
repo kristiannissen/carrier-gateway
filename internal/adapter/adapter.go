@@ -267,6 +267,15 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsCancellation: false, // cancellation endpoint not yet confirmed
 		SupportsUpdate:       false,
 	},
+	// DPD NL: SOAP API (ShipmentService v3.5 / ParcelLifecycleService v2.0).
+	// Labels are cached at booking time — no standalone fetch-label endpoint.
+	// Cancel and update are not available via API; contact DPD customer service.
+	"dpd_nl": {
+		NativeIdempotency:    false,
+		Beta:                 true,
+		SupportsCancellation: false,
+		SupportsUpdate:       false,
+	},
 	// Evri (formerly Hermes UK): booking and label retrieval only.
 	// The Evri Classic API exposes no tracking, cancellation, or update endpoint.
 	// UK domestic only — all delivery addresses must be valid UK postcodes.
@@ -513,6 +522,7 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	}
 
 	registerDPD(adapters, mockMode, log)
+	registerDPDNL(adapters, mockMode, log)
 	registerGLSNL(adapters, mockMode, log)
 	registerSpeedy(adapters, mockMode, log)
 
@@ -635,6 +645,34 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 	}
 
 	return adapters
+}
+
+// registerDPDNL registers the DPD Netherlands SOAP adapter under the key "dpd_nl".
+//
+// Required env vars:
+//
+//	DPD_NL_DELIS_ID  — 8–10 character Delis ID issued by DPD NL
+//	DPD_NL_PASSWORD  — corresponding password
+//
+// Without credentials the adapter falls back to mock mode.
+func registerDPDNL(adapters map[string]CarrierAdapter, mockMode bool, log *zap.Logger) {
+	const key = "dpd_nl"
+
+	delisID := os.Getenv("DPD_NL_DELIS_ID")
+	password := os.Getenv("DPD_NL_PASSWORD")
+
+	switch {
+	case mockMode:
+		adapters[key] = NewMockDPDNLAdapter()
+		log.Info("DPD NL adapter initialized in mock mode (MOCK_MODE=true)")
+	case delisID == "" || password == "":
+		adapters[key] = NewMockDPDNLAdapter()
+		log.Warn("DPD NL adapter falling back to mock mode (DPD_NL_DELIS_ID or DPD_NL_PASSWORD not set)")
+	default:
+		a := NewDPDNLAdapter(delisID, password, log)
+		adapters[key] = a
+		log.Info("DPD NL adapter initialized in production mode (beta)")
+	}
 }
 
 // registerDPD scans environment variables for DPD_{COUNTRY}_API_TOKEN and
