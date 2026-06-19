@@ -91,6 +91,32 @@ Every carrier has a matching `mock_{carrier}.go` that satisfies `CarrierAdapter`
 
 The health endpoint reports which mode each carrier is running in.
 
+### Multi-format booking requests
+
+The booking endpoint accepts three wire formats — detected automatically from `Content-Type`:
+
+| Format | Content-Type | Notes |
+|---|---|---|
+| JSON | `application/json` (default) | Standard REST — see the example above |
+| XML | `application/xml` or `text/xml` | `<BookingRequest>` envelope; same fields as JSON |
+| UN/EDIFACT | `application/edifact` or `text/plain` | IFTMIN D.96A messages — TSR, NAD+CZ/CN, GID, MEA+WT, DIM segments |
+
+The EDIFACT parser handles the full `TSR → NAD → GID → MEA → DIM` segment sequence from a standard IFTMIN booking message. Carrier selection comes from the `TSR` service code; sender/receiver from `NAD+CZ`/`NAD+CN`; parcel dimensions and weight from `GID`/`MEA`/`DIM`. All three formats resolve to the same internal `BookingRequest` type and flow through identical validation and carrier dispatch.
+
+```bash
+# XML booking
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/xml" \
+  -d '<BookingRequest><Carrier>postnord</Carrier>...</BookingRequest>'
+
+# EDIFACT booking
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/edifact" \
+  --data-binary "UNB+UNOA:1+SENDER+RECEIVER+260101:0800+1'TSR+postnord'NAD+CZ+...'"
+```
+
+---
+
 ### Normalised statuses
 
 Each carrier returns its own status vocabulary. The gateway maps every raw string to a shared `TrackingStatus` type: `booked`, `picked_up`, `in_transit`, `out_for_delivery`, `delivered`, `failed`, `returned`, `delayed`, `unknown`. The raw carrier string is preserved in `originalStatus` for debugging. Callers should only branch on `normalizedStatus`.
@@ -468,6 +494,11 @@ carrier-gateway/
 │   │   ├── request_id.go
 │   │   ├── idempotency.go
 │   │   └── logging.go
+│   ├── parser/
+│   │   ├── parser.go           # ForRequest — Content-Type dispatch
+│   │   ├── json.go             # JSON parser (default)
+│   │   ├── xml.go              # XML parser (application/xml, text/xml)
+│   │   └── edifact.go          # UN/EDIFACT IFTMIN parser
 │   ├── notification/
 │   │   ├── notification.go     # Event types, Payload, Preferences, Record
 │   │   ├── service.go          # Fan-out dispatch
