@@ -14,7 +14,8 @@ The bitter irony is that integrating directly with the carriers would have been 
 
 This project is what direct integration looks like when you do it properly. A single consistent API, adapters that absorb carrier-specific wire format details, and no middleware standing between your order management system and the carrier actually moving your parcel.
 
-It is also an experiment in how software gets built. Almost the entire codebase was written by AI, specifically — working from design decisions and architectural direction provided by a human with strong opinions and hard-won context. The human provides the judgement. The AI executes. It turns out that combination produces software faster than either could alone, and the result is readable enough that the human can tell when the AI is wrong.
+"It is also an experiment in how software gets built. Almost the entire codebase was written by AI, specifically — working from design decisions and architectural direction provided by a human with strong opinions and hard-won context. The human provides the judgement. The AI executes. It turns out that combination produces software faster than either could alone, and the result is readable enough that the human can tell when the AI is wrong."
+- AI
 
 Whether it holds up is the interesting question.
 
