@@ -1,0 +1,120 @@
+name: DHL Connect Probe
+
+# Run when DHL adapter code changes or on manual trigger.
+# The weekly sandbox-monitor.yml covers all carriers; this workflow gives
+# faster feedback specifically for DHL eConnect changes.
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "internal/adapter/dhl.go"
+      - "internal/adapter/dhl_*.go"
+      - "internal/adapter/mock_dhl*.go"
+  pull_request:
+    paths:
+      - "internal/adapter/dhl.go"
+      - "internal/adapter/dhl_*.go"
+      - "internal/adapter/mock_dhl*.go"
+  workflow_dispatch:
+
+jobs:
+  dhl-probe:
+    name: DHL eConnect Sandbox Probe
+    runs-on: ubuntu-latest
+
+    env:
+      # DHL eConnect (booking + OAuth)
+      DHL_CLIENT_ID:        ${{ secrets.DHL_CLIENT_ID }}
+      DHL_CLIENT_SECRET:    ${{ secrets.DHL_CLIENT_SECRET }}
+      DHL_CUSTOMER_ID:      ${{ secrets.DHL_CUSTOMER_ID }}
+      DHL_TRACKING_API_KEY: ${{ secrets.DHL_TRACKING_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Run DHL sandbox probe
+        id: probe
+        run: |
+          go test -tags sandbox -v -timeout 60s \
+            -run TestSandboxProbe/DHL \
+            ./internal/adapter/... \
+            2>&1 | tee probe-output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dhl-probe-output
+          path: probe-output.txt
+          retention-days: 14
+
+      - name: Open GitHub issue on failure
+        if: steps.probe.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('probe-output.txt', 'utf8');
+
+            const failed = [...output.matchAll(/--- FAIL:\s+(\S+)/g)]
+              .map(m => m[1])
+              .join('\n- ');
+
+            const runURL = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const body = [
+              `## DHL eConnect sandbox probe failure`,
+              ``,
+              `A DHL adapter change triggered a sandbox probe that did not pass.`,
+              `Check whether credentials have expired or the DHL eConnect API changed.`,
+              ``,
+              `**Failed probes:**`,
+              failed ? `- ${failed}` : '_See full output in the workflow run._',
+              ``,
+              `**Workflow run:** ${runURL}`,
+              ``,
+              `<details><summary>Full probe output</summary>`,
+              ``,
+              `\`\`\``,
+              output.slice(-8000),
+              `\`\`\``,
+              `</details>`,
+            ].join('\n');
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'carrier-api-change',
+              state: 'open',
+            });
+
+            if (issues.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues[0].number,
+                body,
+              });
+              core.warning(`Updated existing issue #${issues[0].number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `DHL eConnect probe failure — ${new Date().toISOString().slice(0, 10)}`,
+                body,
+                labels: ['carrier-api-change'],
+              });
+              core.warning(`Opened issue #${issue.number}: ${issue.html_url}`);
+            }
+
+      - name: Fail the workflow if probe failed
+        if: steps.probe.outputs.exit_code != '0'
+        run: exit 1
