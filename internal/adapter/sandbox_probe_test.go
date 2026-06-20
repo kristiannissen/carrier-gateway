@@ -209,8 +209,9 @@ func testDAOSandbox(t *testing.T) {
 	assert.NotEmpty(t, resp.TrackingNumber, "DAO sandbox returned no tracking number")
 }
 
-// testDHLSandbox probes the DHL eConnect OAuth token endpoint.
-// A successful bearer token confirms the auth URL and credential format are intact.
+// testDHLSandbox probes the DHL eConnect OAuth token endpoint and the
+// Unified Tracking API. Auth and tracking are exercised independently so a
+// credential split (eConnect vs. tracking key) is caught separately.
 func testDHLSandbox(t *testing.T) {
 	t.Parallel()
 	skipUnless(t, "DHL_CLIENT_ID", "DHL_CLIENT_SECRET")
@@ -222,12 +223,31 @@ func testDHLSandbox(t *testing.T) {
 		os.Getenv("DHL_TRACKING_API_KEY"),
 		sandboxLogger(t),
 	)
-	ctx, cancel := context.WithTimeout(t.Context(), probeTimeout)
-	defer cancel()
 
-	token, err := a.bearerToken(ctx)
-	require.NoError(t, err, "DHL sandbox auth probe failed")
-	assert.NotEmpty(t, token, "DHL sandbox returned empty access token")
+	t.Run("Auth", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithTimeout(t.Context(), probeTimeout)
+		defer cancel()
+
+		token, err := a.bearerToken(ctx)
+		require.NoError(t, err, "DHL sandbox auth probe failed")
+		assert.NotEmpty(t, token, "DHL sandbox returned empty access token")
+	})
+
+	t.Run("Tracking", func(t *testing.T) {
+		t.Parallel()
+		skipUnless(t, "DHL_TRACKING_API_KEY")
+
+		ctx, cancel := context.WithTimeout(t.Context(), probeTimeout)
+		defer cancel()
+
+		resp, err := a.TrackShipment(ctx, "SANDBOX000000001")
+		if err != nil {
+			assertNotAuthOrServerError(t, "dhl", err)
+			return
+		}
+		assert.Equal(t, "dhl", resp.Carrier)
+	})
 }
 
 // testDHLExpressSandbox probes the MyDHL Express API.
