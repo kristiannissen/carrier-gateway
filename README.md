@@ -562,6 +562,24 @@ The handler, router, and validation layer require no other changes.
 
 ---
 
+## CI/CD
+
+Five workflows live under `.github/workflows/`.
+
+**`ci.yml`** — runs on every push to `main` and weekly on Monday at 08:00 UTC. Builds the project, runs the full test suite with the race detector, and runs `govulncheck` to catch newly disclosed CVEs in existing dependencies. The weekly run fires even when no code has changed.
+
+**`docker.yml`** — runs on every push to `main`. Builds the Docker image and pushes it to the container registry. Runs after `ci.yml` passes.
+
+**`sandbox-monitor.yml`** — runs every Monday at 07:00 UTC and on manual trigger. Executes the full `TestSandboxProbe` suite (`-tags sandbox`) against every carrier sandbox. Each sub-test skips automatically when its credentials are absent, so partial secrets still exercise whatever carriers are configured. A failure opens a GitHub issue labelled `carrier-api-change`; a second failure on the same week adds a comment to the existing issue rather than opening a new one.
+
+**`dhl-connect-probe.yml`** — runs on push and PRs that touch `internal/adapter/dhl*.go`, and on manual trigger. Runs only the `TestSandboxProbe/DHL` sub-test for faster feedback on DHL adapter changes. Same failure → GitHub issue behaviour as the weekly monitor. Required secrets: `DHL_CLIENT_ID`, `DHL_CLIENT_SECRET`, `DHL_CUSTOMER_ID`, `DHL_TRACKING_API_KEY`.
+
+**`postnord-connect-probe.yml`** — same pattern as the DHL probe but scoped to `internal/adapter/postnord*.go`. Runs `TestSandboxProbe/PostNord`, which calls the PostNord Track & Trace API with a dummy tracking number — read-only, no shipment created. Required secrets: `POSTNORD_API_KEY`, `POSTNORD_CUSTOMER_NUMBER`.
+
+All probe workflows upload a `probe-output.txt` artifact retained for 14 days. Live logs are available under Actions → the workflow run → the job step while it is running.
+
+---
+
 ## Roadmap
 
 See [`docs/feature-roadmap.md`](docs/feature-roadmap.md) for the full spec. In priority order:
