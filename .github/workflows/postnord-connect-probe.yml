@@ -21,6 +21,7 @@ jobs:
   postnord-probe:
     name: PostNord Sandbox Probe
     runs-on: ubuntu-latest
+    environment: Preview
 
     env:
       POSTNORD_API_KEY:         ${{ secrets.POSTNORD_API_KEY }}

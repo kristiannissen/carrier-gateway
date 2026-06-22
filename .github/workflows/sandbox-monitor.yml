@@ -11,6 +11,7 @@ jobs:
   probe:
     name: Carrier Sandbox Probes
     runs-on: ubuntu-latest
+    environment: Preview
 
     # Each carrier secret is optional — probes skip automatically when absent.
     # Add new carrier secrets to the repository and list them here; no code change needed.
