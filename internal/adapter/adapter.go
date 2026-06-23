@@ -227,6 +227,17 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsReturnBooking: true,
 		SupportsEventPolling:  true,
 	},
+	// Ufficio Postale: Italian postal service (Poste Italiane) via openapi.it.
+	// Document-mailing service — Poste Italiane prints and dispatches letters on the sender's behalf.
+	// BookShipment and TrackShipment are supported for tracked products (raccomandate, atti_giudiziari).
+	// No label, cancellation, or post-booking update endpoint exists in the API.
+	// Italy-domestic only for most products; sender address must be in Italy.
+	"ufficiopostale": {
+		NativeIdempotency:    false,
+		Beta:                 true,
+		SupportsCancellation: false,
+		SupportsUpdate:       false,
+	},
 	// Econt: Bulgarian carrier. Basic Auth only; all calls are HTTP POST JSON.
 	// Cancellation (deleteLabels) works only before the shipment is accepted by Econt.
 	// Update uses checkPossibleShipmentEditions + updateLabel — not available once in transit.
@@ -620,6 +631,23 @@ func InitAdapters(log *zap.Logger) map[string]CarrierAdapter {
 		a := NewMatkahuoltoAdapter(mhUserID, mhPassword, mhSenderID, log)
 		adapters["matkahuolto"] = a
 		log.Info("Matkahuolto adapter initialized in production mode (beta)",
+			zap.String("baseURL", a.BaseURL),
+		)
+	}
+
+	upAPIKey := os.Getenv("UFFICIOPOSTALE_API_KEY")
+	upSandbox := os.Getenv("UFFICIOPOSTALE_SANDBOX") == "true"
+	switch {
+	case mockMode:
+		adapters["ufficiopostale"] = NewMockUfficioPostaleAdapter()
+		log.Info("Ufficio Postale adapter initialized in mock mode (MOCK_MODE=true)")
+	case upAPIKey == "":
+		adapters["ufficiopostale"] = NewMockUfficioPostaleAdapter()
+		log.Warn("Ufficio Postale adapter falling back to mock mode (UFFICIOPOSTALE_API_KEY not set)")
+	default:
+		a := NewUfficioPostaleAdapter(upAPIKey, upSandbox, log)
+		adapters["ufficiopostale"] = a
+		log.Info("Ufficio Postale adapter initialized in production mode (beta)",
 			zap.String("baseURL", a.BaseURL),
 		)
 	}
