@@ -40,13 +40,15 @@ func (m *MockUfficioPostaleAdapter) BookShipment(ctx context.Context, request Bo
 	// Raccomandate tracking numbers are typically 12-digit numerics.
 	trackingNumber := fmt.Sprintf("%012d", rand.Intn(999999999999)) //nolint:gosec // mock data
 	internalID := fmt.Sprintf("%024x", rand.Uint64())               //nolint:gosec // mock data
+	// ShipmentID encodes product+internalID so FetchLabel can call /{product}/{id}/accettazione.
+	shipmentID := "raccomandate/" + internalID
 
 	return &BookingResponse{
-		ShipmentID:     internalID,
+		ShipmentID:     shipmentID,
 		TrackingNumber: trackingNumber,
 		Carrier:        "ufficiopostale",
 		Status:         "confirmed",
-		BetaWarning:    "Ufficio Postale adapter is in beta — label fetch, cancellation, and update are not supported",
+		BetaWarning:    "Ufficio Postale adapter is in beta — cancellation and update are not supported",
 	}, nil
 }
 
@@ -77,10 +79,22 @@ func (m *MockUfficioPostaleAdapter) TrackShipment(ctx context.Context, trackingN
 	}, nil
 }
 
-// FetchLabel returns unsupported for Ufficio Postale — no label endpoint exists.
-func (m *MockUfficioPostaleAdapter) FetchLabel(_ context.Context, _ LabelRequest) (*LabelResponse, error) {
-	return nil, notSupported("Ufficio Postale", "label fetch",
-		"Poste Italiane prints and dispatches the letter internally; no carrier label is issued")
+// FetchLabel returns a mock accettazione PDF for Ufficio Postale.
+// TrackingNumber must be in ShipmentID format: "{product}/{internalID}".
+func (m *MockUfficioPostaleAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("ufficiopostale: fetch label: tracking number must not be empty")
+	}
+	if req.Format != LabelFormatPDF && req.Format != "" {
+		return nil, fmt.Errorf("ufficiopostale: fetch label: only PDF format is supported, got %q", req.Format)
+	}
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "ufficiopostale",
+		Format:         LabelFormatPDF,
+		Data:           mockLabelData,
+		MimeType:       "application/pdf",
+	}, nil
 }
 
 // CancelShipment returns unsupported for Ufficio Postale — no cancellation endpoint exists.

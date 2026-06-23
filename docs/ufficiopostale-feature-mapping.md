@@ -15,8 +15,8 @@ it on the sender's behalf. This makes it fundamentally different from parcel
 carriers — there is no physical label, no parcel pickup, and no post-booking
 update or cancellation.
 
-`BookShipment` and `TrackShipment` are implemented. `FetchLabel`,
-`CancelShipment`, and `UpdateShipment` all return `ErrNotSupported`.
+`BookShipment`, `TrackShipment`, and `FetchLabel` are implemented.
+`CancelShipment` and `UpdateShipment` return `ErrNotSupported`.
 
 ---
 
@@ -92,9 +92,9 @@ In production, always set `ShipmentComment` to the actual letter content.
 
 | Feature | Status | Notes |
 |---|---|---|
-| Fetch label | ❌ Not available | Poste Italiane prints and attaches the postal document internally |
-| Label at booking | ❌ Not available | No label URL or data in any booking response |
-| Accettazione receipt | ⚠️ Not wired | `GET /{product}/{id}/accettazione` returns a PDF postal receipt; not surfaced via `FetchLabel` because it is not a carrier label |
+| Fetch label (PDF) | ✅ Implemented | `GET /{product}/{id}/accettazione` — returns the postal acceptance receipt PDF |
+| Fetch label (other formats) | ❌ Not available | Only PDF is issued by Poste Italiane |
+| Label at booking | ❌ Not returned | The accettazione must be fetched separately via `FetchLabel` |
 
 ### Tracking
 
@@ -125,7 +125,8 @@ In production, always set `ShipmentComment` to the actual letter content.
 
 ## Known limitations
 
-- **No label**: This is a managed-print postal service; callers never handle a physical label.
+- **FetchLabel uses ShipmentID, not TrackingNumber**: Pass `BookingResponse.ShipmentID` (format: `"{product}/{internalID}"`, e.g. `"raccomandate/000...000"`) as the `TrackingNumber` field in `LabelRequest`. The NumeroRaccomandata cannot be used here — it identifies the letter for tracking, not for receipt retrieval.
+- **Accettazione is not a carrier label**: The returned PDF is a postal acceptance receipt confirming Poste Italiane received the mailing. It is not a barcode label for attachment to a parcel.
 - **No cancellation**: Once a mailing is confirmed (`autoconfirm: true`), it cannot be voided via API.
 - **No update**: Recipient address and document cannot be changed after creation.
 - **Italy-domestic**: Most products restrict the sender to Italy. Cross-border support is limited and product-specific.

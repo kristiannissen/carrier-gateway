@@ -5,6 +5,7 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -315,12 +316,17 @@ func (a *UfficioPostaleAdapter) BookShipment(ctx context.Context, request Bookin
 		zap.String("internalID", dest.ID),
 	)
 
+	// Encode product and internal ID together so FetchLabel can reconstruct
+	// the accettazione path without needing a separate lookup.
+	// Format: "{product}/{internalID}" — e.g. "raccomandate/000000000000000000000000".
+	shipmentID := product + "/" + dest.ID
+
 	return &BookingResponse{
-		ShipmentID:     dest.ID,
+		ShipmentID:     shipmentID,
 		TrackingNumber: trackingNumber,
 		Carrier:        "ufficiopostale",
 		Status:         strings.ToLower(dest.State),
-		BetaWarning:    "Ufficio Postale adapter is in beta — label fetch, cancellation, and update are not supported",
+		BetaWarning:    "Ufficio Postale adapter is in beta — cancellation and update are not supported",
 	}, nil
 }
 
@@ -377,12 +383,64 @@ func (a *UfficioPostaleAdapter) TrackShipment(ctx context.Context, trackingNumbe
 	}, nil
 }
 
-// FetchLabel is not supported by the Ufficio Postale API.
-// Poste Italiane prints and attaches all postal documents internally;
-// no carrier label exists for external attachment.
-func (a *UfficioPostaleAdapter) FetchLabel(_ context.Context, _ LabelRequest) (*LabelResponse, error) {
-	return nil, notSupported("Ufficio Postale", "label fetch",
-		"Poste Italiane prints and dispatches the letter internally; no carrier label is issued")
+// FetchLabel retrieves the postal acceptance receipt (accettazione) for a
+// booked mailing via GET /{product}/{id}/accettazione.
+//
+// Ufficio Postale issues no carrier label — the accettazione is the closest
+// equivalent: a PDF receipt confirming the mailing was accepted by Poste
+// Italiane, suitable for record-keeping or proof of posting.
+//
+// The LabelRequest.TrackingNumber must be the ShipmentID returned by
+// BookShipment (format: "{product}/{internalID}", e.g.
+// "raccomandate/000000000000000000000000"). Only LabelFormatPDF is supported.
+func (a *UfficioPostaleAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("ufficiopostale: fetch label: tracking number must not be empty")
+	}
+	if req.Format != LabelFormatPDF && req.Format != "" {
+		return nil, fmt.Errorf("ufficiopostale: fetch label: only PDF format is supported, got %q", req.Format)
+	}
+
+	// ShipmentID is encoded as "{product}/{internalID}".
+	slash := strings.IndexByte(req.TrackingNumber, '/')
+	if slash < 1 || slash == len(req.TrackingNumber)-1 {
+		return nil, fmt.Errorf("ufficiopostale: fetch label: tracking number must be the ShipmentID "+
+			"in format \"{product}/{internalID}\" — got %q", req.TrackingNumber)
+	}
+	product := req.TrackingNumber[:slash]
+	internalID := req.TrackingNumber[slash+1:]
+
+	path := fmt.Sprintf("/%s/%s/accettazione", product, internalID)
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, a.BaseURL+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("ufficiopostale: fetch label: create request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+a.APIKey)
+	httpReq.Header.Set("Accept", "application/pdf")
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("ufficiopostale: fetch label %s: %w", internalID, err)
+	}
+	defer resp.Body.Close() //nolint:errcheck
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body) //nolint:errcheck
+		return nil, fmt.Errorf("ufficiopostale: fetch label %s returned %d: %s", internalID, resp.StatusCode, string(body))
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ufficiopostale: fetch label: read response: %w", err)
+	}
+
+	return &LabelResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "ufficiopostale",
+		Format:         LabelFormatPDF,
+		Data:           base64.StdEncoding.EncodeToString(data),
+		MimeType:       "application/pdf",
+	}, nil
 }
 
 // CancelShipment is not supported by the Ufficio Postale API.
