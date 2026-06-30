@@ -39,20 +39,27 @@ curl -X POST http://localhost:8080/api/bookings \
 |---|---|---|
 | `postnord` | PostNord (DK, SE, NO, FI) | Production |
 | `bring` | Bring / Posten (NO, SE, DK, FI) | Production |
-| `gls` | GLS (DE, DK, SE, NL, BE, FR, ES + more) | Production |
+| `gls` | GLS Group (DE, DK, SE, NL, BE, FR, ES + more) | Production |
+| `inpost` | InPost (PL, IT, GB) | Production |
 | `omniva` | Omniva (EE, LV, LT) | Production |
-| `dao` | DAO (DK) | Beta |
+| `fedex` | FedEx (worldwide) | Production |
+| `dao` | DAO (DK) | Partial |
+| `postnl` | PostNL (NL) | Beta |
 | `dhl` | DHL eCommerce Europe (28 countries) | Beta |
 | `dhl_express` | DHL Express (worldwide) | Beta |
+| `dhl_ecommerce_uk` | DHL eCommerce UK (GB) | Beta |
 | `dpd_uk` | DPD UK (GB) | Beta |
+| `dpd_nl` | DPD Netherlands (NL) | Beta |
 | `hermes` | Hermes Germany (DE) | Beta |
-| `fedex` | FedEx (worldwide) | Beta |
 | `evri` | Evri (GB) | Beta |
-| `inpost` | InPost (PL, IT, GB) | Production |
+| `speedy` | Speedy (BG + Balkans) | Beta |
 | `econt` | Econt Express (BG + SE Europe) | Beta |
 | `matkahuolto` | Matkahuolto (FI) | Beta |
+| `ufficiopostale` | Ufficio Postale / Poste Italiane (IT) | Beta |
 
-Demo carriers return mock data and are not connected to any live API. DPD continental Europe is registered dynamically from `DPD_{COUNTRY}_API_TOKEN` env vars (e.g. `dpd_lt`, `dpd_at`). For full country coverage see [`docs/carriers.md`](docs/carriers.md). For a feature-by-feature breakdown across all carriers see [`docs/implementation-status.md`](docs/implementation-status.md).
+**Partial** means production-quality with some operations permanently unavailable — the carrier API does not expose them. Unsupported operations return `501 Not Implemented`. For a full feature-by-feature breakdown see [`docs/implementation-status.md`](docs/implementation-status.md).
+
+GLS national subsidiaries (e.g. `gls_nl`, `gls_be`) and DPD continental Europe (e.g. `dpd_lt`, `dpd_at`) are registered dynamically from env vars — see [`docs/carriers.md`](docs/carriers.md) for the full country list and required variables.
 
 ---
 
@@ -396,15 +403,22 @@ curl http://localhost:8080/api/health
     "postnord": "production",
     "bring": "production",
     "gls": "production",
+    "inpost": "production",
     "omniva": "production",
-    "dao": "beta",
+    "fedex": "production",
+    "dao": "production",
+    "postnl": "beta",
     "dhl": "beta",
     "dhl_express": "beta",
+    "dhl_ecommerce_uk": "beta",
     "dpd_uk": "beta",
+    "dpd_nl": "beta",
     "hermes": "beta",
-    "fedex": "beta",
     "evri": "beta",
-    "inpost": "mock"
+    "speedy": "beta",
+    "econt": "beta",
+    "matkahuolto": "beta",
+    "ufficiopostale": "beta"
   }
 }
 ```
