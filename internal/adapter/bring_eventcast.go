@@ -84,9 +84,9 @@ type BringCustomerWebhookRequest struct {
 // BringCustomerWebhookResponse is returned by Register and Renew operations.
 type BringCustomerWebhookResponse struct {
 	// ID is the subscription UUID used for Delete and Renew calls.
-	ID             string             `json:"id"`
-	CustomerNumber string             `json:"customerNumber"`
-	EventSet       []BringEventSet    `json:"eventSet"`
+	ID                   string             `json:"id"`
+	CustomerNumber       string             `json:"customerNumber"`
+	EventSet             []BringEventSet    `json:"eventSet"`
 	WebhookConfiguration BringWebhookConfig `json:"webhookConfiguration"`
 	// Created is when the subscription was first registered.
 	Created time.Time `json:"created"`

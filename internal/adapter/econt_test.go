@@ -43,10 +43,10 @@ func econtTestRequest() BookingRequest {
 			TotalWeight: 1.5,
 			Colli: []Colli{
 				{
-					ID:     "colli-bg-01",
-					Weight: 1.5,
+					ID:         "colli-bg-01",
+					Weight:     1.5,
 					Dimensions: Dimensions{Length: 30, Width: 20, Height: 10},
-					Items: []Item{{Description: "Football boots", Weight: 1.5, Quantity: 1, Value: 89.99}},
+					Items:      []Item{{Description: "Football boots", Weight: 1.5, Quantity: 1, Value: 89.99}},
 				},
 			},
 			DeliveryType: "home",
@@ -402,6 +402,237 @@ func TestEcontLabelFrom_COD(t *testing.T) {
 	assert.Equal(t, 89.99, label.Services.CDAmount)
 	assert.Equal(t, "get", label.Services.CDType)
 	assert.Equal(t, "EUR", label.Services.CDCurrency)
+}
+
+// ── interface assertions ──────────────────────────────────────────────────────
+
+var (
+	_ ManifestAdapter = (*EcontAdapter)(nil)
+	_ PickupQuerier   = (*EcontAdapter)(nil)
+	_ ManifestAdapter = (*MockEcontAdapter)(nil)
+	_ PickupQuerier   = (*MockEcontAdapter)(nil)
+)
+
+// ── pickup helpers ────────────────────────────────────────────────────────────
+
+func econtTestPickupRequest() PickupRequest {
+	return PickupRequest{
+		Carrier: "econt",
+		Pickup: PickupWindow{
+			Date:      "2026-08-03",
+			ReadyTime: "10:00",
+			CloseTime: "17:00",
+		},
+		Contact: PickupContact{
+			Name:  "Unisport Warehouse",
+			Phone: "+35929876543",
+			Email: "warehouse@unisport.bg",
+		},
+		Address: PickupAddress{
+			Street:      "Tsarigradsko shose",
+			HouseNumber: "115",
+			City:        "Sofia",
+			PostalCode:  "1784",
+			Country:     "BG",
+		},
+		EstimatedParcels: 3,
+		EstimatedWeight:  12.5,
+	}
+}
+
+// ── mock adapter pickup tests ─────────────────────────────────────────────────
+
+func TestMockEcontAdapter_BookPickup(t *testing.T) {
+	t.Parallel()
+
+	resp, err := (&MockEcontAdapter{}).BookPickup(t.Context(), econtTestPickupRequest())
+	require.NoError(t, err)
+	assert.Equal(t, "econt", resp.Carrier)
+	assert.Equal(t, "booked", resp.Status)
+	assert.Contains(t, resp.ConfirmationNumber, "MOCK-ECONT-PU-")
+}
+
+func TestMockEcontAdapter_GetPickupByID(t *testing.T) {
+	t.Parallel()
+
+	info, err := (&MockEcontAdapter{}).GetPickupByID(t.Context(), "123456")
+	require.NoError(t, err)
+	assert.Equal(t, "econt", info.Carrier)
+	assert.Equal(t, "123456", info.ID)
+	assert.Equal(t, "CREATED", info.Status)
+}
+
+func TestMockEcontAdapter_ManifestNotSupported(t *testing.T) {
+	t.Parallel()
+
+	m := &MockEcontAdapter{}
+
+	_, err := m.UpdatePickup(t.Context(), "123", PickupRequest{})
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	err = m.CancelPickup(t.Context(), "econt", "123")
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	_, err = m.CloseManifest(t.Context(), ManifestRequest{})
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	_, err = m.GetPickupAvailability(t.Context(), PickupAvailabilityRequest{})
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	_, err = m.ListPickups(t.Context(), ListPickupsRequest{})
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	_, err = m.GetCutoffTime(t.Context(), "1784", "BG")
+	require.ErrorIs(t, err, ErrNotSupported)
+}
+
+// ── live adapter pickup tests ─────────────────────────────────────────────────
+
+func TestEcontAdapter_BookPickup(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req econtRequestCourierRequest
+		require.NoError(t, json.Unmarshal(body, &req))
+		assert.NotZero(t, req.RequestTimeFrom)
+		assert.NotZero(t, req.RequestTimeTo)
+		assert.Equal(t, "pack", req.ShipmentType)
+		require.NotNil(t, req.SenderAddress)
+		assert.Equal(t, "Sofia", req.SenderAddress.City.Name)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(econtRequestCourierResponse{
+			CourierRequestID: "CR-987654",
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	a := NewEcontAdapter("test-user", "test-pass", zap.NewNop())
+	a.BaseURL = srv.URL
+
+	resp, err := a.BookPickup(t.Context(), econtTestPickupRequest())
+	require.NoError(t, err)
+	assert.Equal(t, "econt", resp.Carrier)
+	assert.Equal(t, "CR-987654", resp.ConfirmationNumber)
+	assert.Equal(t, "booked", resp.Status)
+	assert.Equal(t, "10:00", resp.ReadyTime)
+	assert.Equal(t, "17:00", resp.CloseTime)
+}
+
+func TestEcontAdapter_BookPickup_MissingAddress(t *testing.T) {
+	t.Parallel()
+
+	a := NewEcontAdapter("test-user", "test-pass", zap.NewNop())
+
+	req := econtTestPickupRequest()
+	req.Address = PickupAddress{}
+
+	_, err := a.BookPickup(t.Context(), req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "address")
+}
+
+func TestEcontAdapter_BookPickup_APIError(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(econtRequestCourierResponse{
+			Error: &econtError{Type: "InvalidAddressException", Message: "Address not serviceable"},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	a := NewEcontAdapter("test-user", "test-pass", zap.NewNop())
+	a.BaseURL = srv.URL
+
+	_, err := a.BookPickup(t.Context(), econtTestPickupRequest())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Address not serviceable")
+}
+
+func TestEcontAdapter_GetPickupByID(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req econtGetRequestCourierStatusRequest
+		require.NoError(t, json.Unmarshal(body, &req))
+		assert.Equal(t, []string{"CR-987654"}, req.RequestCourierIds)
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(econtGetRequestCourierStatusResponse{
+			RequestCourierStatus: []econtRequestCourierStatusResultElement{
+				{Status: &econtRequestCourierStatus{ID: 987654, Status: "taken"}},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	a := NewEcontAdapter("test-user", "test-pass", zap.NewNop())
+	a.BaseURL = srv.URL
+
+	info, err := a.GetPickupByID(t.Context(), "CR-987654")
+	require.NoError(t, err)
+	assert.Equal(t, "econt", info.Carrier)
+	assert.Equal(t, "COLLECTED", info.Status)
+}
+
+func TestEcontAdapter_GetPickupByID_Rejected(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(econtGetRequestCourierStatusResponse{
+			RequestCourierStatus: []econtRequestCourierStatusResultElement{
+				{Status: &econtRequestCourierStatus{ID: 987654, Status: "reject_client", RejectReason: "client cancelled"}},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	a := NewEcontAdapter("test-user", "test-pass", zap.NewNop())
+	a.BaseURL = srv.URL
+
+	info, err := a.GetPickupByID(t.Context(), "CR-987654")
+	require.NoError(t, err)
+	assert.Equal(t, "CANCELLED", info.Status)
+}
+
+func TestEcontAdapter_ManifestNotSupported(t *testing.T) {
+	t.Parallel()
+
+	a := NewEcontAdapter("test-user", "test-pass", zap.NewNop())
+
+	_, err := a.UpdatePickup(t.Context(), "123", PickupRequest{})
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	err = a.CancelPickup(t.Context(), "econt", "123")
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	_, err = a.CloseManifest(t.Context(), ManifestRequest{})
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	_, err = a.GetPickupAvailability(t.Context(), PickupAvailabilityRequest{})
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	_, err = a.ListPickups(t.Context(), ListPickupsRequest{})
+	require.ErrorIs(t, err, ErrNotSupported)
+
+	_, err = a.GetCutoffTime(t.Context(), "1784", "BG")
+	require.ErrorIs(t, err, ErrNotSupported)
+}
+
+func TestEcontPickupTimestamp(t *testing.T) {
+	t.Parallel()
+
+	ts, err := econtPickupTimestamp("2026-08-03", "10:00")
+	require.NoError(t, err)
+	assert.Positive(t, ts)
+
+	_, err = econtPickupTimestamp("not-a-date", "10:00")
+	require.Error(t, err)
 }
 
 func TestNormalizeEcontEventType(t *testing.T) {

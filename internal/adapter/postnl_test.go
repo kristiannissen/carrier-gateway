@@ -20,36 +20,36 @@ import (
 
 func postnlTestSender() Address {
 	return Address{
-		Name:       "Unisport Warehouse",
-		Street:     "Industrieweg",
+		Name:        "Unisport Warehouse",
+		Street:      "Industrieweg",
 		HouseNumber: "12",
-		City:       "Amsterdam",
-		PostalCode: "1000AA",
-		Country:    "NL",
-		Phone:      "+31612345678",
-		Email:      "warehouse@unisport.nl",
+		City:        "Amsterdam",
+		PostalCode:  "1000AA",
+		Country:     "NL",
+		Phone:       "+31612345678",
+		Email:       "warehouse@unisport.nl",
 	}
 }
 
 func postnlTestReceiver() Address {
 	return Address{
-		Name:       "Jan de Vries",
-		Street:     "Waldorpstraat",
+		Name:        "Jan de Vries",
+		Street:      "Waldorpstraat",
 		HouseNumber: "3",
-		City:       "Den Haag",
-		PostalCode: "2521CA",
-		Country:    "NL",
-		Phone:      "+31687654321",
-		Email:      "jan@example.nl",
+		City:        "Den Haag",
+		PostalCode:  "2521CA",
+		Country:     "NL",
+		Phone:       "+31687654321",
+		Email:       "jan@example.nl",
 	}
 }
 
 func postnlTestColli(id string, weight float64) Colli {
 	return Colli{
-		ID:     id,
-		Weight: weight,
+		ID:         id,
+		Weight:     weight,
 		Dimensions: Dimensions{Length: 30, Width: 20, Height: 10},
-		Items: []Item{{Description: "Sports shoes", Weight: weight, Quantity: 1}},
+		Items:      []Item{{Description: "Sports shoes", Weight: weight, Quantity: 1}},
 	}
 }
 
@@ -318,8 +318,8 @@ func TestPostNLAdapter_TrackShipment(t *testing.T) {
 					},
 					Event: []postnlEvent{
 						{
-							Code:        "J05",
-							Description: "Driver is en route",
+							Code:         "J05",
+							Description:  "Driver is en route",
 							LocationCode: "171966",
 							TimeStamp:    "08-11-2022 10:13:20",
 						},

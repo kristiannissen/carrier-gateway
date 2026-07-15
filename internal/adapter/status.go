@@ -45,11 +45,11 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 	// and extend the mapping. Codes below are sourced from the API spec examples.
 	"postnl": {
 		// Composite phase:statusCode keys (tried first by the adapter).
-		"1:1": StatusBooked,         // Pre-announced — data received, not yet at PostNL
-		"2:2": StatusPickedUp,       // Received at PostNL sorting centre
-		"2:3": StatusInTransit,      // Sorting in progress
-		"3:7": StatusOutForDelivery, // Out for delivery
-		"4:11": StatusDelivered,     // Delivered to recipient
+		"1:1":  StatusBooked,         // Pre-announced — data received, not yet at PostNL
+		"2:2":  StatusPickedUp,       // Received at PostNL sorting centre
+		"2:3":  StatusInTransit,      // Sorting in progress
+		"3:7":  StatusOutForDelivery, // Out for delivery
+		"4:11": StatusDelivered,      // Delivered to recipient
 
 		// Standalone StatusCode fallbacks.
 		"1":  StatusBooked,
@@ -57,8 +57,8 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 		"3":  StatusInTransit,
 		"7":  StatusOutForDelivery,
 		"11": StatusDelivered,
-		"12": StatusFailed,         // Delivery attempt failed
-		"13": StatusReturned,       // Returned to sender
+		"12": StatusFailed,   // Delivery attempt failed
+		"13": StatusReturned, // Returned to sender
 
 		// Event codes (returned in Event[].Code).
 		"A01": StatusBooked,         // Electronic pre-announcement
@@ -100,19 +100,19 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 
 	"bring": {
 		// Full enum from Bring Tracking API YAML specification.
-		"ATTEMPTED_DELIVERY":     StatusFailed,
-		"COLLECTED":              StatusPickedUp,
-		"CUSTOMS":                StatusInTransit,
-		"DELIVERED":              StatusDelivered,
-		"DELIVERED_SENDER":       StatusReturned,
-		"DELIVERY_CANCELLED":     StatusFailed,
-		"DELIVERY_CHANGED":       StatusInTransit,
-		"DELIVERY_ORDERED":       StatusBooked,
-		"DEVIATION":              StatusFailed,
-		"HANDED_IN":              StatusPickedUp,
-		"INTERNATIONAL":          StatusInTransit,
-		"IN_TRANSIT":             StatusInTransit,
-		"NOTIFICATION_SENT": StatusBooked,
+		"ATTEMPTED_DELIVERY": StatusFailed,
+		"COLLECTED":          StatusPickedUp,
+		"CUSTOMS":            StatusInTransit,
+		"DELIVERED":          StatusDelivered,
+		"DELIVERED_SENDER":   StatusReturned,
+		"DELIVERY_CANCELLED": StatusFailed,
+		"DELIVERY_CHANGED":   StatusInTransit,
+		"DELIVERY_ORDERED":   StatusBooked,
+		"DEVIATION":          StatusFailed,
+		"HANDED_IN":          StatusPickedUp,
+		"INTERNATIONAL":      StatusInTransit,
+		"IN_TRANSIT":         StatusInTransit,
+		"NOTIFICATION_SENT":  StatusBooked,
 		// PRE_NOTIFIED means the carrier has sent the recipient a delivery
 		// notification — the shipment is already moving toward the address.
 		// Previously mapped to StatusBooked (incorrect: booked = just registered).
@@ -151,19 +151,19 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 	// https://wsshipper.dpd.nl/soap/WSDL/ParcelLifecycleServiceV20.wsdl or from
 	// DPD NL integration support and extend this mapping.
 	"dpd_nl": {
-		"CREATED":          StatusBooked,          // Label registered, not yet collected
-		"REGISTERED":       StatusBooked,          // Alternative registration status
-		"COLLECTED":        StatusPickedUp,        // Collected by DPD from sender
-		"TRANSIT":          StatusInTransit,       // Moving through DPD network
-		"IN_TRANSIT":       StatusInTransit,       // In transit between depots
-		"DEPOT":            StatusInTransit,       // At DPD depot
-		"OUT_FOR_DELIVERY": StatusOutForDelivery,  // On delivery vehicle
-		"DELIVERED":        StatusDelivered,       // Delivered to recipient or service point
-		"NOT_DELIVERED":    StatusFailed,          // Delivery attempted, not successful
-		"EXCEPTION":        StatusFailed,          // Delivery exception
-		"MISSING":          StatusFailed,          // Parcel missing in network
-		"RETURNED":         StatusReturned,        // Being returned to sender
-		"RETURN_DELIVERED": StatusReturned,        // Returned to sender, delivered
+		"CREATED":          StatusBooked,         // Label registered, not yet collected
+		"REGISTERED":       StatusBooked,         // Alternative registration status
+		"COLLECTED":        StatusPickedUp,       // Collected by DPD from sender
+		"TRANSIT":          StatusInTransit,      // Moving through DPD network
+		"IN_TRANSIT":       StatusInTransit,      // In transit between depots
+		"DEPOT":            StatusInTransit,      // At DPD depot
+		"OUT_FOR_DELIVERY": StatusOutForDelivery, // On delivery vehicle
+		"DELIVERED":        StatusDelivered,      // Delivered to recipient or service point
+		"NOT_DELIVERED":    StatusFailed,         // Delivery attempted, not successful
+		"EXCEPTION":        StatusFailed,         // Delivery exception
+		"MISSING":          StatusFailed,         // Parcel missing in network
+		"RETURNED":         StatusReturned,       // Being returned to sender
+		"RETURN_DELIVERED": StatusReturned,       // Returned to sender, delivered
 	},
 
 	"dhl": {
@@ -313,13 +313,13 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 	// Codes below are inferred from the API spec example and common InPost status flows.
 	"inpost": {
 		"LMD.1001": StatusBooked,         // Shipment information received
-		"LMD.1002": StatusPickedUp,        // Parcel dropped off at locker / collected
-		"LMD.2000": StatusInTransit,       // In transit at sorting hub
-		"LMD.3000": StatusInTransit,       // Arrived at delivery facility
-		"LMD.4000": StatusOutForDelivery,  // Ready for collection at destination locker
-		"LMD.5000": StatusDelivered,       // Delivered / collected by recipient
-		"LMD.5100": StatusFailed,          // Delivery failed — parcel held
-		"LMD.6000": StatusReturned,        // Return to sender initiated
+		"LMD.1002": StatusPickedUp,       // Parcel dropped off at locker / collected
+		"LMD.2000": StatusInTransit,      // In transit at sorting hub
+		"LMD.3000": StatusInTransit,      // Arrived at delivery facility
+		"LMD.4000": StatusOutForDelivery, // Ready for collection at destination locker
+		"LMD.5000": StatusDelivered,      // Delivered / collected by recipient
+		"LMD.5100": StatusFailed,         // Delivery failed — parcel held
+		"LMD.6000": StatusReturned,       // Return to sender initiated
 	},
 
 	// dhl_ecommerce_uk: statusCode values from DHL eCommerce UK Tracking API v1.
@@ -406,20 +406,20 @@ var normalizedStatuses = map[string]map[string]TrackingStatus{
 	},
 
 	"econt": {
-		"Prepared in eEcont":              StatusBooked,
-		"Accepted in Econt":               StatusPickedUp,
-		"In route":                        StatusInTransit,
-		"In courier":                      StatusOutForDelivery,
-		"In pick up courier":              StatusPickedUp,
-		"Accepted in office":              StatusInTransit,
-		"In delivery courier's office":    StatusOutForDelivery,
-		"Arrived in office":               StatusInTransit,
-		"Arrival departure from hub":      StatusInTransit,
-		"Delivered":                       StatusDelivered,
-		"Cancelled after sending":         StatusFailed,
-		"Cancelled before sending":        StatusFailed,
-		"Is returning to sender":          StatusReturned,
-		"Returned to sender":              StatusReturned,
+		"Prepared in eEcont":           StatusBooked,
+		"Accepted in Econt":            StatusPickedUp,
+		"In route":                     StatusInTransit,
+		"In courier":                   StatusOutForDelivery,
+		"In pick up courier":           StatusPickedUp,
+		"Accepted in office":           StatusInTransit,
+		"In delivery courier's office": StatusOutForDelivery,
+		"Arrived in office":            StatusInTransit,
+		"Arrival departure from hub":   StatusInTransit,
+		"Delivered":                    StatusDelivered,
+		"Cancelled after sending":      StatusFailed,
+		"Cancelled before sending":     StatusFailed,
+		"Is returning to sender":       StatusReturned,
+		"Returned to sender":           StatusReturned,
 	},
 }
 

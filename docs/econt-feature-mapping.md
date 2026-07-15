@@ -1,5 +1,8 @@
 # Econt Feature Mapping
 
+**Status: Production.** Full `CarrierAdapter` coverage plus pickup booking
+(`ManifestAdapter`/`PickupQuerier`). See the implementation checklist below.
+
 Econt Express API v1.0. Base URL: `https://ee.econt.com/services` (POST only, Basic auth).
 Test URL: `https://demo.econt.com/ee/services` — credentials `iasp-dev` / `1Asp-dev`.
 
@@ -117,19 +120,50 @@ Test URL: `https://demo.econt.com/ee/services` — credentials `iasp-dev` / `1As
 
 ## Implementation checklist
 
-Follows the standard "Adding a carrier" steps from the README.
+Follows the standard "Adding a carrier" steps from the README. All items are
+complete — Econt is production status (see `README.md`).
 
-- [ ] `internal/adapter/econt.go` — implement `CarrierAdapter`
-- [ ] `internal/adapter/mock_econt.go`
-- [ ] `internal/adapter/econt_test.go`
-- [ ] Register in `InitAdapters` in `adapter.go` with `ECONT_USERNAME` / `ECONT_PASSWORD` guard
-- [ ] Add `capabilities` entry in `adapter.go`
-- [ ] Add status mappings in `status.go` (key: `shortDeliveryStatusEn`)
-- [ ] Add limits entry in `validation/package.go` (max weight 50 kg pack, 1000 kg pallet)
-- [ ] Add `carrierCustomsRules` entry in `validation/carrier_customs.go` (TARIC codes required for cross-border)
-- [ ] Add restricted goods entries in `validation/restricted.go`
-- [ ] Wire customs fields in `adapter/customs.go`
-- [ ] `FetchLabel`: implement as `getShipmentStatuses` → extract `pdfURL` → HTTP GET → base64
-- [ ] `CancelShipment`: call `deleteLabels`; handle already-accepted state via `checkPossibleShipmentEditions`
-- [ ] Pickup: implement `requestCourier` + `getRequestCourierStatus` behind `/api/pickups`
-- [ ] Manifest: return `ErrNotSupported`
+- [x] `internal/adapter/econt.go` — implements `CarrierAdapter`, `ManifestAdapter`, `PickupQuerier`
+- [x] `internal/adapter/mock_econt.go`
+- [x] `internal/adapter/econt_test.go`
+- [x] Registered in `InitAdapters` in `adapter.go` with `ECONT_USERNAME` / `ECONT_PASSWORD` guard
+- [x] `capabilities` entry in `adapter.go` (`Beta: false`)
+- [x] Status mappings in `status.go` (key: `shortDeliveryStatusEn`, plus fine-grained `destinationType` mapping)
+- [x] Limits entry in `validation/package.go` (max weight 50 kg pack, 200×200×180 cm)
+- [x] `carrierCustomsRules` entry in `validation/carrier_customs.go` (TARIC codes required for cross-border)
+- [x] Restricted goods entries in `validation/restricted.go`
+- [x] Customs: embedded directly in the booking payload (`econtLabelFrom` → `econtCustomsList`), same pattern as Bring — no standalone `adapter/customs.go` entry needed since Econt has no separate customs-submission endpoint
+- [x] `FetchLabel`: implemented as `getShipmentStatuses` → extract `pdfURL` → HTTP GET → base64
+- [x] `CancelShipment`: calls `deleteLabels`; handles already-accepted state via `checkPossibleShipmentEditions`
+- [x] Pickup: `requestCourier` + `getRequestCourierStatus` wired behind `/api/pickups` (`BookPickup` / `GetPickupByID`); `UpdatePickup`, `CancelPickup`, `CloseManifest`, `GetPickupAvailability`, `ListPickups`, and `GetCutoffTime` return `ErrNotSupported` — Econt has no API endpoints for those operations
+- [x] Manifest: returns `ErrNotSupported` (no manifest/end-of-day close endpoint exists)
+
+---
+
+## Pickup implementation notes
+
+`BookPickup` calls `ShipmentService.requestCourier`. Key details that differ
+from other carriers in this gateway:
+
+- **No pre-agreed pickup location.** Unlike carriers with an `AsID`/account-level
+  default address, Econt's `requestCourier` always requires a full `senderAddress`.
+  `BookPickup` returns an error if `req.Address` (street, city, postal code,
+  country) is not supplied — there is no fallback to a configured warehouse address.
+- **Unix timestamps, not HH:MM strings.** `requestTimeFrom` / `requestTimeTo` are
+  Unix timestamps, not the HH:MM strings most other adapters pass through.
+  `econtPickupTimestamp` combines `Pickup.Date` + `Pickup.ReadyTime`/`CloseTime`
+  and interprets them as Bulgaria standard time (EET, UTC+2). Daylight saving
+  (EEST, UTC+3) is not accounted for — the one-hour drift does not affect
+  same-day pickup eligibility in practice.
+- **No update or cancel endpoint.** Econt's API has no way to modify or cancel a
+  courier request once submitted — `UpdatePickup` and `CancelPickup` return
+  `ErrNotSupported`. Cancellation happens through the Econt portal or by
+  contacting Econt directly; the request status then shows `reject_client`.
+- **Status lookup only by ID.** `GetPickupByID` calls `getRequestCourierStatus`
+  with a single `requestCourierIds` entry and maps the returned
+  `RequestCourierStatusType` (`unprocess`/`process` → `CREATED`, `taken` →
+  `COLLECTED`, `reject`/`reject_client` → `CANCELLED`) to the gateway's
+  `PickupInfo.Status` vocabulary. There is no org-wide listing endpoint, so
+  `ListPickups` returns `ErrNotSupported`. There is also no dedicated
+  same-day cutoff-time endpoint, so `GetCutoffTime` returns `ErrNotSupported` —
+  call `BookPickup` directly with the desired window instead.

@@ -732,10 +732,10 @@ func TestInPostAdapter_BookPickup_PhoneSplit(t *testing.T) {
 
 	a := newPreseededInPostAdapter(srv)
 	_, err := a.BookPickup(t.Context(), PickupRequest{
-		Carrier: "inpost",
-		Pickup:  PickupWindow{Date: "2025-01-20"},
-		Contact: PickupContact{Name: "Jan Nowak", Phone: "+48500111222"},
-		Address: PickupAddress{Country: "PL", City: "Warsaw", PostalCode: "00-001", Street: "ul. Testowa"},
+		Carrier:          "inpost",
+		Pickup:           PickupWindow{Date: "2025-01-20"},
+		Contact:          PickupContact{Name: "Jan Nowak", Phone: "+48500111222"},
+		Address:          PickupAddress{Country: "PL", City: "Warsaw", PostalCode: "00-001", Street: "ul. Testowa"},
 		EstimatedParcels: 1,
 	})
 	require.NoError(t, err)
@@ -789,10 +789,10 @@ func TestInPostAdapter_BookPickup_PickupTimeDefaults(t *testing.T) {
 
 	a := newPreseededInPostAdapter(srv)
 	_, err := a.BookPickup(t.Context(), PickupRequest{
-		Carrier: "inpost",
-		Pickup:  PickupWindow{Date: "2025-01-20"}, // no ReadyTime / CloseTime
-		Contact: PickupContact{Name: "Jan Nowak"},
-		Address: PickupAddress{Country: "PL", City: "W", PostalCode: "00-001", Street: "S"},
+		Carrier:          "inpost",
+		Pickup:           PickupWindow{Date: "2025-01-20"}, // no ReadyTime / CloseTime
+		Contact:          PickupContact{Name: "Jan Nowak"},
+		Address:          PickupAddress{Country: "PL", City: "W", PostalCode: "00-001", Street: "S"},
 		EstimatedParcels: 1,
 	})
 	require.NoError(t, err)

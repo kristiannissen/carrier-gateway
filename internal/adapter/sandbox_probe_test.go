@@ -79,8 +79,8 @@ func sandboxShipment(carrier string) BookingRequest {
 			TotalWeight: 1.0,
 			Colli: []Colli{
 				{
-					ID:     "probe-colli-1",
-					Weight: 1.0,
+					ID:         "probe-colli-1",
+					Weight:     1.0,
 					Dimensions: Dimensions{Length: 20, Width: 15, Height: 10},
 					Items: []Item{
 						{Description: "Sandbox probe item", Weight: 1.0, Quantity: 1, Value: 10},

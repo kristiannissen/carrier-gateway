@@ -20,12 +20,12 @@ import (
 //	    },
 //	}
 type MockPostNLAdapter struct {
-	BookShipmentFunc    func(request BookingRequest) (*BookingResponse, error)
-	TrackShipmentFunc   func(trackingNumber string) (*TrackingResponse, error)
-	FetchLabelFunc      func(req LabelRequest) (*LabelResponse, error)
-	CancelShipmentFunc  func(trackingNumber string) (*CancelResponse, error)
-	UpdateShipmentFunc  func(req UpdateRequest) (*UpdateResponse, error)
-	BookReturnFunc      func(req ReturnRequest) (*ReturnResponse, error)
+	BookShipmentFunc     func(request BookingRequest) (*BookingResponse, error)
+	TrackShipmentFunc    func(trackingNumber string) (*TrackingResponse, error)
+	FetchLabelFunc       func(req LabelRequest) (*LabelResponse, error)
+	CancelShipmentFunc   func(trackingNumber string) (*CancelResponse, error)
+	UpdateShipmentFunc   func(req UpdateRequest) (*UpdateResponse, error)
+	BookReturnFunc       func(req ReturnRequest) (*ReturnResponse, error)
 	FetchReturnLabelFunc func(req LabelRequest) (*LabelResponse, error)
 }
 

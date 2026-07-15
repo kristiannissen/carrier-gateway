@@ -345,10 +345,10 @@ func (a *DPDAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 	}
 
 	payload := map[string]any{
-		"parcelNumbers":  []string{req.TrackingNumber},
-		"downloadLabel":  true,
-		"labelFormat":    dpdLabelFormat(req.Format),
-		"paperSize":      "A6",
+		"parcelNumbers": []string{req.TrackingNumber},
+		"downloadLabel": true,
+		"labelFormat":   dpdLabelFormat(req.Format),
+		"paperSize":     "A6",
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -581,4 +581,3 @@ func normalizeDPDStatus(statusCode, serviceCode, prevStatusCode string) Tracking
 	}
 	return StatusUnknown
 }
-

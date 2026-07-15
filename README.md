@@ -53,7 +53,7 @@ curl -X POST http://localhost:8080/api/bookings \
 | `hermes` | Hermes Germany (DE) | Beta |
 | `evri` | Evri (GB) | Beta |
 | `speedy` | Speedy (BG + Balkans) | Beta |
-| `econt` | Econt Express (BG + SE Europe) | Beta |
+| `econt` | Econt Express (BG + SE Europe) | Production |
 | `matkahuolto` | Matkahuolto (FI) | Beta |
 | `ufficiopostale` | Ufficio Postale / Poste Italiane (IT) | Beta |
 
@@ -407,6 +407,7 @@ curl http://localhost:8080/api/health
     "omniva": "production",
     "fedex": "production",
     "dao": "production",
+    "econt": "production",
     "postnl": "beta",
     "dhl": "beta",
     "dhl_express": "beta",
@@ -416,7 +417,6 @@ curl http://localhost:8080/api/health
     "hermes": "beta",
     "evri": "beta",
     "speedy": "beta",
-    "econt": "beta",
     "matkahuolto": "beta",
     "ufficiopostale": "beta"
   }

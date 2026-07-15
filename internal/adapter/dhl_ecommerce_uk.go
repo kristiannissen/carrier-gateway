@@ -400,10 +400,10 @@ func (a *DHLEcomUKAdapter) BookShipment(ctx context.Context, req BookingRequest)
 			customsDetails := make([]any, 0, len(customs.Items))
 			for _, item := range customs.Items {
 				cd := map[string]any{
-					"itemDescription":   item.Description,
-					"itemValue":         item.Value,
-					"itemWeight":        item.NetWeight,
-					"packagedQuantity":  item.Quantity,
+					"itemDescription":  item.Description,
+					"itemValue":        item.Value,
+					"itemWeight":       item.NetWeight,
+					"packagedQuantity": item.Quantity,
 				}
 				if item.NetWeight == 0 {
 					cd["itemWeight"] = colli.Weight / float64(len(customs.Items))
@@ -420,7 +420,7 @@ func (a *DHLEcomUKAdapter) BookShipment(ctx context.Context, req BookingRequest)
 				if origin != "" {
 					cd["countryOfOrigin"] = origin
 				}
-					customsDetails = append(customsDetails, cd)
+				customsDetails = append(customsDetails, cd)
 			}
 			piece["customsDetails"] = customsDetails
 		}
@@ -536,7 +536,7 @@ func (a *DHLEcomUKAdapter) BookShipment(ctx context.Context, req BookingRequest)
 				Reference:      colli.Reference,
 				TrackingNumber: s.ReturnShipmentID,
 				Status:         "booked",
-				LabelURL:       func() string {
+				LabelURL: func() string {
 					if len(s.Labels) > 1 {
 						return s.Labels[1]
 					}
@@ -609,18 +609,22 @@ func (a *DHLEcomUKAdapter) TrackShipment(ctx context.Context, trackingNumber str
 		Shipments []struct {
 			ID     string `json:"id"`
 			Status struct {
-				Timestamp   string `json:"timestamp"`
-				Location    struct{ Address struct{ AddressLocality string } } `json:"location"`
-				Status      string                                             `json:"status"`
-				Description string                                             `json:"description"`
-				StatusCode  string                                             `json:"statusCode"`
+				Timestamp string `json:"timestamp"`
+				Location  struct {
+					Address struct{ AddressLocality string }
+				} `json:"location"`
+				Status      string `json:"status"`
+				Description string `json:"description"`
+				StatusCode  string `json:"statusCode"`
 			} `json:"status"`
 			Events []struct {
-				Timestamp   string `json:"timestamp"`
-				Location    struct{ Address struct{ AddressLocality string } } `json:"location"`
-				Status      string                                             `json:"status"`
-				Description string                                             `json:"description"`
-				StatusCode  string                                             `json:"statusCode"`
+				Timestamp string `json:"timestamp"`
+				Location  struct {
+					Address struct{ AddressLocality string }
+				} `json:"location"`
+				Status      string `json:"status"`
+				Description string `json:"description"`
+				StatusCode  string `json:"statusCode"`
 			} `json:"events"`
 			EstimatedDeliveryTime string `json:"estimatedDeliveryTime"`
 		} `json:"shipments"`
@@ -679,7 +683,7 @@ func (a *DHLEcomUKAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*L
 	}
 
 	var labelResp struct {
-		ShipmentID string   `json:"shipmentId"`
+		ShipmentID string `json:"shipmentId"`
 		Labels     []struct {
 			Label string `json:"label"`
 		} `json:"labels"`

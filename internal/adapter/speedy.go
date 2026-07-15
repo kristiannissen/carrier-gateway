@@ -98,10 +98,10 @@ type speedyPhone struct {
 
 // speedySender is the sender block in a create-shipment request.
 type speedySender struct {
-	Phone1      speedyPhone   `json:"phone1"`
-	ClientName  string        `json:"clientName"`
-	PrivatePerson bool        `json:"privatePerson"`
-	Address     speedyAddress `json:"address"`
+	Phone1        speedyPhone   `json:"phone1"`
+	ClientName    string        `json:"clientName"`
+	PrivatePerson bool          `json:"privatePerson"`
+	Address       speedyAddress `json:"address"`
 }
 
 // speedyRecipient is the recipient block in a create-shipment request.
@@ -152,13 +152,13 @@ type speedyService struct {
 // speedyCreateRequest is the POST /shipment request body.
 type speedyCreateRequest struct {
 	speedyAuth
-	Sender            speedySender             `json:"sender"`
-	Recipient         speedyRecipient          `json:"recipient"`
-	Service           speedyService            `json:"service"`
-	Content           speedyContent            `json:"content"`
-	Payment           speedyPayment            `json:"payment"`
+	Sender             speedySender              `json:"sender"`
+	Recipient          speedyRecipient           `json:"recipient"`
+	Service            speedyService             `json:"service"`
+	Content            speedyContent             `json:"content"`
+	Payment            speedyPayment             `json:"payment"`
 	AdditionalServices *speedyAdditionalServices `json:"additionalServices,omitempty"`
-	Ref1              string                   `json:"ref1,omitempty"`
+	Ref1               string                    `json:"ref1,omitempty"`
 }
 
 // speedyCreatedParcel is one parcel in the create-shipment response.
@@ -596,12 +596,12 @@ func (a *SpeedyAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*Upd
 // speedyPickupRequest is the POST /pickup request body.
 type speedyPickupRequest struct {
 	speedyAuth
-	PickupDateTime    string      `json:"pickupDateTime,omitempty"`
-	VisitEndTime      string      `json:"visitEndTime"`
-	AutoAdjustPickup  bool        `json:"autoAdjustPickupDate,omitempty"`
-	PickupScope       string      `json:"pickupScope"`
-	ContactName       string      `json:"contactName,omitempty"`
-	PhoneNumber       speedyPhone `json:"phoneNumber,omitempty"`
+	PickupDateTime   string      `json:"pickupDateTime,omitempty"`
+	VisitEndTime     string      `json:"visitEndTime"`
+	AutoAdjustPickup bool        `json:"autoAdjustPickupDate,omitempty"`
+	PickupScope      string      `json:"pickupScope"`
+	ContactName      string      `json:"contactName,omitempty"`
+	PhoneNumber      speedyPhone `json:"phoneNumber,omitempty"`
 }
 
 // speedyPickupOrder is one order in the pickup response.
@@ -637,7 +637,7 @@ func (a *SpeedyAdapter) BookPickup(ctx context.Context, req PickupRequest) (*Pic
 	}
 
 	body := speedyPickupRequest{
-		speedyAuth:   a.auth(),
+		speedyAuth:     a.auth(),
 		PickupDateTime: pickupDT,
 		VisitEndTime:   closeTime,
 		PickupScope:    "ALL_CREATED_BY_SAME_CLIENT",

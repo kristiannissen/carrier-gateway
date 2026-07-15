@@ -105,25 +105,25 @@ func (a *OmnivaAdapter) WithNotificationService(svc *notification.Service) *Omni
 // ── wire format types ─────────────────────────────────────────────────────────
 
 type omnivaAddress struct {
-	Street       string `json:"street,omitempty"`
-	HouseNo      string `json:"houseNo,omitempty"`
-	ApartmentNo  string `json:"apartmentNo,omitempty"`
-	Deliverypoint string `json:"deliverypoint,omitempty"`
-	Postcode     string `json:"postcode,omitempty"`
-	Country      string `json:"country"`
+	Street          string `json:"street,omitempty"`
+	HouseNo         string `json:"houseNo,omitempty"`
+	ApartmentNo     string `json:"apartmentNo,omitempty"`
+	Deliverypoint   string `json:"deliverypoint,omitempty"`
+	Postcode        string `json:"postcode,omitempty"`
+	Country         string `json:"country"`
 	OffloadPostcode string `json:"offloadPostcode,omitempty"`
 }
 
 type omnivaAddressee struct {
-	PersonName  string        `json:"personName,omitempty"`
-	CompanyName string        `json:"companyName,omitempty"`
-	AltName     string        `json:"altName,omitempty"`
-	ContactPhone  string      `json:"contactPhone,omitempty"`
-	ContactMobile string      `json:"contactMobile,omitempty"`
-	ContactEmail  string      `json:"contactEmail,omitempty"`
-	Address     omnivaAddress `json:"address"`
-	UseCustomerCode bool      `json:"useCustomerCode,omitempty"`
-	UseSenderAddressForReturn bool `json:"useSenderAddressForReturn,omitempty"`
+	PersonName                string        `json:"personName,omitempty"`
+	CompanyName               string        `json:"companyName,omitempty"`
+	AltName                   string        `json:"altName,omitempty"`
+	ContactPhone              string        `json:"contactPhone,omitempty"`
+	ContactMobile             string        `json:"contactMobile,omitempty"`
+	ContactEmail              string        `json:"contactEmail,omitempty"`
+	Address                   omnivaAddress `json:"address"`
+	UseCustomerCode           bool          `json:"useCustomerCode,omitempty"`
+	UseSenderAddressForReturn bool          `json:"useSenderAddressForReturn,omitempty"`
 }
 
 type omnivaMeasurement struct {
@@ -134,8 +134,8 @@ type omnivaMeasurement struct {
 }
 
 type omnivaServicePackage struct {
-	Code                string `json:"code,omitempty"`
-	AllowedStoringPeriod *int  `json:"allowedStoringPeriod,omitempty"`
+	Code                 string `json:"code,omitempty"`
+	AllowedStoringPeriod *int   `json:"allowedStoringPeriod,omitempty"`
 }
 
 type omnivaAddServiceParam struct {
@@ -148,7 +148,7 @@ type omnivaAddServiceParam struct {
 }
 
 type omnivaAddService struct {
-	Code   string                `json:"code"`
+	Code   string                 `json:"code"`
 	Params *omnivaAddServiceParam `json:"params,omitempty"`
 }
 
@@ -173,21 +173,21 @@ type omnivaCustoms struct {
 }
 
 type omnivaShipment struct {
-	Barcode             string               `json:"barcode,omitempty"`
-	PartnerShipmentID   string               `json:"partnerShipmentId,omitempty"`
-	MainService         string               `json:"mainService"`
-	DeliveryChannel     string               `json:"deliveryChannel,omitempty"`
-	ContentDescription  string               `json:"contentDescription,omitempty"`
-	ShipmentComment     string               `json:"shipmentComment,omitempty"`
-	ReturnAllowed       *bool                `json:"returnAllowed,omitempty"`
-	CustomerReturn      bool                 `json:"customerReturn,omitempty"`
-	PaidByReceiver      bool                 `json:"paidByReceiver,omitempty"`
-	ServicePackage      *omnivaServicePackage `json:"servicePackage,omitempty"`
-	AddServices         []omnivaAddService   `json:"addServices,omitempty"`
-	Measurement         *omnivaMeasurement   `json:"measurement,omitempty"`
-	SenderAddressee     omnivaAddressee      `json:"senderAddressee"`
-	ReceiverAddressee   omnivaAddressee      `json:"receiverAddressee"`
-	Customs             *omnivaCustoms       `json:"customs,omitempty"`
+	Barcode            string                `json:"barcode,omitempty"`
+	PartnerShipmentID  string                `json:"partnerShipmentId,omitempty"`
+	MainService        string                `json:"mainService"`
+	DeliveryChannel    string                `json:"deliveryChannel,omitempty"`
+	ContentDescription string                `json:"contentDescription,omitempty"`
+	ShipmentComment    string                `json:"shipmentComment,omitempty"`
+	ReturnAllowed      *bool                 `json:"returnAllowed,omitempty"`
+	CustomerReturn     bool                  `json:"customerReturn,omitempty"`
+	PaidByReceiver     bool                  `json:"paidByReceiver,omitempty"`
+	ServicePackage     *omnivaServicePackage `json:"servicePackage,omitempty"`
+	AddServices        []omnivaAddService    `json:"addServices,omitempty"`
+	Measurement        *omnivaMeasurement    `json:"measurement,omitempty"`
+	SenderAddressee    omnivaAddressee       `json:"senderAddressee"`
+	ReceiverAddressee  omnivaAddressee       `json:"receiverAddressee"`
+	Customs            *omnivaCustoms        `json:"customs,omitempty"`
 }
 
 type omnivaShipmentRequest struct {
@@ -196,8 +196,8 @@ type omnivaShipmentRequest struct {
 }
 
 type omnivaSavedShipment struct {
-	Barcode        string `json:"barcode"`
-	ClientItemID   string `json:"clientItemId"`
+	Barcode      string `json:"barcode"`
+	ClientItemID string `json:"clientItemId"`
 }
 
 type omnivaFailedShipment struct {
@@ -214,9 +214,9 @@ type omnivaShipmentResponse struct {
 }
 
 type omnivaLabelRequest struct {
-	CustomerCode       string   `json:"customerCode"`
-	Barcodes           []string `json:"barcodes"`
-	SendAddressCardTo  string   `json:"sendAddressCardTo"`
+	CustomerCode      string   `json:"customerCode"`
+	Barcodes          []string `json:"barcodes"`
+	SendAddressCardTo string   `json:"sendAddressCardTo"`
 }
 
 type omnivaLabelEntry struct {
@@ -297,8 +297,8 @@ type omnivaReturnFailed struct {
 }
 
 type omnivaReturnResponse struct {
-	ResultCode      string              `json:"resultCode"`
-	SavedShipments  []omnivaReturnSaved `json:"savedShipments"`
+	ResultCode      string               `json:"resultCode"`
+	SavedShipments  []omnivaReturnSaved  `json:"savedShipments"`
 	FailedShipments []omnivaReturnFailed `json:"failedShipments"`
 }
 
@@ -325,7 +325,7 @@ type OmnivaReturnResult struct {
 }
 
 type omnivaPickupAvailabilityRequest struct {
-	CustomerCode string               `json:"customerCode"`
+	CustomerCode  string              `json:"customerCode"`
 	PickupAddress omnivaPickupAddress `json:"pickupAddress"`
 }
 
@@ -362,18 +362,18 @@ type omnivaPickupRequest struct {
 
 type omnivaPickupResponse struct {
 	CourierOrderNumber string `json:"courierOrderNumber"`
-	StartTime         string `json:"startTime"`
-	EndTime           string `json:"endTime"`
+	StartTime          string `json:"startTime"`
+	EndTime            string `json:"endTime"`
 }
 
 type omnivaCancelPickupRequest struct {
-	CustomerCode      string `json:"customerCode"`
+	CustomerCode       string `json:"customerCode"`
 	CourierOrderNumber string `json:"courierOrderNumber"`
 }
 
 type omnivaCancelPickupResponse struct {
 	CourierOrderNumber string `json:"courierOrderNumber"`
-	ResultCode        string `json:"resultCode"`
+	ResultCode         string `json:"resultCode"`
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -457,10 +457,10 @@ func omnivaServicePackageCode(tier string) string {
 // omnivaAddresses converts a gateway Address to an Omniva addressee block.
 func omnivaAddresseeFrom(addr Address) omnivaAddressee {
 	a := omnivaAddressee{
-		AltName:       addr.AltName,
-		ContactPhone:  addr.Phone,
-		ContactMobile: addr.Phone, // same value; Omniva prefers mobile for notifications
-		ContactEmail:  addr.Email,
+		AltName:                   addr.AltName,
+		ContactPhone:              addr.Phone,
+		ContactMobile:             addr.Phone, // same value; Omniva prefers mobile for notifications
+		ContactEmail:              addr.Email,
 		UseSenderAddressForReturn: addr.UseAddressForReturn,
 		Address: omnivaAddress{
 			Street:          addr.Street,
@@ -1096,24 +1096,24 @@ func (a *OmnivaAdapter) pollOnce(ctx context.Context, prefs notification.Prefere
 // are observed in production. Unknown codes fall back to StatusInTransit.
 var omnivaStatuses = map[string]TrackingStatus{
 	// Registration and pre-transit.
-	"REGISTERED":   StatusBooked,
-	"ACCEPTED":     StatusPickedUp,
-	"COLLECTED":    StatusPickedUp,
+	"REGISTERED": StatusBooked,
+	"ACCEPTED":   StatusPickedUp,
+	"COLLECTED":  StatusPickedUp,
 	// In-transit events.
-	"IN_TRANSIT":   StatusInTransit,
-	"IN_SORTING":   StatusInTransit,
-	"SORTED":       StatusInTransit,
-	"DISPATCHED":   StatusInTransit,
+	"IN_TRANSIT": StatusInTransit,
+	"IN_SORTING": StatusInTransit,
+	"SORTED":     StatusInTransit,
+	"DISPATCHED": StatusInTransit,
 	// Delivery events.
-	"OUT_FOR_DELIVERY": StatusOutForDelivery,
-	"DELIVERED":        StatusDelivered,
+	"OUT_FOR_DELIVERY":     StatusOutForDelivery,
+	"DELIVERED":            StatusDelivered,
 	"DELIVERED_TO_MAILBOX": StatusDelivered,
 	// Failure and return events.
-	"DELIVERY_FAILED":   StatusFailed,
-	"NOT_HOME":          StatusFailed,
-	"REFUSED":           StatusFailed,
-	"RETURNED":          StatusReturned,
-	"RETURN_TO_SENDER":  StatusReturned,
+	"DELIVERY_FAILED":  StatusFailed,
+	"NOT_HOME":         StatusFailed,
+	"REFUSED":          StatusFailed,
+	"RETURNED":         StatusReturned,
+	"RETURN_TO_SENDER": StatusReturned,
 	// Held at post office or parcel machine.
 	"READY_FOR_PICKUP": StatusInTransit,
 	"STORED":           StatusInTransit,

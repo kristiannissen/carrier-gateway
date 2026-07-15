@@ -108,4 +108,3 @@ func (m *MockDPDUKAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (
 func (m *MockDPDUKAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
 	return nil, notSupported("DPD UK", "pickup availability", "")
 }
-

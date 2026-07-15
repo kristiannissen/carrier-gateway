@@ -171,7 +171,7 @@ Status column reflects the current state of the gateway implementation:
 |---|---|---|---|
 | GLS Croatia / Slovenia | `gls` | Implemented | Covered by the multi-country GLS ShipIT adapter. |
 | DPD Croatia / Slovenia | `dpd_hr` / `dpd_si` | Not implemented | See DPD under Multi-country. |
-| Econt | `econt` | Partial | BookShipment, CancelShipment, UpdateShipment, TrackShipment, and FetchLabel (PDF) implemented. No pickup, manifest, or return endpoints. Basic Auth via `ECONT_USERNAME` / `ECONT_PASSWORD`. Covers BG and cross-border via Econt Express. |
+| Econt | `econt` | Production | BookShipment, CancelShipment, UpdateShipment, TrackShipment, FetchLabel (PDF), BookPickup, and GetPickupByID implemented. UpdatePickup, CancelPickup, CloseManifest, GetPickupAvailability, ListPickups, and GetCutoffTime return 501 (no such endpoints exist on the Econt API). No return endpoint. Basic Auth via `ECONT_USERNAME` / `ECONT_PASSWORD`. Covers BG and cross-border via Econt Express. |
 | Speedy | `speedy` | Partial | BookShipment, CancelShipment, TrackShipment, FetchLabel (PDF + ZPL), BookPickup, BookReturn, and FetchReturnLabel implemented. UpdateShipment, CancelPickup, and CloseManifest return 501. Credentials embedded in request body (`SPEEDY_USERNAME` / `SPEEDY_PASSWORD`). Covers BG, RO, and neighbouring Balkan markets. |
 
 ---

@@ -73,13 +73,13 @@ type postnlContact struct {
 
 // postnlServices holds the optional services block for a PostNL PNP v4 shipment.
 type postnlServices struct {
-	InsuredValue        *float64           `json:"insuredValue,omitempty"`
-	StatedAddressOnly   bool               `json:"statedAddressOnly,omitempty"`
-	ReturnWhenNotHome   bool               `json:"returnWhenNotHome,omitempty"`
-	MinimalAgeCheck     string             `json:"minimalAgeCheck,omitempty"`
-	DeliveryConfirmation string            `json:"deliveryConfirmation,omitempty"`
-	DeliveryWindow      *postnlDelivWindow `json:"deliveryWindow,omitempty"`
-	Adrlq               bool               `json:"adrlq,omitempty"`
+	InsuredValue         *float64           `json:"insuredValue,omitempty"`
+	StatedAddressOnly    bool               `json:"statedAddressOnly,omitempty"`
+	ReturnWhenNotHome    bool               `json:"returnWhenNotHome,omitempty"`
+	MinimalAgeCheck      string             `json:"minimalAgeCheck,omitempty"`
+	DeliveryConfirmation string             `json:"deliveryConfirmation,omitempty"`
+	DeliveryWindow       *postnlDelivWindow `json:"deliveryWindow,omitempty"`
+	Adrlq                bool               `json:"adrlq,omitempty"`
 }
 
 // postnlDelivWindow holds the delivery window service options.
@@ -132,14 +132,14 @@ type postnlDimension struct {
 
 // postnlBookRequest is the body sent to POST /shipment/delivery/v4/labelconfirm.
 type postnlBookRequest struct {
-	Receiver               postnlReceiver           `json:"receiver"`
-	Sender                 postnlSender             `json:"sender"`
-	ItemCount              int                      `json:"itemCount,omitempty"`
-	Items                  []postnlShipmentItem     `json:"items,omitempty"`
-	ShipmentType           string                   `json:"shipmentType"`
-	HandoverDate           string                   `json:"handoverDate,omitempty"`
-	LabelSettings          *postnlLabelSettings     `json:"labelSettings,omitempty"`
-	Services               *postnlServices          `json:"services,omitempty"`
+	Receiver                  postnlReceiver           `json:"receiver"`
+	Sender                    postnlSender             `json:"sender"`
+	ItemCount                 int                      `json:"itemCount,omitempty"`
+	Items                     []postnlShipmentItem     `json:"items,omitempty"`
+	ShipmentType              string                   `json:"shipmentType"`
+	HandoverDate              string                   `json:"handoverDate,omitempty"`
+	LabelSettings             *postnlLabelSettings     `json:"labelSettings,omitempty"`
+	Services                  *postnlServices          `json:"services,omitempty"`
 	InternationalShipmentData *postnlInternationalData `json:"internationalShipmentData,omitempty"`
 }
 
@@ -152,9 +152,9 @@ type postnlReceiver struct {
 
 // postnlSender is the sender (customer) block in a PostNL booking request.
 type postnlSender struct {
-	CustomerNumber string        `json:"customerNumber"`
-	CustomerCode   string        `json:"customerCode,omitempty"`
-	Address        postnlAddress `json:"address"`
+	CustomerNumber string         `json:"customerNumber"`
+	CustomerCode   string         `json:"customerCode,omitempty"`
+	Address        postnlAddress  `json:"address"`
 	Contact        *postnlContact `json:"contact,omitempty"`
 }
 
@@ -166,8 +166,8 @@ type postnlEmaOkResponse struct {
 
 // postnlEmaItem is one item in the EmaOkResponse.
 type postnlEmaItem struct {
-	Barcode  string            `json:"barcode"`
-	Labels   []postnlEmaLabel  `json:"labels"`
+	Barcode string           `json:"barcode"`
+	Labels  []postnlEmaLabel `json:"labels"`
 }
 
 // postnlEmaLabel holds base64-encoded label data.
@@ -209,18 +209,18 @@ type postnlCurrentStatus struct {
 
 // postnlTrackedShipment carries the status and event history for a single barcode.
 type postnlTrackedShipment struct {
-	Barcode string            `json:"Barcode"`
-	Status  postnlStatus      `json:"Status"`
-	Event   []postnlEvent     `json:"Event"`
+	Barcode string        `json:"Barcode"`
+	Status  postnlStatus  `json:"Status"`
+	Event   []postnlEvent `json:"Event"`
 }
 
 // postnlStatus holds the shipment status from the ShippingStatus API.
 type postnlStatus struct {
-	TimeStamp          string `json:"TimeStamp"`
-	StatusCode         string `json:"StatusCode"`
-	StatusDescription  string `json:"StatusDescription"`
-	PhaseCode          string `json:"PhaseCode"`
-	PhaseDescription   string `json:"PhaseDescription"`
+	TimeStamp         string `json:"TimeStamp"`
+	StatusCode        string `json:"StatusCode"`
+	StatusDescription string `json:"StatusDescription"`
+	PhaseCode         string `json:"PhaseCode"`
+	PhaseDescription  string `json:"PhaseDescription"`
 }
 
 // postnlEvent is a single tracking event in the event history.
@@ -233,11 +233,11 @@ type postnlEvent struct {
 
 // postnlReturnRequest is the body for POST /shipment/delivery/v4/return/generate.
 type postnlReturnRequest struct {
-	Sender        postnlReturnSender        `json:"sender"`
-	Receiver      postnlReturnReceiver      `json:"receiver"`
-	LabelSettings postnlLabelSettings       `json:"labelSettings"`
-	ShipmentType  string                    `json:"shipmentType"`
-	ReturnOptions *postnlReturnOptions      `json:"returnOptions,omitempty"`
+	Sender        postnlReturnSender   `json:"sender"`
+	Receiver      postnlReturnReceiver `json:"receiver"`
+	LabelSettings postnlLabelSettings  `json:"labelSettings"`
+	ShipmentType  string               `json:"shipmentType"`
+	ReturnOptions *postnlReturnOptions `json:"returnOptions,omitempty"`
 }
 
 // postnlReturnSender is the sender block in a return request.
@@ -407,7 +407,7 @@ func postnlBuildItems(colli []Colli) []postnlShipmentItem {
 		item := postnlShipmentItem{}
 		if c.Weight > 0 || c.Dimensions.Length > 0 {
 			dim := &postnlDimension{
-				Weight: int(c.Weight * 1000), // kg → grams
+				Weight: int(c.Weight * 1000),          // kg → grams
 				Length: int(c.Dimensions.Length * 10), // cm → mm
 				Width:  int(c.Dimensions.Width * 10),
 				Height: int(c.Dimensions.Height * 10),

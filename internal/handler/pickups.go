@@ -198,11 +198,11 @@ func (c *Config) GetPickupAvailability(w http.ResponseWriter, r *http.Request) {
 	req := adapter.PickupAvailabilityRequest{
 		Carrier: carrier,
 		Address: adapter.PickupAddress{
-			Street:     r.URL.Query().Get("street"),
+			Street:      r.URL.Query().Get("street"),
 			HouseNumber: r.URL.Query().Get("houseNumber"),
-			City:       r.URL.Query().Get("city"),
-			PostalCode: r.URL.Query().Get("postalCode"),
-			Country:    r.URL.Query().Get("country"),
+			City:        r.URL.Query().Get("city"),
+			PostalCode:  r.URL.Query().Get("postalCode"),
+			Country:     r.URL.Query().Get("country"),
 		},
 	}
 

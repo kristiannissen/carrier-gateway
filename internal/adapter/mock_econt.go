@@ -5,10 +5,14 @@ package adapter
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
+	"math/rand"
+	"time"
 )
 
-// MockEcontAdapter satisfies CarrierAdapter with deterministic canned responses.
-// Used when ECONT_USERNAME is not set or MOCK_MODE=true.
+// MockEcontAdapter satisfies CarrierAdapter, ManifestAdapter, and PickupQuerier
+// with deterministic canned responses. Used when ECONT_USERNAME is not set or
+// MOCK_MODE=true.
 type MockEcontAdapter struct{}
 
 // BookShipment returns a canned booking response.
@@ -87,4 +91,63 @@ func (m *MockEcontAdapter) UpdateShipment(_ context.Context, req UpdateRequest) 
 		Status:         "updated",
 		UpdatedFields:  updated,
 	}, nil
+}
+
+// BookPickup returns a mock pickup response.
+func (m *MockEcontAdapter) BookPickup(_ context.Context, req PickupRequest) (*PickupResponse, error) {
+	date := req.Pickup.Date
+	if date == "" {
+		date = time.Now().UTC().Format("2006-01-02")
+	}
+	readyTime := req.Pickup.ReadyTime
+	if readyTime == "" {
+		readyTime = "09:00"
+	}
+	closeTime := req.Pickup.CloseTime
+	if closeTime == "" {
+		closeTime = "18:00"
+	}
+	return &PickupResponse{
+		Carrier:            "econt",
+		ConfirmationNumber: fmt.Sprintf("MOCK-ECONT-PU-%08d", rand.Intn(100_000_000)), //nolint:gosec // mock data
+		Date:               date,
+		ReadyTime:          readyTime,
+		CloseTime:          closeTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup returns ErrNotSupported for Econt.
+func (m *MockEcontAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("Econt", "pickup update", "")
+}
+
+// CancelPickup returns ErrNotSupported for Econt.
+func (m *MockEcontAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return notSupported("Econt", "pickup cancellation", "")
+}
+
+// CloseManifest returns ErrNotSupported for Econt.
+func (m *MockEcontAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("Econt", "close manifest", "")
+}
+
+// GetPickupAvailability returns ErrNotSupported for Econt.
+func (m *MockEcontAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("Econt", "pickup availability", "")
+}
+
+// GetPickupByID returns a mock pickup status.
+func (m *MockEcontAdapter) GetPickupByID(_ context.Context, orderID string) (*PickupInfo, error) {
+	return &PickupInfo{ID: orderID, Carrier: "econt", Status: "CREATED"}, nil
+}
+
+// ListPickups returns ErrNotSupported for Econt.
+func (m *MockEcontAdapter) ListPickups(_ context.Context, _ ListPickupsRequest) (*PickupList, error) {
+	return nil, notSupported("Econt", "list pickups", "")
+}
+
+// GetCutoffTime returns ErrNotSupported for Econt.
+func (m *MockEcontAdapter) GetCutoffTime(_ context.Context, _, _ string) (*PickupCutoffTime, error) {
+	return nil, notSupported("Econt", "pickup cutoff time", "")
 }

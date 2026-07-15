@@ -216,11 +216,11 @@ type fedexRequestedShipment struct {
 
 // fedexSpecialServicesRequested carries shipment-level special service flags.
 type fedexSpecialServicesRequested struct {
-	SpecialServiceTypes     []string                         `json:"specialServiceTypes"`
-	HoldAtLocationDetail    *fedexHoldAtLocationDetail       `json:"holdAtLocationDetail,omitempty"`
-	ReturnShipmentDetail    *fedexReturnShipmentDetail       `json:"returnShipmentDetail,omitempty"`
-	ShipmentCODDetail       *fedexShipmentCODDetail          `json:"shipmentCODDetail,omitempty"`
-	EmailNotificationDetail *fedexEmailNotificationDetail    `json:"emailNotificationDetail,omitempty"`
+	SpecialServiceTypes     []string                      `json:"specialServiceTypes"`
+	HoldAtLocationDetail    *fedexHoldAtLocationDetail    `json:"holdAtLocationDetail,omitempty"`
+	ReturnShipmentDetail    *fedexReturnShipmentDetail    `json:"returnShipmentDetail,omitempty"`
+	ShipmentCODDetail       *fedexShipmentCODDetail       `json:"shipmentCODDetail,omitempty"`
+	EmailNotificationDetail *fedexEmailNotificationDetail `json:"emailNotificationDetail,omitempty"`
 }
 
 // fedexHoldAtLocationDetail specifies the Hold-at-Location destination.
@@ -320,14 +320,14 @@ type fedexDutiesPayment struct {
 
 // fedexCommodity is a single line item in the customs declaration.
 type fedexCommodity struct {
-	Description          string      `json:"description"`
-	NumberOfPieces       int         `json:"numberOfPieces,omitempty"`
-	Quantity             int         `json:"quantity,omitempty"`
-	QuantityUnits        string      `json:"quantityUnits,omitempty"`
+	Description          string       `json:"description"`
+	NumberOfPieces       int          `json:"numberOfPieces,omitempty"`
+	Quantity             int          `json:"quantity,omitempty"`
+	QuantityUnits        string       `json:"quantityUnits,omitempty"`
 	Weight               *fedexWeight `json:"weight,omitempty"`
 	CustomsValue         *fedexMoney  `json:"customsValue,omitempty"`
-	CountryOfManufacture string      `json:"countryOfManufacture,omitempty"`
-	HarmonizedCode       string      `json:"harmonizedCode,omitempty"`
+	CountryOfManufacture string       `json:"countryOfManufacture,omitempty"`
+	HarmonizedCode       string       `json:"harmonizedCode,omitempty"`
 }
 
 // fedexCustomsClearanceDetail is the top-level customs block attached to the
@@ -1058,9 +1058,9 @@ func (a *FedExAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*Upda
 
 // fedexPickupOriginDetail holds the collection location and time window.
 type fedexPickupOriginDetail struct {
-	PickupLocation    fedexPickupLocationParty `json:"pickupLocation"`
-	ReadyDateTimestamp string                  `json:"readyDateTimestamp"`
-	CustomerCloseTime  string                  `json:"customerCloseTime"`
+	PickupLocation     fedexPickupLocationParty `json:"pickupLocation"`
+	ReadyDateTimestamp string                   `json:"readyDateTimestamp"`
+	CustomerCloseTime  string                   `json:"customerCloseTime"`
 	// PackageLocation is required for FDXG (Ground) pickups.
 	// Accepted values: FRONT, NONE, REAR, SIDE.
 	PackageLocation string `json:"packageLocation,omitempty"`
@@ -1164,10 +1164,10 @@ type fedexPickupScheduleOption struct {
 // fedexEndOfDayRequest is the body for PUT /ship/v1/endofday/.
 // closeReqType must be "GCDR" for a Ground end-of-day close.
 type fedexEndOfDayRequest struct {
-	CloseReqType              string             `json:"closeReqType"`
-	AccountNumber             fedexAccountNumber `json:"accountNumber"`
-	GroundServiceCategory     string             `json:"groundServiceCategory"`
-	CloseDate                 string             `json:"closeDate,omitempty"`
+	CloseReqType               string             `json:"closeReqType"`
+	AccountNumber              fedexAccountNumber `json:"accountNumber"`
+	GroundServiceCategory      string             `json:"groundServiceCategory"`
+	CloseDate                  string             `json:"closeDate,omitempty"`
 	CloseDocumentSpecification *fedexCloseDocSpec `json:"closeDocumentSpecification,omitempty"`
 }
 
@@ -1178,8 +1178,8 @@ type fedexCloseDocSpec struct {
 
 // fedexEndOfDayResponse is the top-level response from PUT /ship/v1/endofday/.
 type fedexEndOfDayResponse struct {
-	TransactionID string              `json:"transactionId"`
-	Output        fedexCloseOutput    `json:"output"`
+	TransactionID string           `json:"transactionId"`
+	Output        fedexCloseOutput `json:"output"`
 }
 
 type fedexCloseOutput struct {
@@ -1187,8 +1187,8 @@ type fedexCloseOutput struct {
 }
 
 type fedexCloseDocument struct {
-	Type  string            `json:"type"`
-	Parts []fedexClosePart  `json:"parts"`
+	Type  string           `json:"type"`
+	Parts []fedexClosePart `json:"parts"`
 }
 
 type fedexClosePart struct {

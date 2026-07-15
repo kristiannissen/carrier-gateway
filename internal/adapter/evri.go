@@ -51,7 +51,7 @@ type EvriAdapter struct {
 	// BaseURL is the root of the Evri Classic API (override in tests).
 	BaseURL string
 	// AuthURL is the OAuth2 token endpoint (override in tests).
-	AuthURL string
+	AuthURL    string
 	HTTPClient *http.Client
 	tokenCache evriTokenCache
 	log        *zap.Logger
@@ -231,8 +231,8 @@ func (a *EvriAdapter) BookShipment(ctx context.Context, request BookingRequest) 
 		}
 
 		parcelDetails := map[string]any{
-			"weightKg":    c.Weight,
-			"type":        evriParcelType(request.Shipment),
+			"weightKg": c.Weight,
+			"type":     evriParcelType(request.Shipment),
 		}
 		if ref != "" {
 			parcelDetails["deliveryReference"] = ref
@@ -246,8 +246,8 @@ func (a *EvriAdapter) BookShipment(ctx context.Context, request BookingRequest) 
 
 		delivery := map[string]any{
 			"deliveryAddress":   deliveryAddr,
-			"firstName":        firstName,
-			"lastName":         lastName,
+			"firstName":         firstName,
+			"lastName":          lastName,
 			"signatureRequired": signatureRequired,
 		}
 		if recv.Email != "" {

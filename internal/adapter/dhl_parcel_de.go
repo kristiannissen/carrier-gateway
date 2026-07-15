@@ -224,10 +224,10 @@ type dhlParcelDELocationAddress struct {
 
 // dhlParcelDEPickupOrder is the request body for POST /orders.
 type dhlParcelDEPickupOrder struct {
-	PickupLocation dhlParcelDEPickupLocation `json:"pickupLocation"`
-	PickupDetails  dhlParcelDEPickupDetails  `json:"pickupDetails"`
+	PickupLocation  dhlParcelDEPickupLocation  `json:"pickupLocation"`
+	PickupDetails   dhlParcelDEPickupDetails   `json:"pickupDetails"`
 	ShipmentDetails dhlParcelDEShipmentDetails `json:"shipmentDetails"`
-	BillingNumber  string                    `json:"billingNumber,omitempty"`
+	BillingNumber   string                     `json:"billingNumber,omitempty"`
 }
 
 // dhlParcelDEPickupDetails holds the requested collection date.

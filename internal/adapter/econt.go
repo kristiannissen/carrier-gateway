@@ -158,8 +158,8 @@ type econtShipmentStatus struct {
 }
 
 type econtCreateLabelResponse struct {
-	Label    *econtShipmentStatus `json:"label,omitempty"`
-	Error    *econtError          `json:"error,omitempty"`
+	Label *econtShipmentStatus `json:"label,omitempty"`
+	Error *econtError          `json:"error,omitempty"`
 }
 
 type econtDeleteLabelsRequest struct {
@@ -225,6 +225,12 @@ type econtUpdateLabelResponse struct {
 // Cancellation via deleteLabels only succeeds before the shipment is accepted
 // by Econt. Once accepted, checkPossibleShipmentEditions must be consulted
 // and CancelShipment returns an error if no editions are available.
+//
+// EcontAdapter also implements ManifestAdapter and PickupQuerier: BookPickup
+// and GetPickupByID are backed by requestCourier / getRequestCourierStatus.
+// UpdatePickup, CancelPickup, CloseManifest, GetPickupAvailability, ListPickups,
+// and GetCutoffTime return ErrNotSupported — Econt has no API endpoints for
+// these operations.
 type EcontAdapter struct {
 	// BaseURL is the API root. Defaults to econtLiveBase.
 	BaseURL string
@@ -712,30 +718,274 @@ func (a *EcontAdapter) UpdateShipment(ctx context.Context, req UpdateRequest) (*
 	}, nil
 }
 
+// ── pickup wire format ────────────────────────────────────────────────────────
+
+const (
+	econtPathRequestCourier          = "/Shipments/ShipmentService.requestCourier.json"
+	econtPathGetRequestCourierStatus = "/Shipments/ShipmentService.getRequestCourierStatus.json"
+)
+
+// econtRequestCourierRequest is the request body for ShipmentService.requestCourier.
+type econtRequestCourierRequest struct {
+	RequestTimeFrom   int64               `json:"requestTimeFrom,omitempty"`
+	RequestTimeTo     int64               `json:"requestTimeTo,omitempty"`
+	ShipmentType      string              `json:"shipmentType,omitempty"`
+	ShipmentPackCount int                 `json:"shipmentPackCount,omitempty"`
+	ShipmentWeight    float64             `json:"shipmentWeight,omitempty"`
+	SenderClient      *econtClientProfile `json:"senderClient,omitempty"`
+	SenderAddress     *econtAddress       `json:"senderAddress,omitempty"`
+}
+
+// econtRequestCourierResponse is the response body for ShipmentService.requestCourier.
+type econtRequestCourierResponse struct {
+	CourierRequestID      string      `json:"courierRequestID,omitempty"`
+	Warnings              string      `json:"warnings,omitempty"`
+	DelayedRequestWarning string      `json:"delayedRequestWarning,omitempty"`
+	Error                 *econtError `json:"error,omitempty"`
+}
+
+// econtGetRequestCourierStatusRequest is the request body for
+// ShipmentService.getRequestCourierStatus. Econt supports only lookup by
+// request ID — there is no date-range or org-wide listing query.
+type econtGetRequestCourierStatusRequest struct {
+	RequestCourierIds []string `json:"requestCourierIds"`
+}
+
+// econtRequestCourierStatus is a single courier request status entry.
+// Status is one of: unprocess, process, taken, reject, reject_client.
+type econtRequestCourierStatus struct {
+	ID           int    `json:"id,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Note         string `json:"note,omitempty"`
+	RejectReason string `json:"reject_reason,omitempty"`
+}
+
+type econtRequestCourierStatusResultElement struct {
+	Status *econtRequestCourierStatus `json:"status,omitempty"`
+	Error  *econtError                `json:"error,omitempty"`
+}
+
+type econtGetRequestCourierStatusResponse struct {
+	RequestCourierStatus []econtRequestCourierStatusResultElement `json:"requestCourierStatus"`
+}
+
+// econtPickupStatuses maps Econt RequestCourierStatusType values to the
+// gateway PickupInfo.Status vocabulary (CREATED / COLLECTED / CANCELLED).
+var econtPickupStatuses = map[string]string{
+	"unprocess":     "CREATED",
+	"process":       "CREATED",
+	"taken":         "COLLECTED",
+	"reject":        "CANCELLED",
+	"reject_client": "CANCELLED",
+}
+
+// econtAddressFromPickup converts a gateway PickupAddress to the Econt address wire type.
+func econtAddressFromPickup(addr PickupAddress) *econtAddress {
+	a := &econtAddress{
+		City: &econtCity{
+			Name:     addr.City,
+			PostCode: addr.PostalCode,
+		},
+		Street: addr.Street,
+		Num:    addr.HouseNumber,
+		Zip:    addr.PostalCode,
+	}
+	if addr.Country != "" {
+		a.City.Country = &econtCountry{Code2: addr.Country}
+	}
+	return a
+}
+
+// econtPickupTimestamp parses a "YYYY-MM-DD" date and "HH:MM" time as Bulgaria
+// standard time (EET, UTC+2) and returns the Unix timestamp that
+// requestCourier's requestTimeFrom/requestTimeTo fields expect. Daylight saving
+// time (EEST, UTC+3) is not accounted for — courier scheduling windows have
+// enough slack that the one-hour difference does not affect same-day
+// eligibility.
+func econtPickupTimestamp(date, hm string) (int64, error) {
+	t, err := time.Parse(time.RFC3339, date+"T"+hm+":00+02:00")
+	if err != nil {
+		return 0, fmt.Errorf("parse pickup time %q %q: %w", date, hm, err)
+	}
+	return t.Unix(), nil
+}
+
+// ── ManifestAdapter ───────────────────────────────────────────────────────────
+
+// BookPickup schedules a courier collection via ShipmentService.requestCourier.
+//
+// Econt has no pre-agreed pickup location on the account, so req.Address must
+// be supplied in full (street, city, postal code, country). ReadyTime and
+// CloseTime default to 09:00/18:00 when omitted.
+func (a *EcontAdapter) BookPickup(ctx context.Context, req PickupRequest) (*PickupResponse, error) {
+	if req.Pickup.Date == "" {
+		return nil, fmt.Errorf("econt: book pickup: pickup.date is required")
+	}
+	if req.Address.Street == "" || req.Address.City == "" || req.Address.PostalCode == "" || req.Address.Country == "" {
+		return nil, fmt.Errorf("econt: book pickup: address (street, city, postalCode, country) is required — Econt has no pre-configured pickup location")
+	}
+
+	readyTime := req.Pickup.ReadyTime
+	if readyTime == "" {
+		readyTime = "09:00"
+	}
+	closeTime := req.Pickup.CloseTime
+	if closeTime == "" {
+		closeTime = "18:00"
+	}
+
+	from, err := econtPickupTimestamp(req.Pickup.Date, readyTime)
+	if err != nil {
+		return nil, fmt.Errorf("econt: book pickup: %w", err)
+	}
+	to, err := econtPickupTimestamp(req.Pickup.Date, closeTime)
+	if err != nil {
+		return nil, fmt.Errorf("econt: book pickup: %w", err)
+	}
+
+	senderClient := &econtClientProfile{Name: req.Contact.Name}
+	if req.Contact.Phone != "" {
+		senderClient.Phones = []string{req.Contact.Phone}
+	}
+	if req.Contact.Email != "" {
+		senderClient.Email = req.Contact.Email
+	}
+
+	payload := econtRequestCourierRequest{
+		RequestTimeFrom:   from,
+		RequestTimeTo:     to,
+		ShipmentType:      econtShipmentTypePack,
+		ShipmentPackCount: req.EstimatedParcels,
+		ShipmentWeight:    req.EstimatedWeight,
+		SenderClient:      senderClient,
+		SenderAddress:     econtAddressFromPickup(req.Address),
+	}
+
+	var result econtRequestCourierResponse
+	if err := a.do(ctx, econtPathRequestCourier, payload, &result); err != nil {
+		return nil, fmt.Errorf("econt: book pickup: %w", err)
+	}
+	if result.Error != nil {
+		return nil, fmt.Errorf("econt: book pickup: %w", result.Error)
+	}
+	if result.CourierRequestID == "" {
+		return nil, fmt.Errorf("econt: book pickup: no courier request ID returned")
+	}
+
+	if result.Warnings != "" {
+		a.log.Warn("econt: pickup booked with warnings",
+			zap.String("courierRequestID", result.CourierRequestID),
+			zap.String("warnings", result.Warnings),
+		)
+	}
+	a.log.Info("econt: pickup booked", zap.String("courierRequestID", result.CourierRequestID))
+
+	return &PickupResponse{
+		Carrier:            "econt",
+		ConfirmationNumber: result.CourierRequestID,
+		Date:               req.Pickup.Date,
+		ReadyTime:          readyTime,
+		CloseTime:          closeTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup is not supported — Econt exposes no update-courier-request endpoint.
+func (a *EcontAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("Econt", "pickup update",
+		"no update-courier-request API endpoint exists — cancel via the Econt portal and call BookPickup again")
+}
+
+// CancelPickup is not supported — Econt exposes no cancel-courier-request
+// endpoint. Cancellation must be done through the Econt portal or by
+// contacting Econt directly; the courier request status will then show
+// reject_client.
+func (a *EcontAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return notSupported("Econt", "pickup cancellation", "no cancel-courier-request API endpoint exists — cancel via the Econt portal")
+}
+
+// CloseManifest is not supported — Econt has no manifest / end-of-day close endpoint.
+func (a *EcontAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("Econt", "close manifest", "Econt has no manifest/end-of-day close endpoint")
+}
+
+// GetPickupAvailability is not supported — Econt has no pre-flight availability
+// endpoint. Callers may proceed directly to BookPickup.
+func (a *EcontAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("Econt", "pickup availability", "no pre-flight availability endpoint — call BookPickup directly")
+}
+
+// ── PickupQuerier ─────────────────────────────────────────────────────────────
+
+// GetPickupByID retrieves the status of a courier request via
+// ShipmentService.getRequestCourierStatus.
+func (a *EcontAdapter) GetPickupByID(ctx context.Context, orderID string) (*PickupInfo, error) {
+	payload := econtGetRequestCourierStatusRequest{RequestCourierIds: []string{orderID}}
+
+	var result econtGetRequestCourierStatusResponse
+	if err := a.do(ctx, econtPathGetRequestCourierStatus, payload, &result); err != nil {
+		return nil, fmt.Errorf("econt: get pickup by id: %w", err)
+	}
+	if len(result.RequestCourierStatus) == 0 {
+		return nil, fmt.Errorf("econt: get pickup by id: no result for request %s", orderID)
+	}
+
+	elem := result.RequestCourierStatus[0]
+	if elem.Error != nil {
+		return nil, fmt.Errorf("econt: get pickup by id: %w", elem.Error)
+	}
+	if elem.Status == nil {
+		return nil, fmt.Errorf("econt: get pickup by id: nil status for %s", orderID)
+	}
+
+	status, ok := econtPickupStatuses[elem.Status.Status]
+	if !ok {
+		status = "CREATED"
+	}
+
+	return &PickupInfo{
+		ID:      orderID,
+		Carrier: "econt",
+		Status:  status,
+	}, nil
+}
+
+// ListPickups is not supported — Econt only exposes status lookup by known
+// request ID, not an org-wide listing endpoint.
+func (a *EcontAdapter) ListPickups(_ context.Context, _ ListPickupsRequest) (*PickupList, error) {
+	return nil, notSupported("Econt", "list pickups", "no list-pickups endpoint — use GetPickupByID with a known request ID")
+}
+
+// GetCutoffTime is not supported — Econt exposes no same-day pickup cutoff
+// endpoint distinct from requestCourier itself.
+func (a *EcontAdapter) GetCutoffTime(_ context.Context, _, _ string) (*PickupCutoffTime, error) {
+	return nil, notSupported("Econt", "pickup cutoff time", "no cutoff-time endpoint — call BookPickup directly with the desired window")
+}
+
 // ── status mapping ────────────────────────────────────────────────────────────
 
 // econtEventTypeStatuses maps Econt trackingEvents.destinationType values to
 // gateway TrackingStatus. The destinationType is the fine-grained event type
 // returned in the trackingEvents array.
 var econtEventTypeStatuses = map[string]TrackingStatus{
-	"client":                    StatusBooked,
-	"courier_direction":         StatusPickedUp,
-	"in_pickup_courier":         StatusPickedUp,
-	"in_pickup_office":          StatusInTransit,
-	"office":                    StatusInTransit,
-	"courier":                   StatusOutForDelivery,
-	"in_delivery_courier":       StatusOutForDelivery,
-	"in_delivery_office":        StatusOutForDelivery,
+	"client":                     StatusBooked,
+	"courier_direction":          StatusPickedUp,
+	"in_pickup_courier":          StatusPickedUp,
+	"in_pickup_office":           StatusInTransit,
+	"office":                     StatusInTransit,
+	"courier":                    StatusOutForDelivery,
+	"in_delivery_courier":        StatusOutForDelivery,
+	"in_delivery_office":         StatusOutForDelivery,
 	"arrival_departure_from_hub": StatusInTransit,
-	"first_try":                 StatusFailed,
-	"second_try":                StatusFailed,
-	"failed_delivery":           StatusFailed,
-	"redirect":                  StatusInTransit,
-	"instruction":               StatusInTransit,
-	"return":                    StatusReturned,
-	"is_returning_to_sender":    StatusReturned,
-	"returned_to_sender":        StatusReturned,
-	"destroy":                   StatusFailed,
+	"first_try":                  StatusFailed,
+	"second_try":                 StatusFailed,
+	"failed_delivery":            StatusFailed,
+	"redirect":                   StatusInTransit,
+	"instruction":                StatusInTransit,
+	"return":                     StatusReturned,
+	"is_returning_to_sender":     StatusReturned,
+	"returned_to_sender":         StatusReturned,
+	"destroy":                    StatusFailed,
 }
 
 // normalizeEcontEventType maps an Econt destinationType to a gateway TrackingStatus.

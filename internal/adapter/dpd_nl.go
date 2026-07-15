@@ -33,7 +33,7 @@ const (
 type dpdNLTokenState struct {
 	mu        sync.Mutex
 	authToken string
-	depot     string    // sending depot returned alongside the token
+	depot     string // sending depot returned alongside the token
 	expiresAt time.Time
 }
 

@@ -26,27 +26,27 @@ func speedyTestAdapter(srv *httptest.Server) *SpeedyAdapter {
 
 func speedyTestSender() Address {
 	return Address{
-		Name:       "Test Sender",
-		Street:     "Vitosha Blvd",
+		Name:        "Test Sender",
+		Street:      "Vitosha Blvd",
 		HouseNumber: "22",
-		City:       "Sofia",
-		PostalCode: "1000",
-		Country:    "BG",
-		Phone:      "+359888000001",
-		Email:      "sender@example.com",
+		City:        "Sofia",
+		PostalCode:  "1000",
+		Country:     "BG",
+		Phone:       "+359888000001",
+		Email:       "sender@example.com",
 	}
 }
 
 func speedyTestReceiver() Address {
 	return Address{
-		Name:       "Test Receiver",
-		Street:     "Tsarigradsko Shose",
+		Name:        "Test Receiver",
+		Street:      "Tsarigradsko Shose",
 		HouseNumber: "135",
-		City:       "Sofia",
-		PostalCode: "1784",
-		Country:    "BG",
-		Phone:      "+359888000002",
-		Email:      "receiver@example.com",
+		City:        "Sofia",
+		PostalCode:  "1784",
+		Country:     "BG",
+		Phone:       "+359888000002",
+		Email:       "receiver@example.com",
 	}
 }
 
@@ -511,15 +511,15 @@ func TestSpeedyAdapter_GetReturnShipment(t *testing.T) {
 func TestSpeedyAdapter_ImplementsInterfaces(t *testing.T) {
 	t.Parallel()
 
-	var _ CarrierAdapter   = (*SpeedyAdapter)(nil)
-	var _ ManifestAdapter  = (*SpeedyAdapter)(nil)
-	var _ PickupQuerier    = (*SpeedyAdapter)(nil)
-	var _ ReturnAdapter    = (*SpeedyAdapter)(nil)
-	var _ ReturnQuerier    = (*SpeedyAdapter)(nil)
+	var _ CarrierAdapter = (*SpeedyAdapter)(nil)
+	var _ ManifestAdapter = (*SpeedyAdapter)(nil)
+	var _ PickupQuerier = (*SpeedyAdapter)(nil)
+	var _ ReturnAdapter = (*SpeedyAdapter)(nil)
+	var _ ReturnQuerier = (*SpeedyAdapter)(nil)
 
-	var _ CarrierAdapter   = (*MockSpeedyAdapter)(nil)
-	var _ ManifestAdapter  = (*MockSpeedyAdapter)(nil)
-	var _ PickupQuerier    = (*MockSpeedyAdapter)(nil)
-	var _ ReturnAdapter    = (*MockSpeedyAdapter)(nil)
-	var _ ReturnQuerier    = (*MockSpeedyAdapter)(nil)
+	var _ CarrierAdapter = (*MockSpeedyAdapter)(nil)
+	var _ ManifestAdapter = (*MockSpeedyAdapter)(nil)
+	var _ PickupQuerier = (*MockSpeedyAdapter)(nil)
+	var _ ReturnAdapter = (*MockSpeedyAdapter)(nil)
+	var _ ReturnQuerier = (*MockSpeedyAdapter)(nil)
 }

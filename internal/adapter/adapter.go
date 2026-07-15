@@ -242,10 +242,14 @@ var capabilities = map[string]carrierCapabilities{
 	// Cancellation (deleteLabels) works only before the shipment is accepted by Econt.
 	// Update uses checkPossibleShipmentEditions + updateLabel — not available once in transit.
 	// FetchLabel is a two-step call: getShipmentStatuses → pdfURL download.
-	// No manifest endpoint; no push webhooks (polling via getShipmentStatuses required).
+	// Pickup booking (BookPickup/GetPickupByID) is wired via requestCourier /
+	// getRequestCourierStatus. UpdatePickup, CancelPickup, CloseManifest,
+	// GetPickupAvailability, ListPickups, and GetCutoffTime return
+	// ErrNotSupported — Econt has no API endpoints for these operations.
+	// No push webhooks — polling via getShipmentStatuses required.
 	"econt": {
 		NativeIdempotency:    false,
-		Beta:                 true,
+		Beta:                 false,
 		SupportsCancellation: true,
 		SupportsUpdate:       true,
 	},
@@ -725,7 +729,7 @@ func registerDPD(adapters map[string]CarrierAdapter, mockMode bool, log *zap.Log
 		}
 		// env is e.g. "DPD_LT_API_TOKEN=abc123"
 		eqIdx := strings.Index(env, "=")
-		key := env[:eqIdx]   // "DPD_LT_API_TOKEN"
+		key := env[:eqIdx]     // "DPD_LT_API_TOKEN"
 		token := env[eqIdx+1:] // "abc123"
 
 		// Extract country from "DPD_{COUNTRY}_API_TOKEN".
@@ -803,7 +807,7 @@ func registerGLSNL(adapters map[string]CarrierAdapter, mockMode bool, log *zap.L
 			continue
 		}
 		eqIdx := strings.Index(env, "=")
-		key := env[:eqIdx]      // e.g. "GLS_NL_USERNAME"
+		key := env[:eqIdx]        // e.g. "GLS_NL_USERNAME"
 		username := env[eqIdx+1:] // e.g. "myuser"
 
 		// key must be "GLS_{CC}_USERNAME" with exactly a 2-letter country code.
@@ -811,7 +815,7 @@ func registerGLSNL(adapters map[string]CarrierAdapter, mockMode bool, log *zap.L
 		if len(parts) != 3 || parts[2] != "USERNAME" || len(parts[1]) != 2 {
 			continue
 		}
-		country := parts[1]                  // "NL"
+		country := parts[1]                             // "NL"
 		carrierKey := "gls_" + strings.ToLower(country) // "gls_nl"
 
 		if seen[carrierKey] {
@@ -1405,10 +1409,10 @@ type TrackingResponse struct {
 	// NormalizedStatus is the carrier-agnostic status. Always present.
 	NormalizedStatus TrackingStatus `json:"normalizedStatus"`
 	// OriginalStatus is the unmodified raw status string from the carrier.
-	OriginalStatus    string           `json:"originalStatus"`
-	Events            []TrackingEvent  `json:"events"`
-	EstimatedDelivery string           `json:"estimatedDelivery,omitempty"`
-	Colli             []ColliTracking  `json:"colli,omitempty"`
+	OriginalStatus    string          `json:"originalStatus"`
+	Events            []TrackingEvent `json:"events"`
+	EstimatedDelivery string          `json:"estimatedDelivery,omitempty"`
+	Colli             []ColliTracking `json:"colli,omitempty"`
 	// ProofOfDelivery is populated when the carrier has recorded ePOD.
 	// Currently surfaced for DHL Express and DHL Freight.
 	ProofOfDelivery *ProofOfDelivery `json:"proofOfDelivery,omitempty"`

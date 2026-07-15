@@ -26,27 +26,27 @@ func upTestAdapter(srv *httptest.Server) *UfficioPostaleAdapter {
 
 func upTestSender() Address {
 	return Address{
-		Name:       "Mario Rossi",
-		Street:     "Via Roma",
+		Name:        "Mario Rossi",
+		Street:      "Via Roma",
 		HouseNumber: "1",
-		City:       "Roma",
-		PostalCode: "00100",
-		Country:    "IT",
-		State:      "RM",
-		Email:      "mario@example.com",
+		City:        "Roma",
+		PostalCode:  "00100",
+		Country:     "IT",
+		State:       "RM",
+		Email:       "mario@example.com",
 	}
 }
 
 func upTestReceiver() Address {
 	return Address{
-		Name:       "Luigi Verdi",
-		Street:     "Via Milano",
+		Name:        "Luigi Verdi",
+		Street:      "Via Milano",
 		HouseNumber: "42",
-		City:       "Milano",
-		PostalCode: "20100",
-		Country:    "IT",
-		State:      "MI",
-		Email:      "luigi@example.com",
+		City:        "Milano",
+		PostalCode:  "20100",
+		Country:     "IT",
+		State:       "MI",
+		Email:       "luigi@example.com",
 	}
 }
 

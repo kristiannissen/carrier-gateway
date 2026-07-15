@@ -23,28 +23,28 @@ const (
 
 // ufficioPostaleProduct maps a ServiceTier value to the API path segment.
 var ufficioPostaleProduct = map[string]string{
-	"":                  "raccomandate",
-	"raccomandata":      "raccomandate",
+	"":                   "raccomandate",
+	"raccomandata":       "raccomandate",
 	"raccomandata_smart": "raccomandate_smart",
-	"ordinaria":         "ordinarie",
-	"atti_giudiziari":   "atti_giudiziari",
+	"ordinaria":          "ordinarie",
+	"atti_giudiziari":    "atti_giudiziari",
 }
 
 // ufficioPostaleStatusMap normalises Ufficio Postale event type codes to the
 // gateway's TrackingStatus. Codes are from the API spec section on tracking.
 var ufficioPostaleStatusMap = map[string]TrackingStatus{
-	"00":  StatusBooked,       // Accettato Online / Accettata online
-	"01":  StatusDelivered,    // Consegnato
-	"03":  StatusFailed,       // Non Consegnabile
-	"10":  StatusInTransit,    // In transit — not in spec but common
+	"00":  StatusBooked,         // Accettato Online / Accettata online
+	"01":  StatusDelivered,      // Consegnato
+	"03":  StatusFailed,         // Non Consegnabile
+	"10":  StatusInTransit,      // In transit — not in spec but common
 	"20":  StatusOutForDelivery, // In distribuzione
-	"30":  StatusFailed,       // In Giacenza / Inviato in Giacenza
-	"40":  StatusFailed,       // Inesitato
-	"70":  StatusInTransit,    // Accettato CAD
-	"91":  StatusFailed,       // Mancata consegna per forza maggiore
-	"93":  StatusInTransit,    // Accettato CAN / Accettato CAD
-	"100": StatusBooked,       // Accettato Online
-	"110": StatusBooked,       // Spedizione Stampata
+	"30":  StatusFailed,         // In Giacenza / Inviato in Giacenza
+	"40":  StatusFailed,         // Inesitato
+	"70":  StatusInTransit,      // Accettato CAD
+	"91":  StatusFailed,         // Mancata consegna per forza maggiore
+	"93":  StatusInTransit,      // Accettato CAN / Accettato CAD
+	"100": StatusBooked,         // Accettato Online
+	"110": StatusBooked,         // Spedizione Stampata
 }
 
 // normaliseUfficioPostaleStatus maps a raw event type code to a TrackingStatus,
