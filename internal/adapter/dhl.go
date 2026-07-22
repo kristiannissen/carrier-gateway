@@ -688,10 +688,18 @@ func (a *DHLAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 
 // FetchLabel retrieves a DHL shipping label via GET /ccc/label-reprint.
 // Requires prior authorisation from DHL (label stored for max 10 days).
-// Only PDF format is supported.
+//
+// Supports PDF, PNG, and ZPL — the three formats DHL documents for eConnect
+// labels generally (APIdocs/dhl_shipping_overview.md: "3 formats: PDF, PNG
+// or ZPL"). The label-reprint operation has no published OpenAPI schema, so
+// the labelFormat query parameter name here is inferred from the "formatLabel"
+// field BookShipment sends on send-cPAN — the same API, the same concept.
+// Verify against the DHL sandbox before relying on PNG/ZPL in production.
 func (a *DHLAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelResponse, error) {
-	if req.Format != LabelFormatPDF {
-		return nil, unsupportedFormat("DHL", req.Format, LabelFormatPDF)
+	switch req.Format {
+	case LabelFormatPDF, LabelFormatPNG, LabelFormatZPL:
+	default:
+		return nil, unsupportedFormat("DHL", req.Format, LabelFormatPDF, LabelFormatPNG, LabelFormatZPL)
 	}
 	if req.TrackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -703,8 +711,8 @@ func (a *DHLAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		fmt.Sprintf("%s/ccc/label-reprint?pieceId=%s&customerId=%s",
-			a.BookingBaseURL, req.TrackingNumber, a.CustomerID), nil)
+		fmt.Sprintf("%s/ccc/label-reprint?pieceId=%s&customerId=%s&labelFormat=%s",
+			a.BookingBaseURL, req.TrackingNumber, a.CustomerID, strings.ToLower(string(req.Format))), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DHL label reprint request: %w", err)
 	}
@@ -729,7 +737,7 @@ func (a *DHLAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 	var labelResp struct {
 		Response struct {
 			StatusCode string `json:"statusCode"`
-			Label      string `json:"label"` // base64 PDF
+			Label      string `json:"label"` // base64, encoding matches the requested labelFormat
 		} `json:"response"`
 	}
 	if err := json.Unmarshal(body, &labelResp); err != nil {
@@ -743,9 +751,9 @@ func (a *DHLAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 	return &LabelResponse{
 		TrackingNumber: req.TrackingNumber,
 		Carrier:        "dhl",
-		Format:         LabelFormatPDF,
+		Format:         req.Format,
 		Data:           labelResp.Response.Label,
-		MimeType:       MimeTypeForFormat(LabelFormatPDF),
+		MimeType:       MimeTypeForFormat(req.Format),
 	}, nil
 }
 

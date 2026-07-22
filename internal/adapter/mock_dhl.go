@@ -58,17 +58,20 @@ func (m *MockDHLAdapter) TrackShipment(_ context.Context, trackingNumber string)
 	}, nil
 }
 
-// FetchLabel returns a mock label for DHL. Only PDF is supported.
+// FetchLabel returns a mock label for DHL. Mirrors the real adapter's
+// supported formats: PDF, PNG, and ZPL.
 func (m *MockDHLAdapter) FetchLabel(_ context.Context, req LabelRequest) (*LabelResponse, error) {
-	if req.Format != LabelFormatPDF {
-		return nil, unsupportedFormat("DHL", req.Format, LabelFormatPDF)
+	switch req.Format {
+	case LabelFormatPDF, LabelFormatPNG, LabelFormatZPL:
+	default:
+		return nil, unsupportedFormat("DHL", req.Format, LabelFormatPDF, LabelFormatPNG, LabelFormatZPL)
 	}
 	return &LabelResponse{
 		TrackingNumber: req.TrackingNumber,
 		Carrier:        "dhl",
-		Format:         LabelFormatPDF,
+		Format:         req.Format,
 		Data:           mockLabelData,
-		MimeType:       MimeTypeForFormat(LabelFormatPDF),
+		MimeType:       MimeTypeForFormat(req.Format),
 	}, nil
 }
 

@@ -78,7 +78,7 @@ func (c *Config) GetLabel(w http.ResponseWriter, r *http.Request) {
 			zap.String("trackingNumber", trackingNumber),
 			zap.String("format", formatStr),
 		)
-		c.writeError(w, r, http.StatusInternalServerError, "label fetch failed", err.Error())
+		c.writeError(w, r, http.StatusInternalServerError, "label fetch failed", carrierErrorDetail)
 		return
 	}
 
@@ -149,7 +149,7 @@ func (c *Config) GetReturnLabel(w http.ResponseWriter, r *http.Request) {
 			zap.String("trackingNumber", trackingNumber),
 			zap.String("format", formatStr),
 		)
-		c.writeError(w, r, http.StatusInternalServerError, "return label fetch failed", err.Error())
+		c.writeError(w, r, http.StatusInternalServerError, "return label fetch failed", carrierErrorDetail)
 		return
 	}
 

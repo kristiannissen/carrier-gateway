@@ -18,6 +18,16 @@ import (
 // Mirrors the limit enforced by middleware.maxRequestBodyBytes.
 const maxRequestBodyBytes = 1 << 20 // 1 MB
 
+// carrierErrorDetail is the detail message returned to callers when a
+// carrier adapter call fails (HTTP 500 from this gateway). The underlying
+// error is always logged in full via zap.Error before this constant is used,
+// so nothing useful is lost — but the raw error is never echoed back to the
+// caller. Some adapters (e.g. PostNord, DAO) authenticate via a URL query
+// parameter, and a wrapped transport error (timeout, DNS failure) can embed
+// that URL; returning err.Error() directly would risk leaking a live
+// carrier credential to whoever called the gateway.
+const carrierErrorDetail = "the carrier request failed; check the server logs for the request ID above"
+
 // Config holds shared configuration for HTTP handlers.
 type Config struct {
 	Registry *adapter.Registry

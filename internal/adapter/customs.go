@@ -585,7 +585,7 @@ func (a *PostNordAdapter) SubmitCustoms(ctx context.Context, req CustomsRequest)
 
 	resp, err := a.HTTPClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("postnord customs: http request: %w", err)
+		return nil, fmt.Errorf("postnord customs: http request: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck
 

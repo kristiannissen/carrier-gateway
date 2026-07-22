@@ -58,7 +58,7 @@ func (c *Config) CloseManifest(w http.ResponseWriter, r *http.Request) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported",
 				fmt.Sprintf("carrier %s does not support manifest close", req.Carrier))
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "manifest close failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "manifest close failed", carrierErrorDetail)
 		}
 		return
 	}

@@ -51,7 +51,7 @@ curl -X POST http://localhost:8080/api/bookings \
 | `dpd_uk` | DPD UK (GB) | Beta |
 | `dpd_nl` | DPD Netherlands (NL) | Beta |
 | `hermes` | Hermes Germany (DE) | Beta |
-| `evri` | Evri (GB) | Beta |
+| `evri` | Evri (GB) | Partial |
 | `speedy` | Speedy (BG + Balkans) | Beta |
 | `econt` | Econt Express (BG + SE Europe) | Production |
 | `matkahuolto` | Matkahuolto (FI) | Beta |
@@ -386,7 +386,7 @@ curl -s "http://localhost:8080/api/labels/00073215400599388772?carrier=postnord&
   | jq -r '.data' | base64 -d > /dev/usb/lp0
 ```
 
-Supported formats: `PDF` (all carriers), `ZPL` and `ZPLGK` (PostNord, GLS, InPost), `EPL2` (InPost PL domestic), `DPL` (InPost PL domestic, pilot — contact InPost Integrations team before use). FedEx label fetch is not yet implemented — store the label from the booking response.
+Supported formats: `PDF` (all carriers), `ZPL` and `ZPLGK` (PostNord, GLS, InPost), `ZPL` and `PNG` (DHL eCommerce Europe — format parameter inferred from the booking API, verify against the DHL sandbox before relying on it in production), `EPL2` (InPost PL domestic), `DPL` (InPost PL domestic, pilot — contact InPost Integrations team before use). FedEx label fetch is not yet implemented — store the label from the booking response.
 
 ### GET /api/health
 
@@ -552,27 +552,11 @@ go test -cover ./...
 
 ### Pre-commit
 
-```bash
-go build ./...
-go test -race -count=1 $(go list ./... | grep -v 'cmd/' | grep -v 'internal/router')
-golangci-lint run
-```
+Enforced by `.git/hooks/pre-commit` — see `CLAUDE.md` for the exact commands.
 
 ### Adding a carrier
 
-1. Create `internal/adapter/{carrier}.go` implementing `CarrierAdapter`
-2. Create `internal/adapter/mock_{carrier}.go`
-3. Create `internal/adapter/{carrier}_test.go`
-4. Add the carrier block to `InitAdapters` in `adapter.go` (env vars + fallback to mock)
-5. Add a `capabilities` entry in `adapter.go`
-6. Add status mappings in `status.go`
-7. Add restricted goods entries in `validation/restricted.go`
-8. Add a limits entry in `validation/package.go`
-9. Wire customs fields in `adapter/customs.go` if the carrier supports cross-border
-10. Add a `carrierCustomsRules` entry in `validation/carrier_customs.go`
-11. Add a feature mapping file under `docs/`
-
-The handler, router, and validation layer require no other changes.
+Adding a carrier is additive only — see `CLAUDE.md` for the step-by-step checklist.
 
 ---
 

@@ -60,7 +60,7 @@ func (c *Config) BookPickup(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, adapter.ErrNotSupported) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "pickup booking failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "pickup booking failed", carrierErrorDetail)
 		}
 		return
 	}
@@ -123,7 +123,7 @@ func (c *Config) UpdatePickup(w http.ResponseWriter, r *http.Request) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported",
 				fmt.Sprintf("carrier %s does not support pickup update", carrier))
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "pickup update failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "pickup update failed", carrierErrorDetail)
 		}
 		return
 	}
@@ -167,7 +167,7 @@ func (c *Config) CancelPickup(w http.ResponseWriter, r *http.Request) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported",
 				fmt.Sprintf("carrier %s does not support pickup cancellation", carrier))
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "pickup cancellation failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "pickup cancellation failed", carrierErrorDetail)
 		}
 		return
 	}
@@ -226,7 +226,7 @@ func (c *Config) GetPickupAvailability(w http.ResponseWriter, r *http.Request) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported",
 				fmt.Sprintf("carrier %s does not support pickup availability queries", carrier))
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "pickup availability failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "pickup availability failed", carrierErrorDetail)
 		}
 		return
 	}
@@ -276,7 +276,7 @@ func (c *Config) GetPickup(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, adapter.ErrNotSupported) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "get pickup failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "get pickup failed", carrierErrorDetail)
 		}
 		return
 	}
@@ -328,7 +328,7 @@ func (c *Config) ListPickups(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, adapter.ErrNotSupported) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "list pickups failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "list pickups failed", carrierErrorDetail)
 		}
 		return
 	}
@@ -383,7 +383,7 @@ func (c *Config) GetCutoffTime(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, adapter.ErrNotSupported) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "get cutoff time failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "get cutoff time failed", carrierErrorDetail)
 		}
 		return
 	}

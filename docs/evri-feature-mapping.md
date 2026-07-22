@@ -3,7 +3,7 @@
 API: **Evri Classic API v1.0**
 Auth: OAuth2 client credentials (`EVRI_CLIENT_ID` + `EVRI_CLIENT_SECRET` → Bearer token)
 Coverage: UK domestic only — all delivery addresses must be valid UK postcodes. No cross-border support.
-Implementation status: **Beta** (booking and label retrieval only)
+Implementation status: **Partial** (booking and label retrieval fully implemented; tracking, cancellation, update, pickup, and manifest are not offered by the Evri Classic API — not a gap in this adapter)
 
 ---
 

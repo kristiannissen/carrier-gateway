@@ -33,7 +33,7 @@ Pickup scheduling via the eConnect API is not available — DHL eCommerce Europe
 | Feature | Implemented | Notes |
 |---|---|---|
 | Print label | ✅ | `GET /ccc/label-reprint` |
-| Label formats | ✅ | PDF only. PNG and ZPL are available in the DHL eConnect API schema but not wired — `FetchLabel` returns `501` for non-PDF formats. |
+| Label formats | ✅ | PDF, PNG, and ZPL all wired via `labelFormat` query parameter on `GET /ccc/label-reprint`. See implementation note below — the reprint endpoint has no published OpenAPI schema, so the parameter name is inferred from the `formatLabel` field `BookShipment` sends on `send-cPAN`; verify against the DHL sandbox before relying on non-PDF formats in production. |
 | Return label | ✅ | DHL Parcel Return Connect product (`DeliveryType=return`) |
 | Labelless return | ✅ | QR code / GIF format — DHL Parcel Return Connect (`returnFunctionality=labelless`) |
 
@@ -165,6 +165,16 @@ provided separately — request from DHL.
 
 **Coverage.** 28 European countries. Not a domestic carrier — intended for
 cross-border B2C flows originating from a European hub (typically DE or NL).
+
+**Label format on reprint.** `GET /ccc/label-reprint` now accepts `labelFormat`
+(`pdf`, `png`, or `zpl`, lower-cased from `LabelFormat`) alongside `pieceId` and
+`customerId`. DHL documents PDF/PNG/ZPL as the three formats available for
+eConnect labels generally (`APIdocs/dhl_shipping_overview.md`), but there is no
+published OpenAPI schema specifically for the label-reprint operation — the
+query parameter name mirrors the `formatLabel` field used on `send-cPAN`
+(`BookShipment`), the same API and the same concept. Confirm PNG/ZPL against
+the DHL sandbox before depending on them in production; PDF is unaffected and
+remains the verified default.
 
 ---
 

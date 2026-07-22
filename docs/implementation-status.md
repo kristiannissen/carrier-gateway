@@ -21,7 +21,7 @@ feature mapping file in this folder with full detail.
 | DPD UK | Not fully implemented yet (Beta) | GB | — |
 | Hermes Germany | Not fully implemented yet (Beta) | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
 | FedEx | Implemented | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
-| Evri | Not fully implemented yet (Beta) | GB | — |
+| Evri | Partial — booking and label retrieval only; tracking/cancel/update/pickup/manifest not offered by the Evri Classic API | GB | [evri-feature-mapping.md](evri-feature-mapping.md) |
 | DHL eCommerce UK | Not fully implemented yet (Beta) | GB | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | Omniva | Implemented | EE, LV, LT | — |
 | InPost | Implemented | PL (shipping + pickups + returns), IT + GB (returns) | [inpost-feature-mapping.md](inpost-feature-mapping.md) |

@@ -50,7 +50,7 @@ func (c *Config) GetTracking(w http.ResponseWriter, r *http.Request) {
 			zap.String("trackingNumber", trackingNumber),
 			zap.String("carrier", carrier),
 		)
-		c.writeError(w, r, http.StatusInternalServerError, "tracking failed", err.Error())
+		c.writeError(w, r, http.StatusInternalServerError, "tracking failed", carrierErrorDetail)
 		return
 	}
 
@@ -117,7 +117,7 @@ func (c *Config) TrackAndNotify(w http.ResponseWriter, r *http.Request) {
 			zap.String("trackingNumber", trackingNumber),
 			zap.String("carrier", req.Carrier),
 		)
-		c.writeError(w, r, http.StatusInternalServerError, "tracking failed", err.Error())
+		c.writeError(w, r, http.StatusInternalServerError, "tracking failed", carrierErrorDetail)
 		return
 	}
 

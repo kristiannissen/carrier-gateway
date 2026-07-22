@@ -224,7 +224,7 @@ func (a *DAOAdapter) BookShipment(ctx context.Context, request BookingRequest) (
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("DAO request failed: %w", err)
+		return nil, fmt.Errorf("DAO request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -299,7 +299,7 @@ func (a *DAOAdapter) updateContactInfo(ctx context.Context, barcode, phone, emai
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("DAO contact update request failed: %w", err)
+		return fmt.Errorf("DAO contact update request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -340,7 +340,7 @@ func (a *DAOAdapter) CancelShipment(ctx context.Context, trackingNumber string) 
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("DAO cancel request failed: %w", err)
+		return nil, fmt.Errorf("DAO cancel request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -433,7 +433,7 @@ func (a *DAOAdapter) updateWeight(ctx context.Context, barcode string, weightKg 
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("DAO weight update request failed: %w", err)
+		return fmt.Errorf("DAO weight update request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -470,7 +470,7 @@ func (a *DAOAdapter) updateShopID(ctx context.Context, barcode, shopID string) e
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("DAO shop update request failed: %w", err)
+		return fmt.Errorf("DAO shop update request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -516,7 +516,7 @@ func (a *DAOAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 
 	resp, err := a.HTTPClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("DAO label request failed: %w", err)
+		return nil, fmt.Errorf("DAO label request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -562,7 +562,7 @@ func (a *DAOAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("DAO tracking request failed: %w", err)
+		return nil, fmt.Errorf("DAO tracking request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 

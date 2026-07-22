@@ -4,6 +4,7 @@ package router
 
 import (
 	"os"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
@@ -26,11 +27,15 @@ func NewRouter(registry *adapter.Registry, notifSvc *notification.Service, log *
 	}
 
 	r := mux.NewRouter()
-	// Security headers and CORS are intentionally omitted here.
-	// This service runs behind a reverse proxy (Traefik/nginx) in Docker; those
-	// headers belong at the proxy layer. CORS is browser-only and irrelevant
-	// for a server-to-server API.
+	// Security headers and CORS are intentionally omitted here — CORS is
+	// browser-only and irrelevant for a server-to-server API. If this
+	// service runs behind a reverse proxy or load balancer, security headers
+	// and TLS termination belong there. If it is deployed as a bare
+	// container with no such layer in front of it, set API_KEYS (below) so
+	// the gateway enforces its own access control instead of relying on an
+	// assumption about the deployment topology.
 	r.Use(middleware.RequestID)
+	r.Use(middleware.APIKeyAuth(apiKeys(), log))
 	r.Use(middleware.Idempotency(log))
 	r.Use(middleware.LogPayloads(log))
 
@@ -62,4 +67,23 @@ func NewRouter(registry *adapter.Registry, notifSvc *notification.Service, log *
 	r.HandleFunc("/docs/{slug}", h.DocsEndpoint).Methods("GET")
 
 	return r
+}
+
+// apiKeys reads API_KEYS from the environment as a comma-separated list and
+// returns the non-empty, trimmed values. An empty result disables API key
+// authentication (see middleware.APIKeyAuth).
+func apiKeys() []string {
+	raw := os.Getenv("API_KEYS")
+	if raw == "" {
+		return nil
+	}
+
+	parts := strings.Split(raw, ",")
+	keys := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if k := strings.TrimSpace(p); k != "" {
+			keys = append(keys, k)
+		}
+	}
+	return keys
 }

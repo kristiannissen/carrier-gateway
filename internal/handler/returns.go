@@ -53,7 +53,7 @@ func (c *Config) GetReturnShipment(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, adapter.ErrNotSupported) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "get return shipment failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "get return shipment failed", carrierErrorDetail)
 		}
 		return
 	}
@@ -123,7 +123,7 @@ func (c *Config) BookReturn(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, adapter.ErrNotSupported) {
 				c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 			} else {
-				c.writeError(w, r, http.StatusInternalServerError, "return booking failed", err.Error())
+				c.writeError(w, r, http.StatusInternalServerError, "return booking failed", carrierErrorDetail)
 			}
 			return
 		}
@@ -176,7 +176,7 @@ func (c *Config) BookReturn(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, adapter.ErrNotSupported) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "return booking failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "return booking failed", carrierErrorDetail)
 		}
 		return
 	}

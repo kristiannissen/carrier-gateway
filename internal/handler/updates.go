@@ -70,7 +70,7 @@ func (c *Config) UpdateShipment(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, adapter.ErrNotSupported) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "update failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "update failed", carrierErrorDetail)
 		}
 		return
 	}

@@ -46,7 +46,7 @@ func (c *Config) CancelShipment(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, adapter.ErrNotSupported) {
 			c.writeError(w, r, http.StatusNotImplemented, "not supported", err.Error())
 		} else {
-			c.writeError(w, r, http.StatusInternalServerError, "cancellation failed", err.Error())
+			c.writeError(w, r, http.StatusInternalServerError, "cancellation failed", carrierErrorDetail)
 		}
 		return
 	}

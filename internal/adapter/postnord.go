@@ -311,7 +311,7 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord API call failed: %w", err)
+		return nil, fmt.Errorf("PostNord API call failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -446,7 +446,7 @@ func (a *PostNordAdapter) CancelShipment(ctx context.Context, trackingNumber str
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord cancel request failed: %w", err)
+		return nil, fmt.Errorf("PostNord cancel request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -534,7 +534,7 @@ func (a *PostNordAdapter) UpdateShipment(ctx context.Context, req UpdateRequest)
 
 	resp, err := a.HTTPClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord update request failed: %w", err)
+		return nil, fmt.Errorf("PostNord update request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -598,7 +598,7 @@ func (a *PostNordAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*La
 
 	resp, err := a.HTTPClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord label request failed: %w", err)
+		return nil, fmt.Errorf("PostNord label request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 
@@ -664,7 +664,7 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 
 	resp, err := a.HTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("PostNord tracking API call failed: %w", err)
+		return nil, fmt.Errorf("PostNord tracking API call failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
 

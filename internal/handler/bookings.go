@@ -105,7 +105,7 @@ func (c *Config) BookShipment(w http.ResponseWriter, r *http.Request) {
 			zap.String("carrier", request.Carrier),
 			zap.String("idempotencyKey", request.IdempotencyKey),
 		)
-		c.writeError(w, r, http.StatusInternalServerError, "booking failed", err.Error())
+		c.writeError(w, r, http.StatusInternalServerError, "booking failed", carrierErrorDetail)
 		return
 	}
 
