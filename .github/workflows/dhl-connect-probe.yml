@@ -22,6 +22,9 @@ jobs:
     name: DHL eConnect Sandbox Probe
     runs-on: ubuntu-latest
     environment: Preview
+    permissions:
+      contents: read
+      issues: write
 
     env:
       # DHL eConnect (booking + OAuth)
