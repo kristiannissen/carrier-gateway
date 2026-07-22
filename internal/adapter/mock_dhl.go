@@ -75,12 +75,14 @@ func (m *MockDHLAdapter) FetchLabel(_ context.Context, req LabelRequest) (*Label
 	}, nil
 }
 
-// CancelShipment returns unsupported for DHL.
+// CancelShipment returns unsupported for DHL — mirrors DHLAdapter.CancelShipment.
 func (m *MockDHLAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
-	return nil, notSupported("DHL", "cancellation", "contact DHL customer service")
+	return nil, notSupported("DHL", "cancellation",
+		"eConnect has no cancel/void endpoint; if not yet collected by DHL, discard the label and book a corrected shipment instead — if already collected, contact DHL customer service")
 }
 
-// UpdateShipment returns unsupported for DHL.
+// UpdateShipment returns unsupported for DHL — mirrors DHLAdapter.UpdateShipment.
 func (m *MockDHLAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, notSupported("DHL", "post-booking update", "contact DHL customer service")
+	return nil, notSupported("DHL", "post-booking update",
+		"eConnect has no update/patch endpoint; submit a new booking request with corrected data and discard the old label")
 }

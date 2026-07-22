@@ -758,13 +758,45 @@ func (a *DHLAdapter) FetchLabel(ctx context.Context, req LabelRequest) (*LabelRe
 }
 
 // CancelShipment is not supported for DHL eCommerce Europe via API.
-// Cancellations must be requested via DHL customer service.
+//
+// The eConnect API has no endpoint to cancel, delete, or void an
+// already-created shipment/waybill (confirmed directly against DHL's
+// eConnect documentation — see APIdocs/dhl_commerce_api.txt.rtf). DHL's own
+// terms state that creating or downloading a label does not constitute the
+// contract of carriage; that contract is only formed once DHL scans or
+// collects the package. In practice this means: if the package has not yet
+// been handed to DHL, there is nothing to cancel via API — simply discard
+// the label and book a corrected shipment instead. If it has already been
+// scanned/collected, only DHL customer service can intercept or return it.
+//
+// The only cancellation endpoint in the DHL eCommerce Europe suite is the
+// Pickup Cancellation API, which cancels a *scheduled courier pickup*, not
+// the underlying shipment — unrelated to this method. DHLAdapter does not
+// implement ManifestAdapter (no BookPickup/CancelPickup/CloseManifest), so
+// pickup/manifest requests for this carrier already 501 generically at the
+// router. The Pickup Cancellation API is a separate, unresearched lead — see
+// docs/dhl-ecommerce-feature-mapping.md.
+//
+// Do not confuse this with DHL Developer Portal copy describing a service
+// that can "generate, update, cancel, and import waybills" — that phrasing
+// belongs to the DHL eCommerce India (Blue Dart) Waybill API, a different
+// product with a different regional architecture. It does not apply here.
 func (a *DHLAdapter) CancelShipment(_ context.Context, _ string) (*CancelResponse, error) {
-	return nil, notSupported("DHL", "cancellation", "contact DHL customer service")
+	return nil, notSupported("DHL", "cancellation",
+		"eConnect has no cancel/void endpoint; if not yet collected by DHL, discard the label and book a corrected shipment instead — if already collected, contact DHL customer service")
 }
 
 // UpdateShipment is not supported for DHL eCommerce Europe via API.
-// Modifications must be requested via DHL customer service.
+//
+// The eConnect API has no update/patch endpoint for an existing shipment
+// (confirmed directly against DHL's eConnect documentation — see
+// APIdocs/dhl_commerce_api.txt.rtf). Amending customs data explicitly
+// requires "a new cPAN [shipment data] with a new cCustoms request", per
+// DHL's own docs — there is no partial-amend path. The same applies to
+// correcting address, weight, or product details: submit a new
+// POST /ccc/send-cpan (or POST /econnect/light) request and discard the old
+// label, rather than attempting to modify the original.
 func (a *DHLAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, notSupported("DHL", "post-booking update", "contact DHL customer service")
+	return nil, notSupported("DHL", "post-booking update",
+		"eConnect has no update/patch endpoint; submit a new booking request with corrected data and discard the old label")
 }

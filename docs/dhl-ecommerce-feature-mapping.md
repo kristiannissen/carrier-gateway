@@ -24,8 +24,8 @@ Pickup scheduling via the eConnect API is not available — DHL eCommerce Europe
 | Feature | Implemented | Notes |
 |---|---|---|
 | Book shipment | ✅ | `POST /ccc/send-cpan` — label returned in response |
-| Cancel shipment | ❌ | No cancellation endpoint in eConnect API |
-| Update shipment | ❌ | No update endpoint in eConnect API |
+| Cancel shipment | ❌ | Confirmed absent — no cancel/void/delete endpoint anywhere in eConnect. A label is not a contract of carriage until DHL scans/collects the package; if not yet collected, discard the label and book a corrected shipment. If already collected, only DHL customer service can intercept it. See implementation note below. |
+| Update shipment | ❌ | Confirmed absent — no update/patch endpoint. Amending customs data explicitly requires a new cPAN + cCustoms request per DHL's own docs; the same applies to address/weight/product corrections — submit a new booking, discard the old label. See implementation note below. |
 | Idempotency key | ❌ | Client-side only |
 
 ### Labels
@@ -57,9 +57,9 @@ Pickup scheduling via the eConnect API is not available — DHL eCommerce Europe
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Book pickup | ❌ | No pickup endpoint in the eConnect API — DHL eCommerce Europe uses standing collection agreements. For DHL Parcel DE domestic pickup, use `DHLParcelDEAdapter`. |
+| Book pickup | ❌ | No pickup endpoint in the eConnect API proper — DHL eCommerce Europe uses standing collection agreements. For DHL Parcel DE domestic pickup, use `DHLParcelDEAdapter`. **Unconfirmed lead:** DHL's own docs reference a separate "Pickup Cancellation API" for cancelling a *scheduled courier pickup* in the DHL eCommerce Europe suite (see implementation note below) — implies some pickup-booking mechanism exists outside the four core eConnect endpoints, not yet identified or wired. |
 | Update pickup | ❌ | Not available via eConnect API |
-| Cancel pickup | ❌ | Not available via eConnect API |
+| Cancel pickup | ❓ | Previously marked as flatly unavailable; DHL's docs mention a "Pickup Cancellation API" that cancels a scheduled courier pickup (distinct from cancelling the shipment/waybill itself). No endpoint path, auth, or schema identified yet — needs follow-up research against the DHL developer portal before it can be wired. See implementation note below. |
 
 ### Manifest
 
@@ -165,6 +165,35 @@ provided separately — request from DHL.
 
 **Coverage.** 28 European countries. Not a domestic carrier — intended for
 cross-border B2C flows originating from a European hub (typically DE or NL).
+
+**Cancel/update confirmation and the India/Blue Dart mix-up
+(`APIdocs/dhl_commerce_api.txt.rtf`).** A direct review against DHL's eConnect
+documentation confirms there is no cancel, delete, void, or update/patch
+endpoint for an existing shipment — the four core endpoints
+(`send-cpan`, `econnect/light`, `send-cCustoms`, `label-reprint`) are strictly
+creation- and reprint-focused. If you encounter broader DHL Developer Portal
+copy describing a service that can "generate, update, cancel, and import
+waybills," that phrasing belongs to the **DHL eCommerce India (Blue Dart)
+Waybill API** — a different product with a different regional architecture —
+and does not apply to this adapter. Don't let it cast doubt on the
+cancel/update gaps documented here; they're confirmed for the Europe eConnect
+API specifically.
+
+Operationally: DHL's own terms state a label does not constitute the contract
+of carriage until the package is handed over to / scanned by DHL. If a
+shipment needs correcting before collection, the correct flow is to discard
+the label client-side and submit a new booking — not to call an API that
+doesn't exist. If the package has already been collected, only DHL customer
+service can intercept or return it.
+
+**Pickup Cancellation API — unconfirmed lead, not wired.** The same source
+also references a distinct "Pickup Cancellation API" that lets registered
+customers cancel a *scheduled courier pickup* — separate from cancelling the
+shipment/waybill itself, which remains unsupported as above. This implies
+some pickup-booking mechanism may exist for DHL eCommerce Europe beyond
+standing collection agreements, but no endpoint path, auth flow, or schema
+was identified. Needs direct research against the DHL developer portal before
+`BookPickup`/`CancelPickup` can be wired for this adapter.
 
 **Label format on reprint.** `GET /ccc/label-reprint` now accepts `labelFormat`
 (`pdf`, `png`, or `zpl`, lower-cased from `LabelFormat`) alongside `pieceId` and
