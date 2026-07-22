@@ -37,25 +37,25 @@ curl -X POST http://localhost:8080/api/bookings \
 
 | Key | Carrier | Status |
 |---|---|---|
-| `postnord` | PostNord (DK, SE, NO, FI) | Production |
+| `postnord` | PostNord (DK, SE, NO, FI) | Partial |
 | `bring` | Bring / Posten (NO, SE, DK, FI) | Production |
-| `gls` | GLS Group (DE, DK, SE, NL, BE, FR, ES + more) | Production |
+| `gls` | GLS Group (DE, DK, SE, NL, BE, FR, ES + more) | Partial |
 | `inpost` | InPost (PL, IT, GB) | Production |
 | `omniva` | Omniva (EE, LV, LT) | Production |
-| `fedex` | FedEx (worldwide) | Production |
-| `dao` | DAO (DK) | Partial |
-| `postnl` | PostNL (NL) | Beta |
-| `dhl` | DHL eCommerce Europe (28 countries) | Beta |
-| `dhl_express` | DHL Express (worldwide) | Beta |
+| `fedex` | FedEx (worldwide) | Partial |
+| `dao` | DAO (DK) | Production |
+| `postnl` | PostNL (NL) | Partial |
+| `dhl` | DHL eCommerce Europe (28 countries) | Partial |
+| `dhl_express` | DHL Express (worldwide) | Partial |
 | `dhl_ecommerce_uk` | DHL eCommerce UK (GB) | Beta |
 | `dpd_uk` | DPD UK (GB) | Beta |
-| `dpd_nl` | DPD Netherlands (NL) | Beta |
-| `hermes` | Hermes Germany (DE) | Beta |
+| `dpd_nl` | DPD Netherlands (NL) | Partial |
+| `hermes` | Hermes Germany (DE) | Partial |
 | `evri` | Evri (GB) | Partial |
-| `speedy` | Speedy (BG + Balkans) | Beta |
+| `speedy` | Speedy (BG + Balkans) | Production |
 | `econt` | Econt Express (BG + SE Europe) | Production |
 | `matkahuolto` | Matkahuolto (FI) | Beta |
-| `ufficiopostale` | Ufficio Postale / Poste Italiane (IT) | Beta |
+| `ufficiopostale` | Ufficio Postale / Poste Italiane (IT) | Production |
 
 **Partial** means production-quality with some operations permanently unavailable — the carrier API does not expose them. Unsupported operations return `501 Not Implemented`. For a full feature-by-feature breakdown see [`docs/implementation-status.md`](docs/implementation-status.md).
 
@@ -400,25 +400,25 @@ curl http://localhost:8080/api/health
   "uptime": "3h22m10s",
   "mockMode": false,
   "carriers": {
-    "postnord": "production",
+    "postnord": "partial",
     "bring": "production",
-    "gls": "production",
+    "gls": "partial",
     "inpost": "production",
     "omniva": "production",
-    "fedex": "production",
+    "fedex": "partial",
     "dao": "production",
     "econt": "production",
-    "postnl": "beta",
-    "dhl": "beta",
-    "dhl_express": "beta",
+    "postnl": "partial",
+    "dhl": "partial",
+    "dhl_express": "partial",
     "dhl_ecommerce_uk": "beta",
     "dpd_uk": "beta",
-    "dpd_nl": "beta",
-    "hermes": "beta",
-    "evri": "beta",
-    "speedy": "beta",
+    "dpd_nl": "partial",
+    "hermes": "partial",
+    "evri": "partial",
+    "speedy": "production",
     "matkahuolto": "beta",
-    "ufficiopostale": "beta"
+    "ufficiopostale": "production"
   }
 }
 ```
@@ -575,15 +575,6 @@ Five workflows live under `.github/workflows/`.
 **`postnord-connect-probe.yml`** — same pattern as the DHL probe but scoped to `internal/adapter/postnord*.go`. Runs `TestSandboxProbe/PostNord`, which calls the PostNord Track & Trace API with a dummy tracking number — read-only, no shipment created. Required secrets: `POSTNORD_API_KEY`, `POSTNORD_CUSTOMER_NUMBER`.
 
 All probe workflows upload a `probe-output.txt` artifact retained for 14 days. Live logs are available under Actions → the workflow run → the job step while it is running.
-
----
-
-## Roadmap
-
-See [`docs/feature-roadmap.md`](docs/feature-roadmap.md) for the full spec. In priority order:
-
-1. **Batch booking** — concurrent per-carrier fan-out, partial failure response
-2. **Tracking subscriptions** — register parcels and receive webhooks as statuses change (requires companion service — see [`docs/parcel-poller.md`](docs/parcel-poller.md))
 
 ---
 

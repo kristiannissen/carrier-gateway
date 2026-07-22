@@ -4,7 +4,12 @@ API: **FedEx Ship API v1 + Track API v1 + Pickup API v1 + Location Search API v1
 Base URL (prod): `https://apis.fedex.com`
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token)
 Coverage: Worldwide.
-Implementation status: **Implemented**
+Implementation status: **Partial** — UpdateShipment is a confirmed carrier
+limitation (not supported by the FedEx Ship API), so all primary methods are
+complete. FetchLabel is a genuine secondary implementation gap: labels are
+returned inline at booking, but the standalone reprint endpoint has not been
+wired pending spec review — this is what keeps FedEx at Partial rather than
+Production.
 
 ---
 
@@ -132,7 +137,9 @@ unchanged to `CancelPickup`; do not attempt to parse it.
 
 ## Implementation notes
 
-**Production status.** FedEx is fully promoted out of beta (`capabilities["fedex"].Beta = false`).
+**Status.** FedEx is out of Beta (`capabilities["fedex"].Beta = false`) since
+all primary methods are complete — it is classified Partial, not Production,
+because FetchLabel (a secondary method) is still a genuine implementation gap.
 
 **Label inline only.** Labels are returned as base64-encoded PDF inside the
 `BookShipment` response (`ColliResponse.LabelURL` as a data URI). The `FetchLabel`

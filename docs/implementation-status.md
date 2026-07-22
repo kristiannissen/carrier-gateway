@@ -9,22 +9,23 @@ feature mapping file in this folder with full detail.
 
 | Carrier | Status | Coverage | File |
 |---|---|---|---|
-| PostNord | Implemented | DK, SE, NO, FI | [postnord-feature-mapping.md](postnord-feature-mapping.md) |
+| PostNord | Partial — all primary methods complete; BookPickup exists in the API but is not wired | DK, SE, NO, FI | [postnord-feature-mapping.md](postnord-feature-mapping.md) |
 | Bring | Implemented | NO, SE, DK, FI | [bring-feature-mapping.md](bring-feature-mapping.md) |
-| GLS | Implemented | DE, DK, SE, NL, BE, FR, ES, PT, IT, AT + more | [gls-feature-mapping.md](gls-feature-mapping.md) |
-| GLS NL (regional) | Not fully implemented yet (Beta) | NL, BE + other GLS national portals | [gls-nl-feature-mapping.md](gls-nl-feature-mapping.md) |
+| GLS | Partial — all primary methods complete; pickup and manifest close exist in the API but are not wired | DE, DK, SE, NL, BE, FR, ES, PT, IT, AT + more | [gls-feature-mapping.md](gls-feature-mapping.md) |
+| GLS NL (regional) | Implemented — no genuine gaps remain once carrier limitations are excluded | NL, BE + other GLS national portals | [gls-nl-feature-mapping.md](gls-nl-feature-mapping.md) |
 | DAO | Implemented | DK only | [dao-feature-mapping.md](dao-feature-mapping.md) |
-| DHL Express | Not fully implemented yet (Beta) | Worldwide | [dhl-express-feature-mapping.md](dhl-express-feature-mapping.md) |
-| DHL eCommerce Europe | Not fully implemented yet (Beta) | 28 European countries | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
+| DHL Express | Partial — all primary methods complete; standalone pickup update/cancel exist in the API but are not wired | Worldwide | [dhl-express-feature-mapping.md](dhl-express-feature-mapping.md) |
+| DHL eCommerce Europe | Partial — all primary methods complete (cancel/update are confirmed carrier limitations); pickup/manifest status unconfirmed | 28 European countries | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | DPD | Not fully implemented yet (Beta) | Pan-European | [dpd-group-feature-mapping.md](dpd-group-feature-mapping.md) |
-| DPD NL | Not fully implemented yet (Beta) | NL | [dpd-nl-feature-mapping.md](dpd-nl-feature-mapping.md) |
-| DPD UK | Not fully implemented yet (Beta) | GB | — |
-| Hermes Germany | Not fully implemented yet (Beta) | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
-| FedEx | Implemented | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
+| DPD NL | Implemented — no genuine gaps remain once carrier limitations are excluded; verify SOAP endpoint URLs against live WSDLs before go-live | NL | [dpd-nl-feature-mapping.md](dpd-nl-feature-mapping.md) |
+| DPD UK | Not fully implemented yet (Beta) — endpoints unconfirmed against the live API, not verified carrier limitations | GB | — |
+| Hermes Germany | Partial — cancel/update are confirmed carrier limitations; pickup/manifest status unconfirmed | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
+| FedEx | Partial — update is a confirmed carrier limitation; label reprint is a genuine gap pending spec review | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
 | Evri | Partial — booking and label retrieval only; tracking/cancel/update/pickup/manifest not offered by the Evri Classic API | GB | [evri-feature-mapping.md](evri-feature-mapping.md) |
 | DHL eCommerce UK | Not fully implemented yet (Beta) | GB | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
 | Omniva | Implemented | EE, LV, LT | — |
 | InPost | Implemented | PL (shipping + pickups + returns), IT + GB (returns) | [inpost-feature-mapping.md](inpost-feature-mapping.md) |
+| Ufficio Postale | Implemented — cancel/update are confirmed carrier limitations | IT | [ufficiopostale-feature-mapping.md](ufficiopostale-feature-mapping.md) |
 
 ---
 
@@ -48,12 +49,12 @@ feature mapping file in this folder with full detail.
 
 | Feature | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book pickup** | ⚠️ | ✅ | ❌ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | ✅ PL only |
+| **Book pickup** | ❌ | ✅ | ❌ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | ✅ PL only |
 | **Update pickup** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | ❌ |
 | **Cancel pickup** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | ✅ PL only |
 | **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | ❌ |
 
-**PostNord pickup note:** Domestic DK/SE/FI only. Requires item IDs from booking response.
+**PostNord pickup note:** `/v3/pickups/ids` exists in the API (domestic DK/SE/FI, requires item IDs from booking response) but is not wired in the adapter — a genuine implementation gap, not a limitation.
 **DHL Express pickup note:** Implicit at booking (returns `dispatchConfirmationNumber`). Standalone `POST /api/pickups` not yet wired.
 **GLS pickup note:** `POST /rs/sporadiccollection` exists in ShipIT API but not yet wired.
 **GLS NL pickup note:** `POST /CreatePickup` — requires three address blocks; all default to the single pickup address when only one is provided.
@@ -163,9 +164,18 @@ Issues that affect production operations and should be addressed next.
    Ground services. Express shipments with `AddOnCashOnDelivery` will be
    rejected by FedEx at the API level.
 
-5. **DHL Express standalone pickup booking** — `POST /api/pickups` for DHL
-   Express is not wired. Pickup is currently triggered only via the booking
-   call.
+5. **DHL Express standalone pickup management** — `POST /api/pickups` for DHL
+   Express is not wired; pickup is currently triggered only via the booking
+   call. `PATCH /pickups` (update) and `DELETE /pickups/{id}` (cancel) also
+   exist in the MyDHL API but are not wired — a previous version of this doc
+   and the corresponding feature-mapping doc wrongly claimed these two were
+   already implemented via `ManifestAdapter`; `DHLExpressAdapter` does not
+   implement that interface at all.
+
+5b. **PostNord pickup booking** — `/v3/pickups/ids` exists in the PostNord
+    API (domestic DK/SE/FI) but is not wired in `internal/adapter/postnord.go`.
+    A previous version of this doc and the corresponding feature-mapping doc
+    wrongly claimed this was implemented.
 
 6. **InPost go-live** — set `INPOST_CLIENT_ID`, `INPOST_CLIENT_SECRET`, `INPOST_ORG_ID`
    and run integration tests against `stage-api.inpost-group.com` before switching to

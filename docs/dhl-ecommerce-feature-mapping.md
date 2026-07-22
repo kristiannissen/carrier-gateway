@@ -4,7 +4,12 @@ API: **DHL eConnect API (cPAN)**
 Base URL (prod): `https://api.dhl.com` (eConnect endpoints)
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token). Optional DHL Unified Tracking API key for tracking.
 Coverage: 28 European countries — B2C cross-border parcel product.
-Implementation status: **Not fully implemented yet** (Beta)
+Implementation status: **Partial** — Cancel and update are confirmed carrier
+limitations (no such endpoints in eConnect), so all primary methods are
+complete. Piece-level tracking and customer barcode are unwired sub-fields
+inside otherwise-working primary methods (tracking, booking), not method-level
+failures, so they don't hold this back to Beta. The remaining genuine gaps are
+secondary: pickup scheduling and manifest close status.
 
 ---
 

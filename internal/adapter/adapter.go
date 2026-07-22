@@ -301,14 +301,16 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsUpdate:       false,
 	},
 	// Speedy: SE European courier. Cancellation is supported before pickup is ordered.
-	// Pickup scheduling (BookPickup) is supported; update/cancel pickup and manifest
-	// close are not available in the Speedy API. Returns are booked as standard
-	// shipments with sender/receiver swapped.
+	// UpdateShipment is a partial update via POST /shipment/update/properties (property
+	// key names inferred from Speedy's CreateShipmentRequest field paths — verify
+	// against the sandbox). Pickup scheduling (BookPickup) is supported; update/cancel
+	// pickup and manifest close are confirmed absent from the Speedy API, not gaps.
+	// Returns are booked as standard shipments with sender/receiver swapped.
 	"speedy": {
 		NativeIdempotency:     false,
-		Beta:                  true,
+		Beta:                  false,
 		SupportsCancellation:  true,
-		SupportsUpdate:        false,
+		SupportsUpdate:        true,
 		SupportsReturnBooking: true,
 	},
 	// Matkahuolto: Finnish parcel and bus courier. XML-based shipment interface

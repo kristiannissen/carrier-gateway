@@ -3,7 +3,7 @@
 API: **Ufficio Postale v1.2.2** via openapi.it  
 Auth: Bearer token (`UFFICIOPOSTALE_API_KEY`)  
 Coverage: Italy domestic (sender must be IT); select products support a limited international recipient list  
-Implementation status: **Beta** (booking and tracking only)
+Implementation status: **Production** — BookShipment, TrackShipment, and FetchLabel implemented; CancelShipment and UpdateShipment are confirmed carrier limitations (the API has no cancellation or post-booking update endpoint), not implementation gaps, so no primary or secondary method is genuinely missing.
 
 ---
 
@@ -16,7 +16,9 @@ carriers — there is no physical label, no parcel pickup, and no post-booking
 update or cancellation.
 
 `BookShipment`, `TrackShipment`, and `FetchLabel` are implemented.
-`CancelShipment` and `UpdateShipment` return `ErrNotSupported`.
+`CancelShipment` and `UpdateShipment` return `ErrNotSupported` — the API has
+no cancellation or post-booking update endpoint at all, so both are carrier
+limitations rather than gaps in this adapter.
 
 ---
 

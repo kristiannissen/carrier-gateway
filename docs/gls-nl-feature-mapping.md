@@ -3,7 +3,12 @@
 API: **GLS Shipping API v0.8** (and compatible national portals)
 Auth: Username/password in every request body (no token)
 Coverage: GLS national subsidiaries — NL, BE, and others using api-portal.gls.nl-style portals
-Implementation status: **Beta**
+Implementation status: **Production** — BookShipment, CancelShipment, BookPickup,
+CancelPickup, and CloseManifest implemented. TrackShipment, FetchLabel (reprint),
+and UpdateShipment are confirmed carrier limitations, not implementation gaps —
+this regional portal API doesn't expose tracking or a reprint endpoint at all
+(the label is returned inline at booking instead), and has no update endpoint.
+No genuine gap remains.
 Carrier keys: `gls_nl`, `gls_be`, … (one per country, registered via env vars)
 
 ---

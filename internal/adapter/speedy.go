@@ -33,6 +33,8 @@ const (
 // Supported operations:
 //   - BookShipment   → POST /shipment
 //   - CancelShipment → POST /shipment/cancel
+//   - UpdateShipment → POST /shipment/update/properties (partial update only —
+//     see UpdateShipment godoc)
 //   - TrackShipment  → POST /track
 //   - FetchLabel     → POST /print (PDF and ZPL)
 //   - BookPickup     → POST /pickup
@@ -43,7 +45,6 @@ const (
 //
 // Not supported by the Speedy API (returns ErrNotSupported):
 //   - UpdatePickup, CancelPickup, CloseManifest, GetPickupAvailability
-//   - UpdateShipment
 //   - GetPickupByID, ListPickups
 type SpeedyAdapter struct {
 	// UserName is the Speedy API username.
@@ -584,11 +585,87 @@ func (a *SpeedyAdapter) CancelShipment(ctx context.Context, trackingNumber strin
 	}, nil
 }
 
-// UpdateShipment is not supported by the Speedy API via this gateway.
-// Use the Speedy web portal for post-booking modifications.
-func (a *SpeedyAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, notSupported("Speedy", "post-booking update",
-		"use the Speedy portal or /shipment/update directly")
+// speedyUpdatePropertiesRequest is the POST /shipment/update/properties request body.
+type speedyUpdatePropertiesRequest struct {
+	speedyAuth
+	ID         string            `json:"id"`
+	Properties map[string]string `json:"properties"`
+}
+
+// speedyUpdatePropertiesResponse is the POST /shipment/update/properties response body.
+type speedyUpdatePropertiesResponse struct {
+	Error *speedyError `json:"error"`
+}
+
+// UpdateShipment applies a partial update via POST /shipment/update/properties.
+//
+// Speedy documents two update mechanisms (APIdocs/speedy_api.md §2.1.7,
+// APIdocs/speedy_api.rtf): a full replace at POST /shipment/update, which
+// requires resending the entire original shipment payload (recipient,
+// service, content, payment), and a partial key-value update at
+// POST /shipment/update/properties, which only needs the changed fields.
+// This stateless gateway does not retain the original booking payload, so it
+// uses the partial form exclusively — the same constraint that keeps
+// Matkahuolto's UpdateShipment unimplemented does not apply here because
+// Speedy's properties endpoint doesn't require the full object back.
+//
+// Property key names are inferred from the dotted field paths of Speedy's own
+// CreateShipmentRequest JSON (the API doc describes the map's keys only as
+// "matching CreateShipmentRequest URL parameter names" and gives no worked
+// example for phone/email/weight specifically) — verify against the Speedy
+// sandbox before relying on this in production, in the same spirit as the
+// DHL eConnect label-format inference documented in dhl.go.
+//
+// Speedy only allows updates before the shipment has been requested for
+// pickup or picked up.
+func (a *SpeedyAdapter) UpdateShipment(ctx context.Context, req UpdateRequest) (*UpdateResponse, error) {
+	if req.TrackingNumber == "" {
+		return nil, fmt.Errorf("speedy: update shipment: tracking number must not be empty")
+	}
+
+	properties := make(map[string]string)
+	var updated []string
+	if req.ReceiverPhone != "" {
+		properties["recipient.phone1.number"] = req.ReceiverPhone
+		updated = append(updated, "phone")
+	}
+	if req.ReceiverEmail != "" {
+		properties["recipient.email"] = req.ReceiverEmail
+		updated = append(updated, "email")
+	}
+	if req.Weight > 0 {
+		properties["content.totalWeight"] = strconv.FormatFloat(req.Weight, 'f', -1, 64)
+		updated = append(updated, "weight")
+	}
+	if len(properties) == 0 {
+		return nil, fmt.Errorf("speedy: update shipment: no supported fields provided")
+	}
+
+	body := speedyUpdatePropertiesRequest{
+		speedyAuth: a.auth(),
+		ID:         req.TrackingNumber,
+		Properties: properties,
+	}
+
+	var apiResp speedyUpdatePropertiesResponse
+	if err := a.do(ctx, "/shipment/update/properties", body, &apiResp); err != nil {
+		return nil, fmt.Errorf("speedy: update shipment: %w", err)
+	}
+	if apiResp.Error != nil {
+		return nil, fmt.Errorf("speedy update: %s", apiResp.Error.Message)
+	}
+
+	a.log.Info("speedy shipment updated",
+		zap.String("shipmentID", req.TrackingNumber),
+		zap.Strings("updatedFields", updated),
+	)
+
+	return &UpdateResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "speedy",
+		Status:         "updated",
+		UpdatedFields:  updated,
+	}, nil
 }
 
 // ── ManifestAdapter ──────────────────────────────────────────────────────────

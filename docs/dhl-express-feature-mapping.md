@@ -4,17 +4,24 @@ API: **MyDHL API v3.3.0**
 Base URL (prod): `https://express.api.dhl.com/mydhlapi`
 Auth: HTTP Basic (username + password)
 Coverage: Worldwide — express international and domestic.
-Implementation status: **Not fully implemented yet** (Beta)
+Implementation status: **Partial** — Cancel and update are confirmed carrier
+limitations (no void/update AWB endpoint in the MyDHL API), so all primary
+methods are complete. The remaining gap is secondary: standalone pickup
+update/cancel exist in the MyDHL API (`PATCH /pickups`, `DELETE /pickups/{id}`)
+but the adapter does not implement `ManifestAdapter` at all — a genuine
+implementation gap, corrected below (a previous version of this doc wrongly
+claimed these were wired).
 
 ---
 
 ## Summary
 
 DHL Express covers booking, tracking, label fetch, and return labels. Pickup is
-implicit in the booking call (a `dispatchConfirmationNumber` is returned) and
-can also be updated and cancelled as a standalone operation. AWB cancellation is
-not available via the MyDHL API — the shipment cannot be voided after booking.
-Manifest retrieval is available post-collection via the image endpoint.
+implicit in the booking call (a `dispatchConfirmationNumber` is returned), but
+standalone pickup update/cancel are not wired despite the MyDHL API supporting
+them. AWB cancellation is not available via the MyDHL API — the shipment
+cannot be voided after booking. Manifest retrieval is available post-collection
+via the image endpoint.
 
 ---
 
@@ -52,12 +59,17 @@ Manifest retrieval is available post-collection via the image endpoint.
 |---|---|---|
 | Implicit pickup at booking | ✅ | `pickup.isRequested=true` in booking payload. Returns `dispatchConfirmationNumber`. |
 | Book standalone pickup | ❌ | Not yet wired as `POST /api/pickups` |
-| Update pickup | ✅ | `PATCH /pickups` — accepts `dispatchConfirmationNumber`, new date/time window |
-| Cancel pickup | ✅ | `DELETE /pickups/{dispatchConfirmationNumber}` |
+| Update pickup | ❌ | `PATCH /pickups` exists in the MyDHL API but `DHLExpressAdapter` does not implement `ManifestAdapter` at all — genuine gap, not a limitation |
+| Cancel pickup | ❌ | `DELETE /pickups/{dispatchConfirmationNumber}` exists in the MyDHL API but is not wired — genuine gap, not a limitation |
 
-**Note:** Pickup update and cancel are wired via the `ManifestAdapter` interface
-but standalone pickup booking (`POST /api/pickups`) is not yet wired — pickup
-is currently only triggered via the booking call.
+**Corrected note:** A previous version of this doc claimed pickup update and
+cancel were "wired via the `ManifestAdapter` interface." That was wrong —
+`internal/adapter/dhl_express.go` implements only `BookShipment`,
+`TrackShipment`, `FetchLabel`, `CancelShipment`, and `UpdateShipment`; there is
+no `BookPickup`/`UpdatePickup`/`CancelPickup`/`CloseManifest` on this adapter.
+Pickup is currently only triggered implicitly via the booking call, and
+standalone pickup management is unavailable through the gateway despite
+existing in the MyDHL API.
 
 ### Manifest
 
@@ -99,8 +111,8 @@ is currently only triggered via the booking call.
 | `GET /api/trackings/{id}` | `GET /shipments/{id}/tracking` | ✅ |
 | `GET /api/labels/{id}` | `GET /shipments/{id}/get-image` | ✅ |
 | `POST /api/pickups` | Implicit via booking | ⚠️ Standalone not wired |
-| `PUT /api/pickups/{id}` | `PATCH /pickups` | ✅ |
-| `DELETE /api/pickups/{id}` | `DELETE /pickups/{id}` | ✅ |
+| `PUT /api/pickups/{id}` | `PATCH /pickups` (exists, unwired) | ❌ → 501 |
+| `DELETE /api/pickups/{id}` | `DELETE /pickups/{id}` (exists, unwired) | ❌ → 501 |
 | `POST /api/manifests` | `GET /shipments/{id}/get-image?typeCode=MANIFEST` | ✅ (post-collection only) |
 
 ---

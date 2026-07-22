@@ -127,9 +127,27 @@ func (m *MockSpeedyAdapter) CancelShipment(_ context.Context, trackingNumber str
 	}, nil
 }
 
-// UpdateShipment returns ErrNotSupported for Speedy.
-func (m *MockSpeedyAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, notSupported("Speedy", "post-booking update", "")
+// UpdateShipment returns a mock update response — mirrors SpeedyAdapter.UpdateShipment.
+func (m *MockSpeedyAdapter) UpdateShipment(_ context.Context, req UpdateRequest) (*UpdateResponse, error) {
+	var updated []string
+	if req.ReceiverPhone != "" {
+		updated = append(updated, "phone")
+	}
+	if req.ReceiverEmail != "" {
+		updated = append(updated, "email")
+	}
+	if req.Weight > 0 {
+		updated = append(updated, "weight")
+	}
+	if len(updated) == 0 {
+		return nil, fmt.Errorf("speedy: update shipment: no supported fields provided")
+	}
+	return &UpdateResponse{
+		TrackingNumber: req.TrackingNumber,
+		Carrier:        "speedy",
+		Status:         "updated",
+		UpdatedFields:  updated,
+	}, nil
 }
 
 // BookPickup returns a mock pickup response.

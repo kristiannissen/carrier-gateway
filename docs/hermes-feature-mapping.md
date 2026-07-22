@@ -3,7 +3,10 @@
 API: **Hermes HSI API (HEX — Hermes Exchange)**
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token)
 Coverage: Germany — domestic home delivery network.
-Implementation status: **Not fully implemented yet** (Beta)
+Implementation status: **Partial** — Cancel and update are confirmed carrier
+limitations (explicitly not supported by the HSI API), so all primary methods
+are complete. Pickup scheduling and manifest status are unconfirmed (secondary),
+which is what keeps this at Partial rather than Production.
 
 ---
 

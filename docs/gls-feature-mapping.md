@@ -3,7 +3,13 @@
 API: **GLS ShipIT API v1**
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token)
 Coverage: Multi-country — DE, DK, SE, NL, BE, FR, ES, PT, IT, AT, IE, HR, SI, SK, CZ, HU and more via single credentials.
-Implementation status: **Implemented**
+Implementation status: **Partial** — UpdateShipment is a confirmed carrier
+limitation (no update/modify/amend endpoint found anywhere in
+`APIdocs/GLS_Shipping_API_v0.8.pdf`), so all primary methods are complete.
+Pickup (`sporadiccollection`) and manifest close (`endofday`) both exist in
+the API but are not wired — two genuine secondary implementation gaps, the
+second one operationally required, which is what keeps this at Partial rather
+than Production.
 
 ---
 
@@ -13,7 +19,7 @@ GLS covers booking, cancellation, tracking, and labels. The ShipIT API has an
 `endofday` endpoint that must be called before the driver arrives — this is the
 only carrier in the gateway where manifest close is a hard operational
 requirement. `SporadicCollection` (sporadic pickup) exists in the API but is
-not yet wired. Post-booking update is not yet implemented.
+not yet wired. Post-booking update is confirmed unsupported by the API itself.
 
 ---
 
@@ -25,7 +31,7 @@ not yet wired. Post-booking update is not yet implemented.
 |---|---|---|
 | Book shipment | ✅ | ShipIT API v1 `POST /rs/shipments` |
 | Cancel shipment | ✅ | `POST /rs/shipments/cancel/{trackID}` |
-| Update shipment | ❌ | Not yet implemented |
+| Update shipment | ❌ | Confirmed carrier limitation — no update/modify/amend endpoint in `GLS_Shipping_API_v0.8.pdf` |
 | Idempotency key | ❌ | Client-side only |
 
 ### Labels

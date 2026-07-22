@@ -6,7 +6,7 @@ Base URL (prod): `https://wsshipper.dpd.nl/soap/services/`
 
 Auth: 24-hour auth token issued by `LoginService.getAuth` using delisID + password.
 
-**Status: implemented (beta)** — `internal/adapter/dpd_nl.go`
+**Status: Production** — `internal/adapter/dpd_nl.go`
 
 ---
 
@@ -18,12 +18,18 @@ requires its own credentials.
 
 The adapter covers booking (B2B, B2C, PSD/parcel-shop, returns, multi-colli,
 international customs), label retrieval (from in-process cache), and parcel
-tracking. Cancellation and post-booking update are not supported by the API and
-return `ErrNotSupported`.
+tracking. Cancellation and post-booking update are confirmed carrier
+limitations rather than implementation gaps and return `ErrNotSupported`; no
+pickup or manifest endpoint exists in ShipmentService v3.5 either. No genuine
+gap remains against any primary or secondary method.
 
-The adapter is marked **beta** — test against the DPD NL sandbox before enabling
-in production. All `BookingResponse` objects carry a `BetaWarning` field for
-visibility.
+**Operational caveat, separate from the capability classification above:** the
+SOAP endpoint URLs baked into the adapter have not yet been cross-checked
+against the live WSDLs (requires DPD NL credentials to access), and the
+`ParcelLifecycleService` tracking response schema was derived from
+documentation rather than a live schema. Test against the DPD NL sandbox
+before enabling in production. `BookingResponse` objects carry a `BetaWarning`
+field for visibility until this is verified.
 
 ---
 

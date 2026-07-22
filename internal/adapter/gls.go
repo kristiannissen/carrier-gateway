@@ -553,10 +553,13 @@ func (a *GLSAdapter) CancelShipment(ctx context.Context, trackingNumber string) 
 	}, nil
 }
 
-// UpdateShipment is not yet supported for GLS.
-// GLS post-booking update API documentation is not yet available.
+// UpdateShipment is not supported for GLS.
+// No update/modify/amend endpoint exists anywhere in the ShipIT API v1 spec
+// (APIdocs/GLS_Shipping_API_v0.8.pdf) — confirmed carrier limitation, not an
+// unresearched gap.
 func (a *GLSAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*UpdateResponse, error) {
-	return nil, notSupported("GLS", "post-booking update", "")
+	return nil, notSupported("GLS", "post-booking update",
+		"no update/modify/amend endpoint exists in the ShipIT API")
 }
 
 // FetchLabel retrieves a GLS shipping label via POST /rs/shipments/reprintparcel.

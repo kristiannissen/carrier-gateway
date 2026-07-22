@@ -380,10 +380,69 @@ func TestSpeedyAdapter_CancelShipment(t *testing.T) {
 func TestSpeedyAdapter_UpdateShipment(t *testing.T) {
 	t.Parallel()
 
-	a := NewSpeedyAdapter("u", "p", speedyDefaultServiceID, zap.NewNop())
-	_, err := a.UpdateShipment(t.Context(), UpdateRequest{})
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrNotSupported))
+	t.Run("no supported fields returns error", func(t *testing.T) {
+		t.Parallel()
+
+		a := NewSpeedyAdapter("u", "p", speedyDefaultServiceID, zap.NewNop())
+		_, err := a.UpdateShipment(t.Context(), UpdateRequest{TrackingNumber: "123"})
+		require.Error(t, err)
+	})
+
+	t.Run("empty tracking number returns error", func(t *testing.T) {
+		t.Parallel()
+
+		a := NewSpeedyAdapter("u", "p", speedyDefaultServiceID, zap.NewNop())
+		_, err := a.UpdateShipment(t.Context(), UpdateRequest{ReceiverPhone: "+359888123456"})
+		require.Error(t, err)
+	})
+
+	t.Run("phone and weight update via properties endpoint", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "/shipment/update/properties", r.URL.Path)
+
+			var body speedyUpdatePropertiesRequest
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+			assert.Equal(t, "123", body.ID)
+			assert.Equal(t, "+359888123456", body.Properties["recipient.phone1.number"])
+			assert.Equal(t, "2.5", body.Properties["content.totalWeight"])
+
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{}`))
+		}))
+		defer srv.Close()
+
+		a := speedyTestAdapter(srv)
+		resp, err := a.UpdateShipment(t.Context(), UpdateRequest{
+			TrackingNumber: "123",
+			ReceiverPhone:  "+359888123456",
+			Weight:         2.5,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "updated", resp.Status)
+		assert.Equal(t, "speedy", resp.Carrier)
+		assert.Contains(t, resp.UpdatedFields, "phone")
+		assert.Contains(t, resp.UpdatedFields, "weight")
+	})
+
+	t.Run("carrier error is surfaced", func(t *testing.T) {
+		t.Parallel()
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"error": {"context": "update", "message": "shipment already picked up"}}`))
+		}))
+		defer srv.Close()
+
+		a := speedyTestAdapter(srv)
+		_, err := a.UpdateShipment(t.Context(), UpdateRequest{
+			TrackingNumber: "123",
+			ReceiverEmail:  "new@example.com",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "shipment already picked up")
+	})
 }
 
 func TestSpeedyAdapter_FetchLabel(t *testing.T) {

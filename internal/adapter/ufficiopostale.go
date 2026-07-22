@@ -59,9 +59,10 @@ func normaliseUfficioPostaleStatus(code string) TrackingStatus {
 // UfficioPostaleAdapter implements CarrierAdapter for Ufficio Postale
 // (Poste Italiane, delivered via the openapi.it gateway).
 //
-// Implemented: BookShipment, TrackShipment.
-// Not implemented: FetchLabel, CancelShipment, UpdateShipment — the API has
-// no label, cancellation, or post-booking update endpoint.
+// Implemented: BookShipment, TrackShipment, FetchLabel (returns the postal
+// acceptance receipt PDF via GET /{product}/{id}/accettazione).
+// Not implemented: CancelShipment, UpdateShipment — the API has no
+// cancellation or post-booking update endpoint.
 //
 // This is a document-mailing service: Poste Italiane prints and posts the
 // letter on the sender's behalf. The document content is taken from
