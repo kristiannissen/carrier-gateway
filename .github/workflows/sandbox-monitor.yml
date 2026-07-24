@@ -19,9 +19,12 @@ jobs:
     # Each carrier secret is optional — probes skip automatically when absent.
     # Add new carrier secrets to the repository and list them here; no code change needed.
     env:
-      # PostNord
+      # PostNord — BASE_URL should point at the sandbox host
+      # (https://atapi2.postnord.com); the adapter defaults to production
+      # (api2.postnord.com), which rejects a sandbox key with a generic 403.
       POSTNORD_API_KEY:         ${{ secrets.POSTNORD_API_KEY }}
       POSTNORD_CUSTOMER_NUMBER: ${{ secrets.POSTNORD_CUSTOMER_NUMBER }}
+      POSTNORD_BASE_URL:        ${{ secrets.POSTNORD_BASE_URL }}
 
       # Bring
       BRING_API_KEY:        ${{ secrets.BRING_API_KEY }}

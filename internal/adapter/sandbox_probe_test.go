@@ -122,6 +122,13 @@ func TestSandboxProbe(t *testing.T) {
 
 // testPostNordSandbox probes the PostNord tracking API with a dummy number.
 // Tracking is read-only. A "not found" response is fine; a 401/5xx is not.
+//
+// NewPostNordAdapter defaults BaseURL to the production host
+// (api2.postnord.com); a sandbox-issued API key sent there comes back as a
+// generic 403 "invalid api key" that is indistinguishable from a genuinely
+// revoked key. Set POSTNORD_BASE_URL to PostNord's sandbox host
+// (https://atapi2.postnord.com) so the probe actually exercises the sandbox
+// the key was issued for.
 func testPostNordSandbox(t *testing.T) {
 	t.Parallel()
 	skipUnless(t, "POSTNORD_API_KEY", "POSTNORD_CUSTOMER_NUMBER")
@@ -132,6 +139,9 @@ func testPostNordSandbox(t *testing.T) {
 		0,
 		sandboxLogger(t),
 	)
+	if sandboxURL := os.Getenv("POSTNORD_BASE_URL"); sandboxURL != "" {
+		a.BaseURL = sandboxURL
+	}
 	ctx, cancel := context.WithTimeout(t.Context(), probeTimeout)
 	defer cancel()
 
