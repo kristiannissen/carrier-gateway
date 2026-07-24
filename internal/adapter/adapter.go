@@ -218,10 +218,15 @@ var capabilities = map[string]carrierCapabilities{
 	},
 	"postnord": {NativeIdempotency: true, SupportsCancellation: true, SupportsUpdate: true},
 	"bring":    {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
-	"gls":      {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
-	"dao":      {NativeIdempotency: false, Beta: false, SupportsCancellation: true, SupportsUpdate: true},
-	"dhl":      {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	"hermes":   {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	// GLS: UpdateShipment is a confirmed carrier limitation — no update/modify/amend
+	// endpoint exists in the ShipIT API v1 spec. Implements ManifestAdapter —
+	// BookPickup (sporadiccollection) and CloseManifest (endofday, operationally
+	// required) are wired; UpdatePickup, CancelPickup, and GetPickupAvailability
+	// are confirmed carrier limitations, not implementation gaps.
+	"gls":     {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
+	"dao":     {NativeIdempotency: false, Beta: false, SupportsCancellation: true, SupportsUpdate: true},
+	"dhl":     {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	"hermes":  {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	// InPost: X-Deduplication-Id header provides server-side deduplication.
 	// Cancellation and post-booking update are not supported by the InPost Group API.
 	// Pickups are available in Poland only (implements ManifestAdapter — BookPickup + CancelPickup).

@@ -724,3 +724,173 @@ func (a *GLSAdapter) TrackShipment(ctx context.Context, trackingNumber string) (
 		Events:           events,
 	}, nil
 }
+
+// BookPickup schedules a sporadic (ad-hoc) collection via POST /rs/sporadiccollection.
+//
+// Wire format notes:
+//   - Endpoint: POST /rs/sporadiccollection (SporadicCollection body).
+//   - ContactID reuses the shipper contact configured for BookShipment.
+//   - PreferredPickUpDate combines Pickup.Date and Pickup.ReadyTime (default
+//     09:00 when unset) into an RFC3339 timestamp.
+//   - Product is always "PARCEL", matching the hardcoded product on BookShipment.
+//   - The response carries only EstimatedPickUpDate — GLS does not return a
+//     booking reference, so ConfirmationNumber falls back to the requested date.
+func (a *GLSAdapter) BookPickup(ctx context.Context, req PickupRequest) (*PickupResponse, error) {
+	if req.Pickup.Date == "" {
+		return nil, fmt.Errorf("gls: pickup date must not be empty")
+	}
+
+	token, err := a.bearerToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gls: obtain access token: %w", err)
+	}
+
+	readyTime := req.Pickup.ReadyTime
+	if readyTime == "" {
+		readyTime = "09:00"
+	}
+	preferredPickUpDate := fmt.Sprintf("%sT%s:00Z", req.Pickup.Date, readyTime)
+
+	numParcels := req.EstimatedParcels
+	if numParcels == 0 && len(req.TrackingNumbers) > 0 {
+		numParcels = len(req.TrackingNumbers)
+	}
+
+	body := map[string]any{
+		"ContactID":           a.ContactID,
+		"PreferredPickUpDate": preferredPickUpDate,
+		"Product":             "PARCEL",
+	}
+	if numParcels > 0 {
+		body["NumberOfParcels"] = numParcels
+	}
+	if req.EstimatedWeight > 0 {
+		body["ExpectedTotalWeight"] = req.EstimatedWeight
+	}
+	if req.Pickup.SpecialInstructions != "" {
+		body["AdditionalInformation"] = req.Pickup.SpecialInstructions
+	}
+
+	payloadBytes, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("gls: marshal sporadic collection request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, a.BaseURL+"/rs/sporadiccollection", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("gls: create sporadic collection request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/glsVersion1+json")
+	httpReq.Header.Set("Accept", "application/glsVersion1+json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("gls: sporadic collection API call failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		return nil, fmt.Errorf("gls: sporadic collection API returned status %d: %s", resp.StatusCode, string(b))
+	}
+
+	var glsResp struct {
+		EstimatedPickUpDate string `json:"EstimatedPickUpDate"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&glsResp); err != nil {
+		return nil, fmt.Errorf("gls: decode sporadic collection response: %w", err)
+	}
+
+	a.log.Info("gls pickup booked",
+		zap.String("preferredPickUpDate", preferredPickUpDate),
+		zap.String("estimatedPickUpDate", glsResp.EstimatedPickUpDate),
+	)
+
+	return &PickupResponse{
+		Carrier:            "gls",
+		ConfirmationNumber: req.Pickup.Date, // GLS does not return a booking reference
+		Date:               req.Pickup.Date,
+		ReadyTime:          req.Pickup.ReadyTime,
+		CloseTime:          req.Pickup.CloseTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup is not supported by the GLS ShipIT API.
+// No update endpoint exists for a sporadic collection (confirmed carrier
+// limitation, not an implementation gap) — reschedule by contacting GLS directly.
+func (a *GLSAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("GLS", "pickup update", "no update endpoint exists for /rs/sporadiccollection")
+}
+
+// CancelPickup is not supported by the GLS ShipIT API.
+// No cancellation endpoint exists for a sporadic collection (confirmed carrier
+// limitation, not an implementation gap).
+func (a *GLSAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return notSupported("GLS", "pickup cancellation", "no cancellation endpoint exists for /rs/sporadiccollection")
+}
+
+// CloseManifest closes the shipping day via POST /rs/shipments/endofday.
+//
+// This is the operationally required end-of-day report: GLS drivers expect
+// the account's shipments for the day to be closed out before collection. The
+// call is account-wide — GLS returns every shipment booked for the given date
+// rather than a filtered subset, so req.TrackingNumbers is not sent.
+func (a *GLSAdapter) CloseManifest(ctx context.Context, req ManifestRequest) (*ManifestResponse, error) {
+	if req.Date == "" {
+		return nil, fmt.Errorf("gls: CloseManifest requires a date")
+	}
+
+	token, err := a.bearerToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("gls: obtain access token: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/rs/shipments/endofday?date=%s", a.BaseURL, url.QueryEscape(req.Date))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("gls: create end-of-day request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/glsVersion1+json")
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("gls: end-of-day API call failed: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		b, _ := io.ReadAll(resp.Body) //nolint:errcheck // best-effort error body read
+		return nil, fmt.Errorf("gls: end-of-day API returned status %d: %s", resp.StatusCode, string(b))
+	}
+
+	var glsResp struct {
+		Shipments []json.RawMessage `json:"Shipments"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&glsResp); err != nil {
+		return nil, fmt.Errorf("gls: decode end-of-day response: %w", err)
+	}
+
+	a.log.Info("gls manifest closed",
+		zap.String("date", req.Date),
+		zap.Int("parcelsConfirmed", len(glsResp.Shipments)),
+	)
+
+	return &ManifestResponse{
+		Carrier:          "gls",
+		Date:             req.Date,
+		Status:           "closed",
+		ParcelsConfirmed: len(glsResp.Shipments),
+		Warnings:         []string{},
+	}, nil
+}
+
+// GetPickupAvailability is not supported by the GLS ShipIT API.
+// No pre-flight availability endpoint exists (confirmed carrier limitation,
+// not an implementation gap) — callers may proceed directly to BookPickup.
+func (a *GLSAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("GLS", "pickup availability",
+		"no availability endpoint exists in the ShipIT API — proceed directly to BookPickup")
+}

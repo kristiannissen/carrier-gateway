@@ -11,7 +11,7 @@ feature mapping file in this folder with full detail.
 |---|---|---|---|
 | PostNord | Partial — all primary methods complete; BookPickup exists in the API but is not wired | DK, SE, NO, FI | [postnord-feature-mapping.md](postnord-feature-mapping.md) |
 | Bring | Implemented | NO, SE, DK, FI | [bring-feature-mapping.md](bring-feature-mapping.md) |
-| GLS | Partial — all primary methods complete; pickup and manifest close exist in the API but are not wired | DE, DK, SE, NL, BE, FR, ES, PT, IT, AT + more | [gls-feature-mapping.md](gls-feature-mapping.md) |
+| GLS | Production — all primary methods complete; pickup scheduling and manifest close are wired; remaining pickup update/cancel/availability gaps are confirmed carrier limitations | DE, DK, SE, NL, BE, FR, ES, PT, IT, AT + more | [gls-feature-mapping.md](gls-feature-mapping.md) |
 | GLS NL (regional) | Implemented — no genuine gaps remain once carrier limitations are excluded | NL, BE + other GLS national portals | [gls-nl-feature-mapping.md](gls-nl-feature-mapping.md) |
 | DAO | Implemented | DK only | [dao-feature-mapping.md](dao-feature-mapping.md) |
 | DHL Express | Partial — all primary methods complete; standalone pickup update/cancel exist in the API but are not wired | Worldwide | [dhl-express-feature-mapping.md](dhl-express-feature-mapping.md) |
@@ -49,14 +49,14 @@ feature mapping file in this folder with full detail.
 
 | Feature | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book pickup** | ❌ | ✅ | ❌ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | ✅ PL only |
+| **Book pickup** | ❌ | ✅ | ✅ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | ✅ PL only |
 | **Update pickup** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | ❌ |
 | **Cancel pickup** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | ✅ PL only |
 | **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | ❌ |
 
 **PostNord pickup note:** `/v3/pickups/ids` exists in the API (domestic DK/SE/FI, requires item IDs from booking response) but is not wired in the adapter — a genuine implementation gap, not a limitation.
 **DHL Express pickup note:** Implicit at booking (returns `dispatchConfirmationNumber`). Standalone `POST /api/pickups` not yet wired.
-**GLS pickup note:** `POST /rs/sporadiccollection` exists in ShipIT API but not yet wired.
+**GLS pickup note:** `POST /rs/sporadiccollection` is wired via `BookPickup`. Update/cancel/availability return `ErrNotSupported` — no such endpoints exist in the ShipIT API spec.
 **GLS NL pickup note:** `POST /CreatePickup` — requires three address blocks; all default to the single pickup address when only one is provided.
 **FedEx pickup note:** Update not supported — cancel-and-rebook. Confirmation number is an opaque token encoding code + date + Express location.
 
@@ -68,7 +68,7 @@ feature mapping file in this folder with full detail.
 |---|---|---|---|
 | PostNord | ❌ | ❌ | Handled by EDI scan at collection |
 | Bring | ❌ | ❌ | No API support |
-| GLS | ❌ | ❌ | **Required** — `POST /rs/shipments/endofday` exists but not wired. Must be called before driver arrives. |
+| GLS | ✅ | ❌ | **Required** — `POST /rs/shipments/endofday` wired via `CloseManifest`. Account-wide by date; must be called before driver arrives. No manifest document field in the response schema. |
 | GLS NL | ✅ | ❌ | Per-unit `POST /ConfirmLabel` — CloseManifest iterates over all tracking numbers. No manifest PDF. |
 | DAO | ❌ | ❌ | No API support |
 | DHL Express | ❌ | ✅ | Post-collection only via `GET /shipments/{id}/get-image?typeCode=MANIFEST` |
@@ -150,21 +150,14 @@ feature mapping file in this folder with full detail.
 
 Issues that affect production operations and should be addressed next.
 
-1. **GLS manifest (end-of-day close)** — `POST /rs/shipments/endofday` must be
-   wired before GLS can be used in production. Without it the driver will not
-   collect the parcels.
-
-2. **GLS pickup (sporadic collection)** — `POST /rs/sporadicollection` exists
-   in the API but is not wired.
-
-3. **FedEx label reprint** — `FetchLabel` returns `ErrNotSupported`. Labels
+1. **FedEx label reprint** — `FetchLabel` returns `ErrNotSupported`. Labels
    must be stored from the booking response. Spec review pending.
 
-4. **FedEx COD** — `shipmentCODDetail` is wired but FedEx only supports COD on
+2. **FedEx COD** — `shipmentCODDetail` is wired but FedEx only supports COD on
    Ground services. Express shipments with `AddOnCashOnDelivery` will be
    rejected by FedEx at the API level.
 
-5. **DHL Express standalone pickup management** — `POST /api/pickups` for DHL
+3. **DHL Express standalone pickup management** — `POST /api/pickups` for DHL
    Express is not wired; pickup is currently triggered only via the booking
    call. `PATCH /pickups` (update) and `DELETE /pickups/{id}` (cancel) also
    exist in the MyDHL API but are not wired — a previous version of this doc
@@ -172,32 +165,32 @@ Issues that affect production operations and should be addressed next.
    already implemented via `ManifestAdapter`; `DHLExpressAdapter` does not
    implement that interface at all.
 
-5b. **PostNord pickup booking** — `/v3/pickups/ids` exists in the PostNord
+3b. **PostNord pickup booking** — `/v3/pickups/ids` exists in the PostNord
     API (domestic DK/SE/FI) but is not wired in `internal/adapter/postnord.go`.
     A previous version of this doc and the corresponding feature-mapping doc
     wrongly claimed this was implemented.
 
-6. **InPost go-live** — set `INPOST_CLIENT_ID`, `INPOST_CLIENT_SECRET`, `INPOST_ORG_ID`
+4. **InPost go-live** — set `INPOST_CLIENT_ID`, `INPOST_CLIENT_SECRET`, `INPOST_ORG_ID`
    and run integration tests against `stage-api.inpost-group.com` before switching to
    production. Adapter is fully implemented.
 
-7. **DPD tracking** — `GET /shipments/{id}` returns a numeric internal status
+5. **DPD tracking** — `GET /shipments/{id}` returns a numeric internal status
    code only. Full event tracking requires the separate DPD Tracking API
    (separate credentials).
 
-8. **DHL eCommerce UK — cancellation postal code** — `CancelShipment` requires
+6. **DHL eCommerce UK — cancellation postal code** — `CancelShipment` requires
    the consignee postal code alongside the shipment ID, but the `CarrierAdapter`
    interface only exposes the tracking number. The adapter caches the postal code
    at booking time; shipments booked in a different process or after a restart
    cannot be cancelled via the API. Resolve by storing the postal code externally
    (e.g. in the order database) and injecting it, or by extending the interface.
 
-9. **DHL eCommerce UK — Windsor Framework (GB → NI)** — shipments from Great
+7. **DHL eCommerce UK — Windsor Framework (GB → NI)** — shipments from Great
    Britain to Northern Ireland require a `clearanceDeclaration` block
    (`C2C`/`C2B`/`B2C`/`B2B` Green/Red Lane). No `Customs` fields map to this
    yet. Must be added before routing GB→NI lanes through this adapter.
 
-10. **DHL eCommerce UK — amendment** — `UpdateShipment` returns 501. The
-    `/shipping/v1/amendment` endpoint supports post-booking address and weight
-    changes but its schema is incompatible with `UpdateRequest`. Wire when the
-    interface is extended.
+8. **DHL eCommerce UK — amendment** — `UpdateShipment` returns 501. The
+   `/shipping/v1/amendment` endpoint supports post-booking address and weight
+   changes but its schema is incompatible with `UpdateRequest`. Wire when the
+   interface is extended.

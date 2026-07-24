@@ -138,6 +138,54 @@ func (m *MockGLSAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (*Up
 	return nil, notSupported("GLS", "post-booking update", "")
 }
 
+// BookPickup returns a mock sporadic collection confirmation.
+func (m *MockGLSAdapter) BookPickup(_ context.Context, req PickupRequest) (*PickupResponse, error) {
+	confirmation := req.Pickup.Date
+	if confirmation == "" {
+		confirmation = time.Now().Format("2006-01-02")
+	}
+	zap.L().Info("MockGLSAdapter: returning mock pickup response")
+	return &PickupResponse{
+		Carrier:            "gls",
+		ConfirmationNumber: confirmation,
+		Date:               req.Pickup.Date,
+		ReadyTime:          req.Pickup.ReadyTime,
+		CloseTime:          req.Pickup.CloseTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup returns unsupported for GLS — no update endpoint exists for a
+// sporadic collection.
+func (m *MockGLSAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("GLS", "pickup update", "no update endpoint exists for /rs/sporadiccollection")
+}
+
+// CancelPickup returns unsupported for GLS — no cancellation endpoint exists
+// for a sporadic collection.
+func (m *MockGLSAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return notSupported("GLS", "pickup cancellation", "no cancellation endpoint exists for /rs/sporadiccollection")
+}
+
+// CloseManifest returns a mock end-of-day response confirming all tracking numbers.
+func (m *MockGLSAdapter) CloseManifest(_ context.Context, req ManifestRequest) (*ManifestResponse, error) {
+	zap.L().Info("MockGLSAdapter: returning mock manifest close response")
+	return &ManifestResponse{
+		Carrier:          "gls",
+		Date:             req.Date,
+		Status:           "closed",
+		ParcelsConfirmed: len(req.TrackingNumbers),
+		Warnings:         []string{},
+	}, nil
+}
+
+// GetPickupAvailability returns unsupported for GLS — no availability endpoint
+// exists in the ShipIT API.
+func (m *MockGLSAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("GLS", "pickup availability",
+		"no availability endpoint exists in the ShipIT API — proceed directly to BookPickup")
+}
+
 // NewMockGLSAdapter returns a new MockGLSAdapter with default behaviour.
 func NewMockGLSAdapter() *MockGLSAdapter {
 	return &MockGLSAdapter{}

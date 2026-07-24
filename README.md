@@ -39,7 +39,7 @@ curl -X POST http://localhost:8080/api/bookings \
 |---|---|---|
 | `postnord` | PostNord (DK, SE, NO, FI) | Partial |
 | `bring` | Bring / Posten (NO, SE, DK, FI) | Production |
-| `gls` | GLS Group (DE, DK, SE, NL, BE, FR, ES + more) | Partial |
+| `gls` | GLS Group (DE, DK, SE, NL, BE, FR, ES + more) | Production |
 | `inpost` | InPost (PL, IT, GB) | Production |
 | `omniva` | Omniva (EE, LV, LT) | Production |
 | `fedex` | FedEx (worldwide) | Partial |
@@ -420,7 +420,7 @@ curl http://localhost:8080/api/health
   "carriers": {
     "postnord": "partial",
     "bring": "production",
-    "gls": "partial",
+    "gls": "production",
     "inpost": "production",
     "omniva": "production",
     "fedex": "partial",

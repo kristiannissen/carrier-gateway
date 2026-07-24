@@ -742,6 +742,209 @@ func TestGLSAdapter_BookShipment_Return_EmailNotification(t *testing.T) {
 	assert.Equal(t, "notify@example.com", mail["sendTo"])
 }
 
+// =========================================================================
+// Pickup and manifest tests
+// =========================================================================
+
+func TestGLSAdapter_ImplementsManifestAdapter(t *testing.T) {
+	t.Parallel()
+
+	var _ CarrierAdapter = (*GLSAdapter)(nil)
+	var _ ManifestAdapter = (*GLSAdapter)(nil)
+
+	var _ CarrierAdapter = (*MockGLSAdapter)(nil)
+	var _ ManifestAdapter = (*MockGLSAdapter)(nil)
+}
+
+func TestGLSAdapter_BookPickup_RequestShape(t *testing.T) {
+	t.Parallel()
+
+	var capturedPath, capturedMethod string
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600}`))
+			return
+		}
+		capturedPath = r.URL.Path
+		capturedMethod = r.Method
+		raw, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(raw, &capturedBody))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"EstimatedPickUpDate":"2026-07-25T09:00:00Z"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	log, _ := zap.NewDevelopment()
+	adapter := &GLSAdapter{
+		ClientID: "test", ClientSecret: "secret", ContactID: "cid-123",
+		BaseURL: srv.URL, AuthURL: srv.URL + "/oauth2/v2/token",
+		HTTPClient: srv.Client(), log: log,
+	}
+
+	resp, err := adapter.BookPickup(t.Context(), PickupRequest{
+		Carrier:          "gls",
+		Pickup:           PickupWindow{Date: "2026-07-25", ReadyTime: "10:30", SpecialInstructions: "side door"},
+		EstimatedParcels: 3,
+		EstimatedWeight:  12.5,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "/rs/sporadiccollection", capturedPath)
+	assert.Equal(t, http.MethodPost, capturedMethod)
+	assert.Equal(t, "gls", resp.Carrier)
+	assert.Equal(t, "2026-07-25", resp.Date)
+	assert.Equal(t, "booked", resp.Status)
+
+	assert.Equal(t, "cid-123", capturedBody["ContactID"])
+	assert.Equal(t, "2026-07-25T10:30:00Z", capturedBody["PreferredPickUpDate"])
+	assert.Equal(t, "PARCEL", capturedBody["Product"])
+	assert.Equal(t, float64(3), capturedBody["NumberOfParcels"])
+	assert.Equal(t, 12.5, capturedBody["ExpectedTotalWeight"])
+	assert.Equal(t, "side door", capturedBody["AdditionalInformation"])
+}
+
+func TestGLSAdapter_BookPickup_DefaultReadyTime(t *testing.T) {
+	t.Parallel()
+
+	var capturedBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600}`))
+			return
+		}
+		raw, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(raw, &capturedBody))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"EstimatedPickUpDate":"2026-07-25T09:00:00Z"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	log, _ := zap.NewDevelopment()
+	adapter := &GLSAdapter{
+		ClientID: "test", ClientSecret: "secret", ContactID: "cid-123",
+		BaseURL: srv.URL, AuthURL: srv.URL + "/oauth2/v2/token",
+		HTTPClient: srv.Client(), log: log,
+	}
+
+	_, err := adapter.BookPickup(t.Context(), PickupRequest{
+		Carrier: "gls",
+		Pickup:  PickupWindow{Date: "2026-07-25"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "2026-07-25T09:00:00Z", capturedBody["PreferredPickUpDate"])
+}
+
+func TestGLSAdapter_BookPickup_MissingDate(t *testing.T) {
+	t.Parallel()
+
+	adapter, _ := newGLSTestServer(t, http.StatusOK, `{}`)
+	_, err := adapter.BookPickup(t.Context(), PickupRequest{Carrier: "gls"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "pickup date must not be empty")
+}
+
+func TestGLSAdapter_UpdatePickup_NotSupported(t *testing.T) {
+	t.Parallel()
+
+	adapter := &GLSAdapter{}
+	_, err := adapter.UpdatePickup(t.Context(), "conf-1", PickupRequest{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotSupported)
+}
+
+func TestGLSAdapter_CancelPickup_NotSupported(t *testing.T) {
+	t.Parallel()
+
+	adapter := &GLSAdapter{}
+	err := adapter.CancelPickup(t.Context(), "gls", "conf-1")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotSupported)
+}
+
+func TestGLSAdapter_GetPickupAvailability_NotSupported(t *testing.T) {
+	t.Parallel()
+
+	adapter := &GLSAdapter{}
+	_, err := adapter.GetPickupAvailability(t.Context(), PickupAvailabilityRequest{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotSupported)
+}
+
+func TestGLSAdapter_CloseManifest_RequestShape(t *testing.T) {
+	t.Parallel()
+
+	var capturedPath, capturedMethod, capturedQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/v2/token" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"access_token":"test-token","expires_in":3600}`))
+			return
+		}
+		capturedPath = r.URL.Path
+		capturedMethod = r.Method
+		capturedQuery = r.URL.Query().Get("date")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"Shipments":[{"TrackID":"GLS1"},{"TrackID":"GLS2"}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	log, _ := zap.NewDevelopment()
+	adapter := &GLSAdapter{
+		ClientID: "test", ClientSecret: "secret", ContactID: "cid",
+		BaseURL: srv.URL, AuthURL: srv.URL + "/oauth2/v2/token",
+		HTTPClient: srv.Client(), log: log,
+	}
+
+	resp, err := adapter.CloseManifest(t.Context(), ManifestRequest{Carrier: "gls", Date: "2026-07-25"})
+	require.NoError(t, err)
+
+	assert.Equal(t, "/rs/shipments/endofday", capturedPath)
+	assert.Equal(t, http.MethodPost, capturedMethod)
+	assert.Equal(t, "2026-07-25", capturedQuery)
+	assert.Equal(t, "closed", resp.Status)
+	assert.Equal(t, 2, resp.ParcelsConfirmed)
+}
+
+func TestGLSAdapter_CloseManifest_MissingDate(t *testing.T) {
+	t.Parallel()
+
+	adapter := &GLSAdapter{}
+	_, err := adapter.CloseManifest(t.Context(), ManifestRequest{Carrier: "gls"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requires a date")
+}
+
+func TestMockGLSAdapter_BookPickup(t *testing.T) {
+	t.Parallel()
+
+	resp, err := (&MockGLSAdapter{}).BookPickup(t.Context(), PickupRequest{
+		Carrier: "gls",
+		Pickup:  PickupWindow{Date: "2026-07-25", ReadyTime: "09:00", CloseTime: "17:00"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "gls", resp.Carrier)
+	assert.Equal(t, "2026-07-25", resp.ConfirmationNumber)
+	assert.Equal(t, "booked", resp.Status)
+}
+
+func TestMockGLSAdapter_CloseManifest(t *testing.T) {
+	t.Parallel()
+
+	resp, err := (&MockGLSAdapter{}).CloseManifest(t.Context(), ManifestRequest{
+		Carrier:         "gls",
+		Date:            "2026-07-25",
+		TrackingNumbers: []string{"GLS1", "GLS2", "GLS3"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "closed", resp.Status)
+	assert.Equal(t, 3, resp.ParcelsConfirmed)
+}
+
 func TestGLSAdapter_BookShipment_Return_MissingAppID(t *testing.T) {
 	t.Parallel()
 

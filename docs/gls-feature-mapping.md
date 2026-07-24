@@ -3,23 +3,26 @@
 API: **GLS ShipIT API v1**
 Auth: OAuth2 client credentials (clientID + clientSecret → Bearer token)
 Coverage: Multi-country — DE, DK, SE, NL, BE, FR, ES, PT, IT, AT, IE, HR, SI, SK, CZ, HU and more via single credentials.
-Implementation status: **Partial** — UpdateShipment is a confirmed carrier
+Implementation status: **Production** — UpdateShipment is a confirmed carrier
 limitation (no update/modify/amend endpoint found anywhere in
 `APIdocs/GLS_Shipping_API_v0.8.pdf`), so all primary methods are complete.
-Pickup (`sporadiccollection`) and manifest close (`endofday`) both exist in
-the API but are not wired — two genuine secondary implementation gaps, the
-second one operationally required, which is what keeps this at Partial rather
-than Production.
+Pickup scheduling (`sporadiccollection`) and manifest close (`endofday`) are
+now wired via `BookPickup` and `CloseManifest`. `UpdatePickup`, `CancelPickup`,
+and `GetPickupAvailability` return `ErrNotSupported` — confirmed carrier
+limitations, since `gls_shipit-farm.yaml` defines no update/cancel/availability
+operation for a sporadic collection. No genuine implementation gaps remain.
 
 ---
 
 ## Summary
 
-GLS covers booking, cancellation, tracking, and labels. The ShipIT API has an
-`endofday` endpoint that must be called before the driver arrives — this is the
-only carrier in the gateway where manifest close is a hard operational
-requirement. `SporadicCollection` (sporadic pickup) exists in the API but is
-not yet wired. Post-booking update is confirmed unsupported by the API itself.
+GLS covers booking, cancellation, tracking, labels, pickup scheduling, and
+manifest close. The ShipIT API has an `endofday` endpoint that must be called
+before the driver arrives — this is the only carrier in the gateway where
+manifest close is a hard operational requirement, and it is now wired.
+`SporadicCollection` (ad-hoc pickup) is also wired via `BookPickup`. Post-booking
+update, pickup update/cancel, and pickup availability are confirmed unsupported
+by the API itself — no such operations exist in the ShipIT API spec.
 
 ---
 
@@ -55,16 +58,17 @@ not yet wired. Post-booking update is confirmed unsupported by the API itself.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Book pickup (sporadic) | ❌ | `POST /rs/sporadiccollection` exists in ShipIT API but not wired in adapter |
-| Update pickup | ❌ | Needs investigation |
-| Cancel pickup | ❌ | Needs investigation |
+| Book pickup (sporadic) | ✅ | `POST /rs/sporadiccollection` — `PreferredPickUpDate` built from `Pickup.Date` + `Pickup.ReadyTime` (defaults to 09:00) |
+| Update pickup | ❌ | Confirmed carrier limitation — no update operation for a sporadic collection in `gls_shipit-farm.yaml` |
+| Cancel pickup | ❌ | Confirmed carrier limitation — no cancel operation for a sporadic collection in `gls_shipit-farm.yaml` |
+| Pickup availability | ❌ | Confirmed carrier limitation — no availability endpoint exists; callers proceed directly to `BookPickup` |
 
 ### Manifest
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Close manifest | ❌ | `POST /rs/shipments/endofday` exists in ShipIT API but not wired. **Operationally required for GLS** — must be called before the driver arrives. Acts as the collection order. Returns PDF. |
-| Manifest document | ❌ | Returned by `endofday` but endpoint not yet wired |
+| Close manifest | ✅ | `POST /rs/shipments/endofday?date=...`. **Operationally required for GLS** — must be called before the driver arrives. Acts as the collection order. Account-wide by date; `req.TrackingNumbers` is not sent since the API has no filtered variant. |
+| Manifest document | ❌ | `endofday` returns the day's `Shipments` array (used for `ParcelsConfirmed`); no PDF/manifest document field in the response schema |
 
 ### Add-ons
 
@@ -100,10 +104,10 @@ not yet wired. Post-booking update is confirmed unsupported by the API itself.
 | `PATCH /api/bookings/{id}` | — | ❌ not yet implemented |
 | `GET /api/trackings/{id}` | `POST /rs/tracking/parceldetails` | ✅ |
 | `GET /api/labels/{id}` | `POST /rs/shipments/reprintparcel` | ✅ |
-| `POST /api/pickups` | `POST /rs/sporadiccollection` | ❌ not yet wired |
-| `PUT /api/pickups/{id}` | ❓ needs investigation | ❌ |
-| `DELETE /api/pickups/{id}` | ❓ needs investigation | ❌ |
-| `POST /api/manifests` | `POST /rs/shipments/endofday` | ❌ not yet wired |
+| `POST /api/pickups` | `POST /rs/sporadiccollection` | ✅ |
+| `PUT /api/pickups/{id}` | — | ❌ confirmed carrier limitation |
+| `DELETE /api/pickups/{id}` | — | ❌ confirmed carrier limitation |
+| `POST /api/manifests` | `POST /rs/shipments/endofday` | ✅ |
 
 ---
 
@@ -121,8 +125,7 @@ not yet wired. Post-booking update is confirmed unsupported by the API itself.
 
 **Manifest is required.** Unlike other carriers where manifest is optional,
 GLS requires `POST /rs/shipments/endofday` before the driver arrives. Skipping
-this means the driver will not collect the parcels. Wiring `CloseManifest` for
-GLS is a high-priority gap.
+this means the driver will not collect the parcels. `CloseManifest` is now wired.
 
 **Add-ons.** Most add-on service schemas exist in ShipIT API v1 (CashService,
 DepositService, IdentService) but are not yet mapped in the adapter. They return
