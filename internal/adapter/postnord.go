@@ -251,10 +251,15 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 		}
 	}
 
+	// messageId must be reused verbatim on a later update instruction for the
+	// same shipment — see UpdateShipment and APIdocs/postnord_update_cancel.rtf.
+	// It's captured below and returned to the caller via
+	// BookingResponse.CarrierMessageID.
+	messageID := fmt.Sprintf("msg-%d", time.Now().UnixMilli())
 	payload := map[string]any{
 		"messageDate":     time.Now().UTC().Format(time.RFC3339),
 		"messageFunction": "Instruction",
-		"messageId":       fmt.Sprintf("msg-%d", time.Now().UnixMilli()),
+		"messageId":       messageID,
 		"application": map[string]any{
 			"applicationId": a.ApplicationID,
 			"name":          "logistics-gateway",
@@ -377,10 +382,11 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 	}
 
 	result := &BookingResponse{
-		ShipmentID:     trackingNumber,
-		TrackingNumber: trackingNumber,
-		Carrier:        "postnord",
-		Status:         "booked",
+		ShipmentID:       trackingNumber,
+		TrackingNumber:   trackingNumber,
+		Carrier:          "postnord",
+		Status:           "booked",
+		CarrierMessageID: messageID,
 	}
 
 	// Extract inline label data if present.
@@ -406,6 +412,20 @@ func (a *PostNordAdapter) BookShipment(ctx context.Context, request BookingReque
 // CancelShipment cancels a PostNord shipment via the v3 EDI endpoint.
 // Uses messageFunction "Cancellation" and updateIndicator "Delete".
 // The shipment must not yet have been collected by PostNord.
+//
+// Unconfirmed discrepancy: APIdocs/postnord_update_cancel.rtf (a single,
+// AI-research-derived source — not an official schema, and no schema for the
+// EDI Instruction message format exists anywhere else in APIdocs/) claims
+// PostNord's Booking API has no dedicated cancel/void endpoint at all, and
+// that cancellation should instead go through the Delivery Order Modification
+// Service (DOMS) or manual support — but gives no endpoint, schema, or
+// worked example for DOMS to verify or implement against. That claim has not
+// been acted on here: it directly contradicts this already-implemented,
+// presumably-tested "Cancellation"/"Delete" EDI instruction, and there's
+// nothing concrete in that source to wire even if it's right. Flagging for
+// awareness, not changing behavior, until there's a stronger source (e.g. an
+// official schema showing messageFunction "Cancellation" is invalid, or a
+// real sandbox failure).
 func (a *PostNordAdapter) CancelShipment(ctx context.Context, trackingNumber string) (*CancelResponse, error) {
 	if trackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -467,8 +487,16 @@ func (a *PostNordAdapter) CancelShipment(ctx context.Context, trackingNumber str
 }
 
 // UpdateShipment sends a PostNord v3 EDI update instruction.
-// Only ReceiverPhone and ReceiverEmail are supported — address updates are
-// SE-only per PostNord's API. The carrier will return an error for DK bookings.
+// Only ReceiverPhone and ReceiverEmail are supported. Per
+// APIdocs/postnord_update_cancel.rtf, PostNord's update functionality —
+// not just address changes — is currently only supported for Sweden (SE);
+// the carrier is expected to reject update requests for DK/NO/FI bookings.
+//
+// PostNord's documentation states the update instruction must reuse the
+// exact messageId from the original booking request. Pass the value from
+// BookingResponse.CarrierMessageID back as req.CarrierMessageID to satisfy
+// this; if omitted, a new messageId is generated on a best-effort basis,
+// which PostNord's API may reject for an existing shipment.
 func (a *PostNordAdapter) UpdateShipment(ctx context.Context, req UpdateRequest) (*UpdateResponse, error) {
 	if req.TrackingNumber == "" {
 		return nil, fmt.Errorf("tracking number must not be empty")
@@ -492,10 +520,19 @@ func (a *PostNordAdapter) UpdateShipment(ctx context.Context, req UpdateRequest)
 		consigneeContact["emailAddress"] = req.ReceiverEmail
 	}
 
+	// Reuse the original booking's messageId when the caller supplied it
+	// (BookingResponse.CarrierMessageID) — PostNord's documentation states
+	// updates must reference the exact messageId from the original booking
+	// instruction. Falling back to a freshly generated ID is best-effort only.
+	messageID := req.CarrierMessageID
+	if messageID == "" {
+		messageID = fmt.Sprintf("update-%d", time.Now().UnixMilli())
+	}
+
 	payload := map[string]any{
 		"messageDate":     time.Now().UTC().Format(time.RFC3339),
 		"messageFunction": "Instruction",
-		"messageId":       fmt.Sprintf("update-%d", time.Now().UnixMilli()),
+		"messageId":       messageID,
 		"application": map[string]any{
 			"applicationId": a.ApplicationID,
 			"name":          "logistics-gateway",

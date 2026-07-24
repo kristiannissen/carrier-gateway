@@ -157,6 +157,13 @@ type UpdateRequest struct {
 	// ServicePointID redirects delivery to a different service point.
 	// DAO only — uses OpdaterShopid.php.
 	ServicePointID string `json:"servicePointId,omitempty"`
+	// CarrierMessageID reuses a carrier-internal message identifier from the
+	// original booking, where required by the carrier's own protocol.
+	// PostNord only — pass back BookingResponse.CarrierMessageID from the
+	// original booking so the update instruction reuses the same messageId.
+	// If omitted, the adapter generates a new one on a best-effort basis,
+	// which PostNord's API may reject for an existing shipment.
+	CarrierMessageID string `json:"carrierMessageId,omitempty"`
 }
 
 // UpdateResponse is returned after a successful shipment update.
@@ -1306,6 +1313,15 @@ type BookingResponse struct {
 	Errors         []string        `json:"errors,omitempty"`
 	LockerId       string          `json:"lockerId,omitempty"`
 	ServicePointID string          `json:"servicePointId,omitempty"`
+	// CarrierMessageID is the carrier-internal message identifier used for
+	// this booking, where the carrier's own protocol requires it to be re-sent
+	// on later calls to identify the original message.
+	// PostNord only — required to reuse the exact same messageId from the
+	// original v3 EDI booking instruction when submitting a later update
+	// (per PostNord's own documentation, updates that don't reuse it may be
+	// rejected). Callers that need to update a PostNord shipment should store
+	// this value and pass it back as UpdateRequest.CarrierMessageID.
+	CarrierMessageID string `json:"carrierMessageId,omitempty"`
 	// FlaggedForReview is true when the address passed a ReviewRequired
 	// validation — the booking was accepted but should be checked manually.
 	FlaggedForReview bool `json:"flaggedForReview,omitempty"`

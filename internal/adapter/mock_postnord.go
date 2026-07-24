@@ -62,15 +62,16 @@ func (m *MockPostNordAdapter) BookShipment(ctx context.Context, request BookingR
 	parent := fmt.Sprintf("PN%09dDK", rand.Intn(1000000000)) //nolint:gosec // mock data, not security-sensitive
 
 	return &BookingResponse{
-		ShipmentID:     fmt.Sprintf("shipment_%d", rand.Intn(1000000)), //nolint:gosec // mock data, not security-sensitive
-		TrackingNumber: parent,
-		LabelURL:       fmt.Sprintf("https://mock.postnord.com/labels/%s.pdf", parent),
-		Carrier:        "postnord",
-		Cost:           125.50,
-		Currency:       "DKK",
-		ServiceLevel:   "1700",
-		Status:         "booked",
-		Colli:          colliResponses,
+		ShipmentID:       fmt.Sprintf("shipment_%d", rand.Intn(1000000)), //nolint:gosec // mock data, not security-sensitive
+		TrackingNumber:   parent,
+		LabelURL:         fmt.Sprintf("https://mock.postnord.com/labels/%s.pdf", parent),
+		Carrier:          "postnord",
+		Cost:             125.50,
+		Currency:         "DKK",
+		ServiceLevel:     "1700",
+		Status:           "booked",
+		Colli:            colliResponses,
+		CarrierMessageID: fmt.Sprintf("msg-mock-%d", rand.Intn(1000000000)), //nolint:gosec // mock data, not security-sensitive
 	}, nil
 }
 

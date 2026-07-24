@@ -87,7 +87,7 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 
 	adapter, captured := newPostNordTestServer(t, http.StatusOK, postnordMockBookingResponse())
 
-	_, err := adapter.BookShipment(t.Context(), BookingRequest{
+	resp, err := adapter.BookShipment(t.Context(), BookingRequest{
 		Carrier: "postnord",
 		Shipment: Shipment{
 			Sender: Address{
@@ -123,6 +123,10 @@ func TestPostNordAdapter_BookShipment_PayloadShape(t *testing.T) {
 	assert.Equal(t, "Instruction", payload["messageFunction"])
 	assert.NotEmpty(t, payload["messageId"])
 	assert.Equal(t, "Original", payload["updateIndicator"])
+
+	// CarrierMessageID must be returned to the caller so it can be reused on
+	// a later UpdateShipment call — see APIdocs/postnord_update_cancel.rtf.
+	assert.Equal(t, payload["messageId"], resp.CarrierMessageID)
 
 	// application block
 	app := requireNested(t, payload, "application")
@@ -478,6 +482,45 @@ func TestPostNordAdapter_BookShipment_APIError(t *testing.T) {
 func TestPostNordAdapter_SupportsNativeIdempotency(t *testing.T) {
 	t.Parallel()
 	assert.True(t, SupportsNativeIdempotency("postnord"))
+}
+
+// =========================================================================
+// UpdateShipment — messageId reuse (APIdocs/postnord_update_cancel.rtf)
+// =========================================================================
+
+func TestPostNordAdapter_UpdateShipment_MessageID(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reuses caller-supplied CarrierMessageID", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newPostNordTestServer(t, http.StatusOK, "{}")
+
+		resp, err := adapter.UpdateShipment(t.Context(), UpdateRequest{
+			TrackingNumber:   "00073215400599388772",
+			ReceiverPhone:    "+4587654321",
+			CarrierMessageID: "msg-original-booking-123",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "updated", resp.Status)
+
+		payload := *captured
+		assert.Equal(t, "msg-original-booking-123", payload["messageId"])
+		assert.Equal(t, "Update", payload["updateIndicator"])
+	})
+
+	t.Run("generates a messageId when none supplied", func(t *testing.T) {
+		t.Parallel()
+		adapter, captured := newPostNordTestServer(t, http.StatusOK, "{}")
+
+		_, err := adapter.UpdateShipment(t.Context(), UpdateRequest{
+			TrackingNumber: "00073215400599388772",
+			ReceiverEmail:  "new@example.com",
+		})
+		require.NoError(t, err)
+
+		payload := *captured
+		assert.NotEmpty(t, payload["messageId"])
+	})
 }
 
 // =========================================================================
