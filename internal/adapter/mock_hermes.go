@@ -125,6 +125,87 @@ func (m *MockHermesAdapter) UpdateShipment(_ context.Context, _ UpdateRequest) (
 	return nil, notSupported("Hermes", "post-booking update", "")
 }
 
+// ── ManifestAdapter ───────────────────────────────────────────────────────────
+
+// BookPickup returns a mock Hermes pickup order response.
+func (m *MockHermesAdapter) BookPickup(_ context.Context, req PickupRequest) (*PickupResponse, error) {
+	if req.Pickup.Date == "" {
+		return nil, fmt.Errorf("hermes: pickup date is required")
+	}
+	return &PickupResponse{
+		Carrier:            "hermes",
+		ConfirmationNumber: fmt.Sprintf("%011d", rand.Intn(100000000000)), //nolint:gosec // mock data
+		Date:               req.Pickup.Date,
+		ReadyTime:          req.Pickup.ReadyTime,
+		CloseTime:          req.Pickup.CloseTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup is not supported for Hermes.
+func (m *MockHermesAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("Hermes", "pickup update",
+		"the HSI API has no update endpoint for pickup orders — cancel the existing pickup and create a new one")
+}
+
+// CancelPickup returns success for any confirmation number in mock mode.
+func (m *MockHermesAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return nil
+}
+
+// CloseManifest is not supported for Hermes.
+func (m *MockHermesAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("Hermes", "manifest close", "no end-of-day manifest endpoint exists in the HSI API")
+}
+
+// GetPickupAvailability is not supported for Hermes.
+func (m *MockHermesAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("Hermes", "pickup availability",
+		"no dedicated availability endpoint exists in the HSI API")
+}
+
+// ── PickupQuerier ─────────────────────────────────────────────────────────────
+
+// GetPickupByID returns a mock pickup order for the given order ID.
+func (m *MockHermesAdapter) GetPickupByID(_ context.Context, orderID string) (*PickupInfo, error) {
+	return &PickupInfo{
+		ID:                 orderID,
+		Carrier:            "hermes",
+		Status:             "CREATED",
+		ConfirmationNumber: orderID,
+		ReadyTime:          "BETWEEN_10_AND_13",
+	}, nil
+}
+
+// ListPickups returns a mock paged list of pickup orders.
+func (m *MockHermesAdapter) ListPickups(_ context.Context, req ListPickupsRequest) (*PickupList, error) {
+	size := req.Size
+	if size <= 0 {
+		size = 20
+	}
+	return &PickupList{
+		Carrier:    "hermes",
+		Page:       req.Page,
+		Count:      1,
+		TotalPages: 1,
+		PerPage:    size,
+		Items: []PickupInfo{
+			{
+				ID:                 "01234567890",
+				Carrier:            "hermes",
+				Status:             "CREATED",
+				ConfirmationNumber: "01234567890",
+				ReadyTime:          "BETWEEN_10_AND_13",
+			},
+		},
+	}, nil
+}
+
+// GetCutoffTime is not supported for Hermes.
+func (m *MockHermesAdapter) GetCutoffTime(_ context.Context, _, _ string) (*PickupCutoffTime, error) {
+	return nil, notSupported("Hermes", "pickup cutoff time", "no cutoff-time endpoint exists in the HSI API")
+}
+
 // NewMockHermesAdapter returns a new MockHermesAdapter with default behaviour.
 func NewMockHermesAdapter() *MockHermesAdapter {
 	return &MockHermesAdapter{}

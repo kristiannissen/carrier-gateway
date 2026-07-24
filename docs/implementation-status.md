@@ -19,7 +19,7 @@ feature mapping file in this folder with full detail.
 | DPD | Not fully implemented yet (Beta) | Pan-European | [dpd-group-feature-mapping.md](dpd-group-feature-mapping.md) |
 | DPD NL | Implemented — no genuine gaps remain once carrier limitations are excluded; verify SOAP endpoint URLs against live WSDLs before go-live | NL | [dpd-nl-feature-mapping.md](dpd-nl-feature-mapping.md) |
 | DPD UK | Not fully implemented yet (Beta) — endpoints unconfirmed against the live API, not verified carrier limitations | GB | — |
-| Hermes Germany | Partial — cancel/update are confirmed carrier limitations; pickup/manifest status unconfirmed | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
+| Hermes Germany | Production — cancel/update are confirmed carrier limitations; BookPickup/CancelPickup/GetPickupByID/ListPickups now wired; remaining pickup/manifest gaps are confirmed carrier limitations | DE only | [hermes-feature-mapping.md](hermes-feature-mapping.md) |
 | FedEx | Partial — update is a confirmed carrier limitation; label reprint is a genuine gap pending spec review | Worldwide | [fedex-feature-mapping.md](fedex-feature-mapping.md) |
 | Evri | Partial — booking and label retrieval only; tracking/cancel/update/pickup/manifest not offered by the Evri Classic API | GB | [evri-feature-mapping.md](evri-feature-mapping.md) |
 | DHL eCommerce UK | Not fully implemented yet (Beta) | GB | [dhl-ecommerce-feature-mapping.md](dhl-ecommerce-feature-mapping.md) |
@@ -49,15 +49,16 @@ feature mapping file in this folder with full detail.
 
 | Feature | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book pickup** | ✅ | ✅ | ✅ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | ✅ PL only |
-| **Update pickup** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | ❌ |
-| **Cancel pickup** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | ✅ PL only |
-| **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | ❌ |
+| **Book pickup** | ✅ | ✅ | ✅ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ✅ | ✅ | ✅ PL only |
+| **Update pickup** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Cancel pickup** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❓ | ❌ | ✅ | ✅ | ✅ | ✅ PL only |
+| **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❌ | ✅ | ❌ |
 
 **PostNord pickup note:** `POST /v3/pickups/ids` (domestic DK/SE/FI, requires item IDs from booking response) is now wired via `BookPickup`. Update/cancel pickup and manifest close are confirmed carrier limitations — no such endpoints exist. `GetCutoffTime` (`PickupQuerier`, not yet implemented) remains a genuine gap: `POST /v4/sac/pickup/stopdate` exists but returns a single cutoff date rather than a slot list, so it doesn't fulfil `GetPickupAvailability` either — that method is a confirmed limitation, distinct from the `GetCutoffTime` gap.
 **DHL Express pickup note:** Implicit at booking (returns `dispatchConfirmationNumber`). Standalone `POST /api/pickups` not yet wired.
 **GLS pickup note:** `POST /rs/sporadiccollection` is wired via `BookPickup`. Update/cancel/availability return `ErrNotSupported` — no such endpoints exist in the ShipIT API spec.
 **GLS NL pickup note:** `POST /CreatePickup` — requires three address blocks; all default to the single pickup address when only one is provided.
+**Hermes pickup note:** `POST`/`DELETE /pickuporders` are wired via `BookPickup`/`CancelPickup`. `GetPickupByID` and `ListPickups` (`PickupQuerier`) are also wired — the API has no per-ID GET or pagination, so both fetch the full `GET /pickuporders` list and filter/page client-side. `UpdatePickup`, `GetPickupAvailability`, and `GetCutoffTime` are confirmed carrier limitations — no such endpoints exist anywhere in the HSI API.
 **FedEx pickup note:** Update not supported — cancel-and-rebook. Confirmation number is an opaque token encoding code + date + Express location.
 
 ---
@@ -75,7 +76,7 @@ feature mapping file in this folder with full detail.
 | DHL eCommerce EU | ❓ | ❓ | Not confirmed |
 | DHL eCommerce UK | ❌ | ❌ | No manifest API — shipments processed automatically by DHL |
 | DPD | ❌ | ❌ | No API support — pickup order acts as handover instruction |
-| Hermes | ❓ | ❓ | Not confirmed |
+| Hermes | ❌ | ❌ | No end-of-day manifest endpoint exists anywhere in the HSI API — confirmed carrier limitation |
 | FedEx | ✅ | ✅ | Ground only — `PUT /ship/v1/endofday/`. Express accounts do not require a close. |
 | InPost | N/A | N/A | Locker network — no manifest |
 

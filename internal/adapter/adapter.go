@@ -229,10 +229,19 @@ var capabilities = map[string]carrierCapabilities{
 	// BookPickup (sporadiccollection) and CloseManifest (endofday, operationally
 	// required) are wired; UpdatePickup, CancelPickup, and GetPickupAvailability
 	// are confirmed carrier limitations, not implementation gaps.
-	"gls":     {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
-	"dao":     {NativeIdempotency: false, Beta: false, SupportsCancellation: true, SupportsUpdate: true},
-	"dhl":     {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
-	"hermes":  {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	"gls": {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
+	"dao": {NativeIdempotency: false, Beta: false, SupportsCancellation: true, SupportsUpdate: true},
+	"dhl": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
+	// Hermes: CancelShipment/UpdateShipment are confirmed carrier limitations —
+	// no PATCH/PUT/DELETE exists for shipment orders anywhere in the HSI API.
+	// Implements ManifestAdapter — BookPickup and CancelPickup are wired via
+	// POST/DELETE /pickuporders. UpdatePickup, CloseManifest, and
+	// GetPickupAvailability are confirmed carrier limitations — no such
+	// endpoints exist. Implements PickupQuerier — GetPickupByID and ListPickups
+	// are wired via GET /pickuporders (no per-ID GET or pagination in the API,
+	// so both filter/page the full list client-side). GetCutoffTime is a
+	// confirmed carrier limitation.
+	"hermes": {NativeIdempotency: false, Beta: true, SupportsCancellation: false, SupportsUpdate: false},
 	// InPost: X-Deduplication-Id header provides server-side deduplication.
 	// Cancellation and post-booking update are not supported by the InPost Group API.
 	// Pickups are available in Poland only (implements ManifestAdapter — BookPickup + CancelPickup).
