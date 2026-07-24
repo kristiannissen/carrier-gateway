@@ -89,6 +89,8 @@ The gateway holds no database and no per-request state. Every call is self-conta
 
 The only planned stateful feature — subscription-based tracking — is intentionally kept in a separate companion service so the gateway itself stays stateless. See [`docs/parcel-poller.md`](docs/parcel-poller.md).
 
+This extends to messaging infrastructure: carrier-gateway will never require or bundle a specific queue or broker (RabbitMQ, SQS, Kafka, or similar) for webhooks or subscriptions. It exposes signed events and normalized data; you wire whatever queue you already run around it. See "Queues and event-driven delivery" below for the concrete recipe using only what's already implemented.
+
 ### Mock-first development
 
 Every carrier has a matching `mock_{carrier}.go` that satisfies `CarrierAdapter`. Mocks are selected in two ways:
@@ -131,6 +133,20 @@ Each carrier returns its own status vocabulary. The gateway maps every raw strin
 ### Webhook notifications
 
 All outgoing webhooks are signed with HMAC-SHA256 (`X-Signature: sha256=<hex>`) and only dispatched to `https://` endpoints. Dispatch can be triggered at booking, on a tracking poll, or on demand via `POST /api/notifications`.
+
+### Queues and event-driven delivery — bring your own
+
+carrier-gateway does not include, require, or recommend a specific message queue or broker. This is a deliberate design boundary, not a missing feature — bundling a broker would break the stateless, no-external-dependency model described above. Everything needed to build event-driven delivery on top of your own queue is already exposed by the existing endpoints.
+
+**Push webhooks — available today.** Trigger a signed webhook at booking (the `notifications` block on `POST /api/bookings`), on a tracking check (`POST /api/trackings/{trackingNumber}` with `previousStatus`), or on demand (`POST /api/notifications`). Dispatch is fire-and-forget and single-attempt; check `notificationsSent` / `notificationsFailed` in the response to know whether to retry. Your webhook receiver validates `X-Signature`, then enqueues the event onto whatever queue you run — RabbitMQ, SQS, Kafka, Pub/Sub, or a plain DB-backed job table — for downstream processing, retries, or fan-out. carrier-gateway has no opinion on any of that.
+
+**Polling / subscriptions — available today, with glue you write.** carrier-gateway has no subscription registry of its own. To get "register once, get notified on change" behaviour, run your own scheduler — cron, a queue-based delayed job, Celery/Sidekiq beat, a cloud scheduler — that periodically calls `POST /api/trackings/{trackingNumber}` with the last known `previousStatus` and a `notifications` block. carrier-gateway compares against the carrier's live status and dispatches the webhook only when it has advanced, so you never poll the carrier directly or normalize their statuses yourself. Your own store holds the "last known status" and the schedule; carrier-gateway holds no state at all. The full reference design for this pattern, including the data model, is in [`docs/parcel-poller.md`](docs/parcel-poller.md) — it's a spec, not shipped code, so you (or whichever queue-backed worker you already run) implement it against your own infrastructure.
+
+**Gaps — what's not available today, if you want more than the above:**
+
+- No bulk/batch tracking endpoint. Polling many parcels means one `POST /api/trackings/{id}` call per parcel — there's no `POST /api/trackings/batch` to check many in a single round trip. Your own queue consumer can fan this out, but carrier-gateway can't batch it for you yet.
+- No reference implementation of the poller/subscription service. `docs/parcel-poller.md` documents the design fully, but no code exists — you build it (or an equivalent) against your own queue and store.
+- No webhook delivery retry, backoff, or dead-lettering inside carrier-gateway — dispatch is intentionally single-attempt and fire-and-forget. Retry logic belongs in your own queue consumer; `POST /api/notifications` lets you re-dispatch on demand, but you own the retry schedule.
 
 ---
 

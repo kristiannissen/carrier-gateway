@@ -282,6 +282,23 @@ Kept as an unbuilt spec, not an active plan. Requires a stateful companion
 service (see `docs/parcel-poller.md`), which is a bigger commitment than
 anything else in this file — lowest priority of the four.
 
+**Design decision, not a gap to close later:** carrier-gateway will never
+bundle or require a specific queue/broker (RabbitMQ, SQS, Kafka, etc.) to
+implement this. The gateway stays stateless; a subscription/event feature —
+if it's ever built — lives entirely in a separate companion service that
+owns its own queue and store, exactly as `docs/parcel-poller.md` already
+specifies. This is architectural, not a missing feature waiting on
+prioritization.
+
+**What's already achievable today, without building any of this:** README's
+["Queues and event-driven delivery"](../README.md#queues-and-event-driven-delivery--bring-your-own)
+section documents how to get webhook + queue behaviour using only the
+endpoints that already exist (`POST /api/notifications`,
+`POST /api/trackings/{trackingNumber}` with `previousStatus`) plus a
+scheduler and queue you already run. The genuine gaps if you want more than
+that — no bulk tracking endpoint, no shipped poller reference implementation,
+no built-in webhook retry — are listed there too.
+
 ### Problem
 
 The existing `GET /api/trackings/{trackingNumber}` is poll-based: the caller
