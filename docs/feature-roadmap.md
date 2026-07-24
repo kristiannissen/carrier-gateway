@@ -2,19 +2,41 @@
 
 ## Overview
 
-Four features in priority order. Each builds on the previous:
-batch booking increases volume, pickup scheduling closes the outbound loop,
-manifest documents the handover, and tracking events give the caller
-visibility after the parcel leaves the warehouse.
+The actual priority for this gateway is primary-feature completeness per
+carrier: book, update, cancel, track, and return a shipment (see the "Feature
+tiers" section in `CLAUDE.md`). Closing primary-method gaps on carriers still
+in Beta matters more than any of the four features below — check
+`docs/carriers.md` and `docs/implementation-status.md` for the current
+per-carrier gap list before picking up anything here.
+
+The four features documented in this file are all secondary and are **not
+currently prioritized**. They're kept here as a spec for later, not as an
+active plan:
 
 ```
-1. Batch booking       — book multiple shipments in one call
-2. Pickup scheduling   — tell the carrier when and where to collect
-3. Manifest            — document what went on the truck
-4. Tracking events     — normalized status updates per parcel
+- Batch booking       — book multiple shipments in one call. Not started.
+- Pickup scheduling   — tell the carrier when and where to collect. Already
+                         shipped per-carrier (BookPickup/UpdatePickup/
+                         CancelPickup) — see docs/carriers.md. This section is
+                         now historical reference, not a gap.
+- Manifest            — document what went on the truck. Already shipped
+                         per-carrier (CloseManifest) — see docs/carriers.md.
+                         Also historical reference, not a gap.
+- Tracking events     — normalized status updates per parcel, subscription
+                         model. Not started. Requires a stateful companion
+                         service (see docs/parcel-poller.md).
 ```
 
-See `manifest-pickup-requirements.md` for full detail on features 2 and 3.
+Pickup scheduling and manifest are implemented today as per-carrier
+`ManifestAdapter` methods (`POST /api/pickups`, `POST /api/manifests`, etc.) —
+see `docs/carriers.md` for which carriers support which. When this roadmap was
+written those were still gateway-wide gaps; they no longer are. The sections
+below are left intact as detailed reference for anyone extending pickup/manifest
+support to a carrier that doesn't have it yet, and as an unbuilt spec for batch
+booking and tracking events if either becomes a priority later.
+
+See `manifest-pickup-requirements.md` for full detail on pickup scheduling and
+manifest specifically.
 
 ---
 
@@ -51,7 +73,10 @@ A carrier is `"mock"` when `mockMode` is `true`, `"beta"` when flagged via
 
 ---
 
-## 1. Batch booking
+## 1. Batch booking — not currently prioritized
+
+Kept as an unbuilt spec, not an active plan. Primary-feature completeness per
+carrier takes precedence — see the Overview above.
 
 ### Workflow
 
@@ -204,7 +229,12 @@ single-booking endpoint. Per-carrier worker pools are managed inside
 
 ---
 
-## 2. Pickup scheduling
+## 2. Pickup scheduling — already shipped
+
+**This has already shipped per-carrier** (`BookPickup`/`UpdatePickup`/
+`CancelPickup` on `ManifestAdapter`) — see `docs/carriers.md` for which
+carriers support it and which don't (as a confirmed carrier limitation, not a
+gap). The detail below is kept as reference spec, not an open item.
 
 See `manifest-pickup-requirements.md` for full endpoint specification, carrier
 fit/gap table, and code changes.
@@ -223,7 +253,12 @@ this call.
 
 ---
 
-## 3. Manifest
+## 3. Manifest — already shipped
+
+**This has already shipped per-carrier** (`CloseManifest` on
+`ManifestAdapter`) — see `docs/carriers.md` for which carriers support it and
+which don't (as a confirmed carrier limitation, not a gap). The detail below
+is kept as reference spec, not an open item.
 
 See `manifest-pickup-requirements.md` for full endpoint specification, carrier
 fit/gap table, and code changes.
@@ -241,7 +276,11 @@ after collection. Carriers without manifest API support return
 
 ---
 
-## 4. Tracking events
+## 4. Tracking events — not currently prioritized
+
+Kept as an unbuilt spec, not an active plan. Requires a stateful companion
+service (see `docs/parcel-poller.md`), which is a bigger commitment than
+anything else in this file — lowest priority of the four.
 
 ### Problem
 
@@ -424,11 +463,15 @@ Dispatcher          — reuses existing notification.Service for webhook deliver
 
 ---
 
-## Dependency order
+## Status
 
-| Feature | Depends on | Stateful |
-|---|---|---|
-| Batch booking | Nothing — uses existing `CarrierAdapter.Book` | No |
-| Pickup scheduling | Nothing — new `ManifestAdapter` interface | No |
-| Manifest | Nothing — new `ManifestAdapter` interface | No |
-| Tracking events | Batch booking useful but not required; requires backing store | Yes |
+| Feature | Status | Depends on | Stateful |
+|---|---|---|---|
+| Batch booking | Not prioritized | Nothing — uses existing `CarrierAdapter.Book` | No |
+| Pickup scheduling | Shipped per-carrier — see `docs/carriers.md` | `ManifestAdapter` interface | No |
+| Manifest | Shipped per-carrier — see `docs/carriers.md` | `ManifestAdapter` interface | No |
+| Tracking events | Not prioritized | Batch booking useful but not required; requires backing store | Yes |
+
+None of the above is more urgent than closing primary-method gaps on carriers
+still in Beta (`DHL eCommerce UK`, `DPD UK`, `Matkahuolto` as of the last
+audit) — see `docs/implementation-status.md`.
