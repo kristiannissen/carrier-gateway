@@ -286,7 +286,7 @@ Response (domestic — optional fields omitted when empty):
 }
 ```
 
-For cross-border shipments with customs, warnings, or notifications the response additionally includes `addOnWarnings`, `customsWarnings`, `notificationsSent`, `notificationsFailed`, `cnFormType`, and `cnDocument` — all omitted when empty.
+For cross-border shipments with customs, warnings, or notifications the response additionally includes `addOnWarnings`, `customsWarnings`, `notificationsSent`, `notificationsFailed`, `cnFormType`, and `cnDocument` — all omitted when empty. PostNord bookings also include `carrierMessageId`; store it if you plan to update the shipment later (see `PATCH /api/bookings/{trackingNumber}` below).
 
 #### Key booking fields
 
@@ -389,6 +389,8 @@ curl -X PATCH "http://localhost:8080/api/bookings/00057126960000003016?carrier=d
   -H "Content-Type: application/json" \
   -d '{"phone": "+4587654321", "email": "new@example.com", "weight": 2.3}'
 ```
+
+**PostNord only:** pass back the `carrierMessageId` from the original booking response as `carrierMessageId` in the update body. PostNord's API is documented to require the update instruction to reuse the exact same messageId as the original booking; without it, the adapter generates a new one on a best-effort basis, which PostNord may reject. Also note PostNord's update capability is currently documented as Sweden-only for every field, not only address changes — DK/NO/FI update requests are expected to be rejected by the carrier.
 
 ### GET /api/labels/{trackingNumber}
 

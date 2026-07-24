@@ -30,9 +30,9 @@ is not available via API.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Book shipment | ✅ | v3 EDI API, multi-colli, full address block |
-| Cancel shipment | ✅ | v3 EDI cancel instruction |
-| Update shipment | ✅ (partial) | Phone and email only. Weight and service point change are not supported post-booking. |
+| Book shipment | ✅ | v3 EDI API, multi-colli, full address block. Returns `CarrierMessageID` for later reuse on update. |
+| Cancel shipment | ✅ | v3 EDI cancel instruction (`messageFunction: "Cancellation"`, `updateIndicator: "Delete"`). See "Unconfirmed source" note below — a single low-confidence source disputes this, but it hasn't been acted on. |
+| Update shipment | ✅ (partial) | Phone and email only. Weight and service point change are not supported post-booking. Per `APIdocs/postnord_update_cancel.rtf`, update is documented as SE-only for *all* fields, not just address changes, and the update instruction should reuse the exact `messageId` from the original booking — pass `BookingResponse.CarrierMessageID` back as `UpdateRequest.CarrierMessageID`. |
 | Idempotency key | ✅ | Native — passed to the v3 EDI API directly |
 
 ### Labels
@@ -133,3 +133,31 @@ against PostNord's cutoff window before submitting — not currently wired.
 **Multi-market.** The same API key works for DK, SE, NO, FI. Routing is
 determined by the sender/receiver country in the booking payload. No per-country
 credential switching is required.
+
+**Update messageId reuse (`APIdocs/postnord_update_cancel.rtf`).** PostNord's
+documentation states that update instructions must reuse the exact `messageId`
+from the original booking request — not a freshly generated one. Since this
+gateway is stateless, `BookShipment` returns the messageId it used as
+`BookingResponse.CarrierMessageID`; callers who need to update a PostNord
+shipment later should store this value and pass it back as
+`UpdateRequest.CarrierMessageID`. If omitted, `UpdateShipment` still generates
+a new messageId on a best-effort basis (previous behavior), which PostNord's
+API may reject for an existing shipment per this source.
+
+**Update is SE-only for all fields, not just address.** The same source states
+the update capability as a whole — not only address changes — is currently
+only supported for Sweden. The adapter cannot validate this proactively (no
+country is derivable from a bare tracking number in a stateless call), so it
+still relies on the carrier rejecting DK/NO/FI update attempts at the API
+level, same as before — this is a documentation correction, not a behavior
+change.
+
+**Cancel endpoint — unconfirmed discrepancy, not acted on.** The same RTF
+claims PostNord's Booking API has no dedicated cancel/void endpoint at all,
+recommending the Delivery Order Modification Service (DOMS) or manual
+support instead. This directly contradicts the adapter's existing, working
+`CancelShipment` (an EDI instruction with `messageFunction: "Cancellation"`,
+`updateIndicator: "Delete"`). The source is a single AI-research summary with
+no schema for the EDI Instruction format to cross-check either claim against,
+and gives no endpoint or schema for DOMS to implement even if it's right.
+Not acted on — flagged in code and here for awareness only.
