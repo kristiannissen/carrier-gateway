@@ -21,7 +21,7 @@ Status column reflects the current state of the gateway implementation:
 
 | Carrier | Key | Status | Notes |
 |---|---|---|---|
-| PostNord | `postnord` | Partial | Covers DK, SE, NO, FI under a single API key. BookShipment, CancelShipment, UpdateShipment (phone/email only, SE-only and now reuses `CarrierMessageID` from the original booking as PostNord's docs require), TrackShipment, FetchLabel implemented. BookPickup is not wired despite `/v3/pickups/ids` existing in the API — a genuine gap, not a carrier limitation. |
+| PostNord | `postnord` | Partial | Covers DK, SE, NO, FI under a single API key. BookShipment, CancelShipment, UpdateShipment (phone/email only, SE-only and now reuses `CarrierMessageID` from the original booking as PostNord's docs require), TrackShipment, FetchLabel implemented. BookPickup is now wired via `/v3/pickups/ids` (domestic SE, DK, FI only — NO is a confirmed limitation for this specific endpoint). UpdatePickup, CancelPickup, and CloseManifest are confirmed carrier limitations (no such endpoints exist). GetCutoffTime remains a genuine secondary gap — `/v4/sac/pickup/stopdate` exists but is not wired — so the carrier stays Partial rather than Production. |
 | GLS Denmark | `gls` | Production | ShipIT API covers most of Europe — see GLS under Multi-country. |
 | DAO | `dao` | Implemented | Denmark-only parcel network. Strong home delivery coverage. |
 | DHL eCommerce Europe | `dhl_ecommerce` | Partial | BookShipment, TrackShipment, FetchLabel implemented. Cancel and update not supported via API — contact DHL customer service. |
@@ -41,7 +41,7 @@ Status column reflects the current state of the gateway implementation:
 
 | Carrier | Key | Status | Notes |
 |---|---|---|---|
-| PostNord Sweden | `postnord` | Partial | Same API and key as PostNord Denmark. |
+| PostNord Sweden | `postnord` | Partial | Same API and key as PostNord Denmark. Domestic pickup booking (`/v3/pickups/ids`) is supported here. |
 
 ---
 

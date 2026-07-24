@@ -5,12 +5,16 @@ Base URL (prod): `https://api2.postnord.com`
 Auth: API key (query parameter `?apikey=`) + customer number + application ID
 Coverage: Denmark, Sweden, Norway, Finland — single API key across all four markets.
 Implementation status: **Partial** — all five core `CarrierAdapter` methods
-are live, so every primary method is complete. BookPickup is a genuine
-secondary implementation gap: PostNord's `/v3/pickups/ids` endpoint exists
-(see `APIdocs/postnord_pickup_swagger.json`) but `internal/adapter/postnord.go`
-has no pickup method at all — a previous version of this doc wrongly claimed
-it was implemented. Manifest is a confirmed carrier limitation (handled by EDI
-scan at collection, not exposed via API).
+are live, so every primary method is complete. `internal/adapter/postnord.go`
+now also implements `ManifestAdapter`: BookPickup is wired via
+`/v3/pickups/ids` (domestic SE, DK, FI only — NO is a confirmed limitation
+for this specific endpoint, even though PostNord otherwise covers NO for
+booking/tracking/labels). UpdatePickup, CancelPickup, CloseManifest, and
+GetPickupAvailability all return `ErrNotSupported` — no such endpoints exist
+in the PostNord API. The carrier does not yet implement `PickupQuerier`;
+`GetCutoffTime` is a genuine remaining secondary gap since
+`/v4/sac/pickup/stopdate` exists but is not wired — that gap is why the
+carrier stays **Partial** rather than reaching Production.
 
 ---
 
@@ -18,9 +22,13 @@ scan at collection, not exposed via API).
 
 PostNord is the most fully integrated carrier in the gateway. All five core
 `CarrierAdapter` methods are live. It is the only carrier with native
-idempotency key support. Pickup scheduling is not yet wired despite the
-`/v3/pickups/ids` endpoint existing for domestic DK/SE/FI shipments. Manifest
-is not available via API.
+idempotency key support. Pickup scheduling (`BookPickup`) is now wired for
+domestic DK/SE/FI shipments via `/v3/pickups/ids`. Update/cancel of a
+scheduled pickup and manifest close are confirmed carrier limitations — no
+such endpoints exist. `GetCutoffTime` (`PickupQuerier`) remains unwired
+despite `/v4/sac/pickup/stopdate` existing — a genuine secondary gap tracked
+below, not yet blocking day-to-day pickup use since callers can submit
+`BookPickup` directly without a pre-flight cutoff check.
 
 ---
 
@@ -56,16 +64,19 @@ is not available via API.
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Book pickup | ❌ | `/v3/pickups/ids` exists in the PostNord API but is not wired in the adapter — genuine gap, not a limitation. A previous version of this doc claimed this was implemented. |
-| Update pickup | ❌ | Not in PostNord API (`501`) |
-| Cancel pickup | ❌ | Not in PostNord API (`501`) |
-| Geographic scope | ⚠️ | Domestic DK, SE, FI only. Cross-border PostNord shipments return `not_supported`. |
+| Book pickup | ✅ | `POST /v3/pickups/ids` — takes carrier item IDs from `BookingResponse`/`ColliResponse.TrackingNumber`, not human-readable order references. Returns `bookingResponse.bookingId` as `ConfirmationNumber`. |
+| Update pickup | ❌ | Confirmed carrier limitation — `/v3/pickups/ids` only exposes `POST` (create); no update endpoint exists (`501`) |
+| Cancel pickup | ❌ | Confirmed carrier limitation — no cancel endpoint exists (`501`) |
+| Pickup availability | ❌ | Confirmed carrier limitation for `GetPickupAvailability` specifically — no endpoint returns a list of bookable slots (`501`) |
+| Get cutoff time | ❌ | Genuine gap, not a limitation — `POST /v4/sac/pickup/stopdate` exists and returns a cutoff/stop date but is not wired to `GetCutoffTime` (`PickupQuerier`, not yet implemented by this adapter) |
+| Get pickup by ID / list pickups | ❌ | Confirmed carrier limitation — no such query endpoints exist in the API; `PickupQuerier` is not implemented |
+| Geographic scope | ⚠️ | Domestic DK, SE, FI only for pickup booking. NO is rejected client-side (see `postNordPickupCountries` in `internal/adapter/postnord.go`). Cross-border PostNord shipments return `not_supported`. |
 
 ### Manifest
 
 | Feature | Implemented | Notes |
 |---|---|---|
-| Close manifest | ❌ | Not in PostNord API — handled by EDI scan at collection time (`501`) |
+| Close manifest | ❌ | Confirmed carrier limitation — handled by EDI scan at collection time, no API endpoint (`501`) |
 | Manifest document | ❌ | Not available via API |
 
 ### Add-ons
@@ -99,10 +110,10 @@ is not available via API.
 | `PATCH /api/bookings/{id}` | v3 EDI update | ✅ (phone, email only) |
 | `GET /api/trackings/{id}` | v5 trackandtrace | ✅ |
 | `GET /api/labels/{id}` | v3 label | ✅ |
-| `POST /api/pickups` | `/v3/pickups/ids` (exists, unwired) | ❌ → 501 |
-| `PUT /api/pickups/{id}` | — | ❌ → 501 |
-| `DELETE /api/pickups/{id}` | — | ❌ → 501 |
-| `POST /api/manifests` | — | ❌ → 501 |
+| `POST /api/pickups` | `/v3/pickups/ids` | ✅ |
+| `PUT /api/pickups/{id}` | — (no update endpoint) | ❌ → 501 |
+| `DELETE /api/pickups/{id}` | — (no cancel endpoint) | ❌ → 501 |
+| `POST /api/manifests` | — (no manifest endpoint) | ❌ → 501 |
 
 ---
 
@@ -120,15 +131,27 @@ is not available via API.
 
 ## Implementation notes
 
-**Pickup not wired.** `internal/adapter/postnord.go` does not implement
-`BookPickup` (or any `ManifestAdapter` method) despite `/v3/pickups/ids`
-existing in the PostNord API and requiring only the carrier item IDs returned
-in the booking response, not human-readable tracking numbers. This is a
-genuine secondary implementation gap, not a limitation — wiring it would
-require adding `ManifestAdapter` support to the adapter.
+**Pickup now wired.** `internal/adapter/postnord.go` implements
+`ManifestAdapter`. `BookPickup` calls `POST /v3/pickups/ids` with the carrier
+item IDs from the booking response (not human-readable tracking numbers,
+passed via `PickupRequest.TrackingNumbers`), and returns
+`bookingResponse.bookingId` as `ConfirmationNumber`. Domestic SE, DK, FI
+only — a request with `Address.Country` set to anything else (e.g. `NO`) is
+rejected before the API call, since PostNord's own documentation limits this
+endpoint to those three markets.
+`UpdatePickup`, `CancelPickup`, and `CloseManifest` return `ErrNotSupported`
+— no such endpoints exist anywhere in the PostNord Booking API. `GetPickupAvailability`
+also returns `ErrNotSupported`: no endpoint returns a list of bookable time slots.
 
-**Pickup cutoff.** `/v4/sac/pickup/stopdate` can validate the pickup date
-against PostNord's cutoff window before submitting — not currently wired.
+**Pickup cutoff — still a genuine gap.** `POST /v4/sac/pickup/stopdate`
+returns a single cutoff/stop date (not a slot list), which maps to
+`GetCutoffTime` on the `PickupQuerier` interface rather than
+`GetPickupAvailability` on `ManifestAdapter`. This adapter does not yet
+implement `PickupQuerier` at all, so `GetCutoffTime` remains unwired despite
+the endpoint existing — a genuine secondary gap, not a carrier limitation.
+This is the one remaining gap keeping PostNord at **Partial** instead of
+**Production** (all primary methods are complete, and every other secondary
+method is either wired or a confirmed limitation).
 
 **Multi-market.** The same API key works for DK, SE, NO, FI. Routing is
 determined by the sender/receiver country in the booking payload. No per-country

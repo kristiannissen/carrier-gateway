@@ -4,6 +4,7 @@ package adapter
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // =========================================================================
@@ -524,6 +526,208 @@ func TestPostNordAdapter_UpdateShipment_MessageID(t *testing.T) {
 }
 
 // =========================================================================
+// Mock adapter — BookPickup
+// =========================================================================
+
+func TestMockPostNordAdapter_BookPickup(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing tracking numbers", func(t *testing.T) {
+		t.Parallel()
+		_, err := (&MockPostNordAdapter{}).BookPickup(t.Context(), PickupRequest{
+			Pickup: PickupWindow{Date: "2026-08-01"},
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "tracking number")
+	})
+
+	t.Run("missing pickup date", func(t *testing.T) {
+		t.Parallel()
+		_, err := (&MockPostNordAdapter{}).BookPickup(t.Context(), PickupRequest{
+			TrackingNumbers: []string{"00373500489530470000"},
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "pickup.date")
+	})
+
+	t.Run("valid request", func(t *testing.T) {
+		t.Parallel()
+		resp, err := (&MockPostNordAdapter{}).BookPickup(t.Context(), PickupRequest{
+			TrackingNumbers: []string{"00373500489530470000"},
+			Pickup:          PickupWindow{Date: "2026-08-01"},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "postnord", resp.Carrier)
+		assert.Equal(t, "2026-08-01", resp.Date)
+		assert.Equal(t, "booked", resp.Status)
+		assert.NotEmpty(t, resp.ConfirmationNumber)
+		assert.Equal(t, "09:00", resp.ReadyTime)
+		assert.Equal(t, "18:00", resp.CloseTime)
+	})
+}
+
+func TestMockPostNordAdapter_ManifestAdapter_NotSupported(t *testing.T) {
+	t.Parallel()
+
+	m := &MockPostNordAdapter{}
+
+	_, err := m.UpdatePickup(t.Context(), "confirmation-1", PickupRequest{})
+	assert.True(t, errors.Is(err, ErrNotSupported))
+
+	err = m.CancelPickup(t.Context(), "postnord", "confirmation-1")
+	assert.True(t, errors.Is(err, ErrNotSupported))
+
+	_, err = m.CloseManifest(t.Context(), ManifestRequest{Date: "2026-08-01"})
+	assert.True(t, errors.Is(err, ErrNotSupported))
+
+	_, err = m.GetPickupAvailability(t.Context(), PickupAvailabilityRequest{})
+	assert.True(t, errors.Is(err, ErrNotSupported))
+}
+
+// =========================================================================
+// Real adapter — BookPickup
+// =========================================================================
+
+func TestPostNordAdapter_BookPickup_PayloadShape(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newPostNordPickupTestServer(t, http.StatusCreated, postnordMockPickupResponse())
+
+	resp, err := adapter.BookPickup(t.Context(), PickupRequest{
+		TrackingNumbers: []string{"00373500489530470000", "00373500489530470001"},
+		Pickup: PickupWindow{
+			Date:      "2026-08-01",
+			ReadyTime: "10:00",
+			CloseTime: "16:00",
+		},
+	})
+	require.NoError(t, err)
+
+	items := *captured
+	require.Len(t, items, 2)
+	assert.Equal(t, "00373500489530470000", items[0]["itemId"])
+	assert.Equal(t, "00373500489530470001", items[1]["itemId"])
+	assert.Contains(t, items[0]["earliestPickupDate"].(string), "2026-08-01T10:00")
+	assert.Contains(t, items[0]["latestPickupDate"].(string), "2026-08-01T16:00")
+
+	assert.Equal(t, "postnord", resp.Carrier)
+	assert.Equal(t, "booked", resp.Status)
+	assert.Equal(t, "5Y9SR0CSAO9MTJAYCS8YM3RLZY40LI", resp.ConfirmationNumber)
+	assert.Equal(t, "10:00", resp.ReadyTime)
+	assert.Equal(t, "16:00", resp.CloseTime)
+}
+
+func TestPostNordAdapter_BookPickup_DefaultWindow(t *testing.T) {
+	t.Parallel()
+
+	adapter, captured := newPostNordPickupTestServer(t, http.StatusCreated, postnordMockPickupResponse())
+
+	resp, err := adapter.BookPickup(t.Context(), PickupRequest{
+		TrackingNumbers: []string{"00373500489530470000"},
+		Pickup:          PickupWindow{Date: "2026-08-01"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "09:00", resp.ReadyTime)
+	assert.Equal(t, "18:00", resp.CloseTime)
+
+	items := *captured
+	assert.Contains(t, items[0]["earliestPickupDate"].(string), "2026-08-01T09:00")
+	assert.Contains(t, items[0]["latestPickupDate"].(string), "2026-08-01T18:00")
+}
+
+func TestPostNordAdapter_BookPickup_Validation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing tracking numbers", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newPostNordPickupTestServer(t, http.StatusCreated, postnordMockPickupResponse())
+		_, err := adapter.BookPickup(t.Context(), PickupRequest{Pickup: PickupWindow{Date: "2026-08-01"}})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "tracking number")
+	})
+
+	t.Run("missing pickup date", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newPostNordPickupTestServer(t, http.StatusCreated, postnordMockPickupResponse())
+		_, err := adapter.BookPickup(t.Context(), PickupRequest{TrackingNumbers: []string{"00373500489530470000"}})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "pickup.date")
+	})
+
+	t.Run("Norway rejected — domestic SE, DK, FI only", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newPostNordPickupTestServer(t, http.StatusCreated, postnordMockPickupResponse())
+		_, err := adapter.BookPickup(t.Context(), PickupRequest{
+			TrackingNumbers: []string{"00373500489530470000"},
+			Pickup:          PickupWindow{Date: "2026-08-01"},
+			Address:         PickupAddress{Country: "NO"},
+		})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "NO")
+	})
+
+	t.Run("Sweden accepted", func(t *testing.T) {
+		t.Parallel()
+		adapter, _ := newPostNordPickupTestServer(t, http.StatusCreated, postnordMockPickupResponse())
+		_, err := adapter.BookPickup(t.Context(), PickupRequest{
+			TrackingNumbers: []string{"00373500489530470000"},
+			Pickup:          PickupWindow{Date: "2026-08-01"},
+			Address:         PickupAddress{Country: "SE"},
+		})
+		assert.NoError(t, err)
+	})
+}
+
+func TestPostNordAdapter_BookPickup_APIError(t *testing.T) {
+	t.Parallel()
+
+	adapter, _ := newPostNordPickupTestServer(t, http.StatusBadRequest, `{"error":"invalid request"}`)
+
+	_, err := adapter.BookPickup(t.Context(), PickupRequest{
+		TrackingNumbers: []string{"00373500489530470000"},
+		Pickup:          PickupWindow{Date: "2026-08-01"},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "400")
+}
+
+func TestPostNordAdapter_BookPickup_FailedStatus(t *testing.T) {
+	t.Parallel()
+
+	adapter, _ := newPostNordPickupTestServer(t, http.StatusCreated, `{
+		"bookingResponse": {
+			"bookingId": "",
+			"idInformation": [{"status": "FAIL"}]
+		}
+	}`)
+
+	_, err := adapter.BookPickup(t.Context(), PickupRequest{
+		TrackingNumbers: []string{"00373500489530470000"},
+		Pickup:          PickupWindow{Date: "2026-08-01"},
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "FAIL")
+}
+
+func TestPostNordAdapter_ManifestAdapter_NotSupported(t *testing.T) {
+	t.Parallel()
+
+	adapter := &PostNordAdapter{APIKey: "test-key", CustomerNumber: "150011208", ApplicationID: 1438}
+
+	_, err := adapter.UpdatePickup(t.Context(), "confirmation-1", PickupRequest{})
+	assert.True(t, errors.Is(err, ErrNotSupported))
+
+	err = adapter.CancelPickup(t.Context(), "postnord", "confirmation-1")
+	assert.True(t, errors.Is(err, ErrNotSupported))
+
+	_, err = adapter.CloseManifest(t.Context(), ManifestRequest{Date: "2026-08-01"})
+	assert.True(t, errors.Is(err, ErrNotSupported))
+
+	_, err = adapter.GetPickupAvailability(t.Context(), PickupAvailabilityRequest{})
+	assert.True(t, errors.Is(err, ErrNotSupported))
+}
+
+// =========================================================================
 // Helpers
 // =========================================================================
 
@@ -563,6 +767,44 @@ func postnordMockBookingResponse() string {
 			}
 		]
 	}`
+}
+
+func postnordMockPickupResponse() string {
+	return `{
+		"bookingResponse": {
+			"bookingId": "5Y9SR0CSAO9MTJAYCS8YM3RLZY40LI",
+			"idInformation": [
+				{"status": "OK"}
+			]
+		}
+	}`
+}
+
+// newPostNordPickupTestServer sets up a test server that captures the request
+// body as a JSON array — the shape POST /v3/pickups/ids expects, as opposed
+// to the single-object body used by the booking/cancel/update endpoints.
+func newPostNordPickupTestServer(t *testing.T, statusCode int, body string) (*PostNordAdapter, *[]map[string]any) {
+	t.Helper()
+
+	var captured []map[string]any
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		require.NoError(t, json.Unmarshal(raw, &captured))
+		w.WriteHeader(statusCode)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+
+	return &PostNordAdapter{
+		APIKey:         "test-key",
+		CustomerNumber: "150011208",
+		ApplicationID:  1438,
+		BaseURL:        srv.URL,
+		HTTPClient:     srv.Client(),
+		log:            zap.NewNop(),
+	}, &captured
 }
 
 func newPostNordTestServer(t *testing.T, statusCode int, body string) (*PostNordAdapter, *map[string]any) {

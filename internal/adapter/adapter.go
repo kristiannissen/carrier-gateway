@@ -216,6 +216,12 @@ var capabilities = map[string]carrierCapabilities{
 		SupportsUpdate:        false,
 		SupportsReturnBooking: true,
 	},
+	// PostNord: implements ManifestAdapter — BookPickup is wired via
+	// POST /v3/pickups/ids for already-booked items (domestic SE, DK, FI
+	// only). UpdatePickup, CancelPickup, and CloseManifest are confirmed
+	// carrier limitations — no such endpoints exist. GetCutoffTime
+	// (PickupQuerier, not yet implemented) remains a genuine secondary gap:
+	// POST /v4/sac/pickup/stopdate exists but is not wired.
 	"postnord": {NativeIdempotency: true, SupportsCancellation: true, SupportsUpdate: true},
 	"bring":    {NativeIdempotency: false, SupportsCancellation: true, SupportsUpdate: false},
 	// GLS: UpdateShipment is a confirmed carrier limitation — no update/modify/amend

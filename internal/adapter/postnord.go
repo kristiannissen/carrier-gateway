@@ -17,6 +17,19 @@ import (
 )
 
 // PostNordAdapter implements CarrierAdapter for PostNord using the v3 EDI API.
+//
+// PostNordAdapter also implements ManifestAdapter: BookPickup is wired via
+// POST /v3/pickups/ids for already-booked items (domestic SE, DK, FI only).
+// UpdatePickup, CancelPickup, and CloseManifest return ErrNotSupported —
+// PostNord's API exposes no endpoint for updating or cancelling a scheduled
+// pickup, and no manifest/end-of-day close endpoint at all (shipments are
+// scanned by PostNord at collection instead). GetPickupAvailability also
+// returns ErrNotSupported; PostNord has no endpoint that returns a list of
+// bookable collection slots (POST /v4/sac/pickup/stopdate returns a single
+// cutoff/stop date, not a slot list — see GetCutoffTime on PickupQuerier,
+// which this adapter does not yet implement; that endpoint existing but
+// being unwired is a genuine secondary gap, tracked in
+// docs/postnord-feature-mapping.md, not a confirmed limitation).
 type PostNordAdapter struct {
 	APIKey         string
 	CustomerNumber string // partyId — PostNord account number e.g. "150011208"
@@ -72,6 +85,28 @@ func basicServiceCode(deliveryType string, hasServicePoint bool) string {
 		}
 		return "18"
 	}
+}
+
+// postNordPickupCountries lists the ISO country codes /v3/pickups/ids
+// accepts. PostNord's own API documentation states the endpoint only
+// supports domestic pickups of items in SE, DK, FI — Norway is a confirmed
+// carrier limitation for this specific endpoint even though PostNord
+// otherwise covers NO for booking, tracking, and labels.
+var postNordPickupCountries = map[string]bool{
+	"SE": true,
+	"DK": true,
+	"FI": true,
+}
+
+// postNordPickupTimestamp combines a "YYYY-MM-DD" date and "HH:MM" time into
+// the RFC3339 timestamp the earliestPickupDate/latestPickupDate fields on
+// /v3/pickups/ids expect.
+func postNordPickupTimestamp(date, hm string) (string, error) {
+	t, err := time.Parse("2006-01-02T15:04", date+"T"+hm)
+	if err != nil {
+		return "", fmt.Errorf("parse pickup time %q %q: %w", date, hm, err)
+	}
+	return t.UTC().Format(time.RFC3339), nil
 }
 
 // postNordStreet concatenates street and house number into a single string.
@@ -778,4 +813,165 @@ func (a *PostNordAdapter) TrackShipment(ctx context.Context, trackingNumber stri
 		EstimatedDelivery: s.DeliveryDate,
 		Events:            events,
 	}, nil
+}
+
+// ── ManifestAdapter ───────────────────────────────────────────────────────────
+
+// postnordPickupIDInfo is a single item entry in the /v3/pickups/ids request
+// body, per PostNord's own pickupIdInfo schema (itemId plus an optional
+// earliest/latest pickup date window).
+type postnordPickupIDInfo struct {
+	ItemID             string `json:"itemId"`
+	EarliestPickupDate string `json:"earliestPickupDate,omitempty"`
+	LatestPickupDate   string `json:"latestPickupDate,omitempty"`
+}
+
+// BookPickup schedules a domestic collection for already-booked items via
+// POST /v3/pickups/ids.
+//
+// Wire format notes:
+//   - Endpoint: POST /rest/shipment/v3/pickups/ids?apikey=
+//   - Body: a JSON array of {itemId, earliestPickupDate, latestPickupDate}.
+//   - req.TrackingNumbers must hold the carrier item IDs returned from
+//     BookShipment (BookingResponse.TrackingNumber / ColliResponse.TrackingNumber
+//     — the itemId barcode value), not a human-readable order reference.
+//   - Domestic only: SE, DK, FI. If req.Address.Country is supplied and is
+//     not one of these, the request is rejected client-side rather than left
+//     for PostNord to reject — see postNordPickupCountries.
+//   - Response reuses the same bookingResponse envelope as BookShipment;
+//     bookingResponse.bookingId is returned to the caller as ConfirmationNumber.
+func (a *PostNordAdapter) BookPickup(ctx context.Context, req PickupRequest) (*PickupResponse, error) {
+	if len(req.TrackingNumbers) == 0 {
+		return nil, fmt.Errorf("postnord: book pickup: at least one tracking number (carrier item ID) is required")
+	}
+	if req.Pickup.Date == "" {
+		return nil, fmt.Errorf("postnord: book pickup: pickup.date is required")
+	}
+	if req.Address.Country != "" && !postNordPickupCountries[strings.ToUpper(req.Address.Country)] {
+		return nil, fmt.Errorf("postnord: book pickup: country %q not supported — /v3/pickups/ids only covers domestic SE, DK, FI", req.Address.Country)
+	}
+
+	readyTime := req.Pickup.ReadyTime
+	if readyTime == "" {
+		readyTime = "09:00"
+	}
+	closeTime := req.Pickup.CloseTime
+	if closeTime == "" {
+		closeTime = "18:00"
+	}
+
+	earliest, err := postNordPickupTimestamp(req.Pickup.Date, readyTime)
+	if err != nil {
+		return nil, fmt.Errorf("postnord: book pickup: %w", err)
+	}
+	latest, err := postNordPickupTimestamp(req.Pickup.Date, closeTime)
+	if err != nil {
+		return nil, fmt.Errorf("postnord: book pickup: %w", err)
+	}
+
+	items := make([]postnordPickupIDInfo, len(req.TrackingNumbers))
+	for i, itemID := range req.TrackingNumbers {
+		items[i] = postnordPickupIDInfo{
+			ItemID:             itemID,
+			EarliestPickupDate: earliest,
+			LatestPickupDate:   latest,
+		}
+	}
+
+	payloadBytes, err := json.Marshal(items)
+	if err != nil {
+		return nil, fmt.Errorf("postnord: marshal pickup request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/rest/shipment/v3/pickups/ids?apikey=%s", a.BaseURL, a.APIKey),
+		bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("postnord: create pickup request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+
+	resp, err := a.HTTPClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("postnord: pickup API call failed: %w", sanitizeTransportError(err))
+	}
+	defer resp.Body.Close() //nolint:errcheck // nothing useful to do if close fails after reading
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("postnord: read pickup response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("postnord: pickup API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var pnResp struct {
+		BookingResponse struct {
+			BookingID     string `json:"bookingId"`
+			IDInformation []struct {
+				Status string `json:"status"`
+			} `json:"idInformation"`
+		} `json:"bookingResponse"`
+	}
+	if err := json.Unmarshal(body, &pnResp); err != nil {
+		return nil, fmt.Errorf("postnord: decode pickup response: %w", err)
+	}
+
+	if len(pnResp.BookingResponse.IDInformation) == 0 {
+		return nil, fmt.Errorf("postnord: pickup response contained no idInformation: %s", string(body))
+	}
+	if pnResp.BookingResponse.IDInformation[0].Status != "OK" {
+		return nil, fmt.Errorf("postnord: pickup booking failed with status: %s", pnResp.BookingResponse.IDInformation[0].Status)
+	}
+
+	confirmation := pnResp.BookingResponse.BookingID
+	if confirmation == "" {
+		confirmation = req.TrackingNumbers[0]
+	}
+
+	a.log.Info("postnord: pickup booked",
+		zap.String("bookingId", confirmation),
+		zap.Int("itemCount", len(req.TrackingNumbers)),
+	)
+
+	return &PickupResponse{
+		Carrier:            "postnord",
+		ConfirmationNumber: confirmation,
+		Date:               req.Pickup.Date,
+		ReadyTime:          readyTime,
+		CloseTime:          closeTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup is not supported — /v3/pickups/ids only exposes a create
+// (POST) operation; PostNord's API has no endpoint to modify a pickup once
+// scheduled. Confirmed carrier limitation, not an implementation gap.
+func (a *PostNordAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("PostNord", "pickup update", "no update endpoint exists for /v3/pickups/ids")
+}
+
+// CancelPickup is not supported — PostNord's API has no endpoint to cancel a
+// scheduled pickup. Confirmed carrier limitation, not an implementation gap.
+func (a *PostNordAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return notSupported("PostNord", "pickup cancellation", "no cancel endpoint exists for /v3/pickups/ids")
+}
+
+// CloseManifest is not supported — PostNord has no manifest / end-of-day
+// close endpoint. Shipments are scanned by PostNord at collection instead.
+// Confirmed carrier limitation, not an implementation gap.
+func (a *PostNordAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("PostNord", "close manifest", "PostNord has no manifest/end-of-day close endpoint — shipments are scanned at collection")
+}
+
+// GetPickupAvailability is not supported — PostNord has no endpoint that
+// returns a list of bookable collection time slots. POST /v4/sac/pickup/stopdate
+// exists but returns a single cutoff/stop date rather than a slot list, so it
+// does not fulfil this method's contract; confirmed carrier limitation for
+// GetPickupAvailability specifically. See the adapter's doc comment for the
+// distinct, still-open gap around wiring that endpoint as GetCutoffTime.
+func (a *PostNordAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("PostNord", "pickup availability", "no slot-list endpoint exists — see /v4/sac/pickup/stopdate for cutoff-only info")
 }

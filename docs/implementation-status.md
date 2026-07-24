@@ -9,7 +9,7 @@ feature mapping file in this folder with full detail.
 
 | Carrier | Status | Coverage | File |
 |---|---|---|---|
-| PostNord | Partial — all primary methods complete; BookPickup exists in the API but is not wired | DK, SE, NO, FI | [postnord-feature-mapping.md](postnord-feature-mapping.md) |
+| PostNord | Partial — all primary methods complete; BookPickup now wired; GetCutoffTime exists in the API but is not wired (remaining secondary gap) | DK, SE, NO, FI | [postnord-feature-mapping.md](postnord-feature-mapping.md) |
 | Bring | Implemented | NO, SE, DK, FI | [bring-feature-mapping.md](bring-feature-mapping.md) |
 | GLS | Production — all primary methods complete; pickup scheduling and manifest close are wired; remaining pickup update/cancel/availability gaps are confirmed carrier limitations | DE, DK, SE, NL, BE, FR, ES, PT, IT, AT + more | [gls-feature-mapping.md](gls-feature-mapping.md) |
 | GLS NL (regional) | Implemented — no genuine gaps remain once carrier limitations are excluded | NL, BE + other GLS national portals | [gls-nl-feature-mapping.md](gls-nl-feature-mapping.md) |
@@ -49,12 +49,12 @@ feature mapping file in this folder with full detail.
 
 | Feature | PostNord | Bring | GLS | GLS NL | DAO | DHL Express | DHL eCom EU | DHL eCom UK | DPD | Hermes | FedEx | InPost |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **Book pickup** | ❌ | ✅ | ✅ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | ✅ PL only |
+| **Book pickup** | ✅ | ✅ | ✅ | ✅ | ❌ | ⚠️ | ❓ | ✅ | ✅ | ❓ | ✅ | ✅ PL only |
 | **Update pickup** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❓ | ❌ | ❌ | ❓ | ❌ | ❌ |
 | **Cancel pickup** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❓ | ❌ | ✅ | ❓ | ✅ | ✅ PL only |
 | **Pickup availability** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❓ | ❌ | ❌ | ❓ | ✅ | ❌ |
 
-**PostNord pickup note:** `/v3/pickups/ids` exists in the API (domestic DK/SE/FI, requires item IDs from booking response) but is not wired in the adapter — a genuine implementation gap, not a limitation.
+**PostNord pickup note:** `POST /v3/pickups/ids` (domestic DK/SE/FI, requires item IDs from booking response) is now wired via `BookPickup`. Update/cancel pickup and manifest close are confirmed carrier limitations — no such endpoints exist. `GetCutoffTime` (`PickupQuerier`, not yet implemented) remains a genuine gap: `POST /v4/sac/pickup/stopdate` exists but returns a single cutoff date rather than a slot list, so it doesn't fulfil `GetPickupAvailability` either — that method is a confirmed limitation, distinct from the `GetCutoffTime` gap.
 **DHL Express pickup note:** Implicit at booking (returns `dispatchConfirmationNumber`). Standalone `POST /api/pickups` not yet wired.
 **GLS pickup note:** `POST /rs/sporadiccollection` is wired via `BookPickup`. Update/cancel/availability return `ErrNotSupported` — no such endpoints exist in the ShipIT API spec.
 **GLS NL pickup note:** `POST /CreatePickup` — requires three address blocks; all default to the single pickup address when only one is provided.
@@ -165,10 +165,12 @@ Issues that affect production operations and should be addressed next.
    already implemented via `ManifestAdapter`; `DHLExpressAdapter` does not
    implement that interface at all.
 
-3b. **PostNord pickup booking** — `/v3/pickups/ids` exists in the PostNord
-    API (domestic DK/SE/FI) but is not wired in `internal/adapter/postnord.go`.
-    A previous version of this doc and the corresponding feature-mapping doc
-    wrongly claimed this was implemented.
+3b. **PostNord pickup cutoff time** — `POST /v4/sac/pickup/stopdate` exists
+    in the PostNord API (domestic DK/SE/FI) but is not wired to `GetCutoffTime`
+    (`PickupQuerier`) in `internal/adapter/postnord.go`; that interface is not
+    yet implemented at all. `BookPickup` itself is now wired via
+    `/v3/pickups/ids` — this gap only affects the optional pre-flight cutoff
+    check, not pickup booking itself.
 
 4. **InPost go-live** — set `INPOST_CLIENT_ID`, `INPOST_CLIENT_SECRET`, `INPOST_ORG_ID`
    and run integration tests against `stage-api.inpost-group.com` before switching to

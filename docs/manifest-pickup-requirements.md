@@ -32,9 +32,9 @@ The manifest documents what went on it.
 
 ## Scope
 
-**Implemented:** Bring, DPD, FedEx.
+**Implemented:** Bring, DPD, FedEx, PostNord (BookPickup only — see below).
 
-**In scope, not yet implemented:** GLS, DHL Express, PostNord.
+**In scope, not yet implemented:** GLS, DHL Express.
 
 **Unknown / not yet researched:** DAO, DHL eCommerce Europe, Hermes (HSI).
 
@@ -267,7 +267,7 @@ submits the end-of-day instruction to the carrier.
 | **FedEx** | ✅ `POST /pickup/v1/pickups` | ❌ 501 — not in API | ✅ `PUT /pickup/v1/pickups/cancel` | ✅ `POST /pickup/v1/pickups/availabilities` | ✅ `PUT /ship/v1/endofday/` (FedEx Ground) |
 | **GLS** | ⚠️ `POST /rs/sporadiccollection` — not yet wired | ❓ Needs investigation | ❓ Needs investigation | ❌ Not in API | ⚠️ `POST /rs/shipments/endofday` — not yet wired. **Must come before driver arrives; acts as collection order. Returns PDF.** |
 | **DHL Express** | ⚠️ `POST /pickups` — not yet wired | ❓ Needs investigation | ⚠️ `DELETE /pickups/{id}` — not yet wired | ❌ Not in API | ⚠️ `GET /shipments/{id}/get-image?typeCode=MANIFEST` — not yet wired |
-| **PostNord** | ⚠️ `POST /v3/pickups/ids` (SE/DK/FI) — not yet wired | ❌ Not in API | ❌ Not in API | ❌ Not in API | ❌ Not in API — handled by PostNord EDI at scan time |
+| **PostNord** | ✅ `POST /v3/pickups/ids` (SE/DK/FI) | ❌ Not in API | ❌ Not in API | ❌ Not in API | ❌ Not in API — handled by PostNord EDI at scan time |
 | **DAO** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown |
 | **DHL eCommerce** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown |
 | **Hermes (HSI)** | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown | ❓ Unknown |
@@ -276,20 +276,25 @@ submits the end-of-day instruction to the carrier.
 
 ## PostNord pickup — implementation notes
 
-PostNord's `/v3/pickups/ids` takes an array of item IDs (the barcode identifiers
-returned in the booking response) and a time window. The adapter must:
+Implemented. PostNord's `/v3/pickups/ids` takes an array of item IDs (the
+barcode identifiers returned in the booking response) and a time window.
+`internal/adapter/postnord.go`'s `BookPickup`:
 
-1. Accept item IDs via the `trackingNumbers` field on the pickup request, or
-   retrieve them from the gateway's own booking records for the given date.
-2. Map `pickup.readyTime` → `earliestPickupDate` and `pickup.closeTime` →
-   `latestPickupDate` (both as datetime, combined with `pickup.date`).
-3. Return the `bookingId` from the response as `confirmationNumber`.
+1. Accepts item IDs via the `trackingNumbers` field on the pickup request —
+   the gateway is stateless, so it does not retrieve them from any booking
+   record itself; callers must pass back the IDs from `BookShipment`.
+2. Maps `pickup.readyTime` → `earliestPickupDate` and `pickup.closeTime` →
+   `latestPickupDate` (both as RFC3339 datetimes, combined with `pickup.date`;
+   defaults to 09:00/18:00 when omitted).
+3. Returns the `bookingId` from the response as `confirmationNumber`.
 
-Geographic limitation: domestic SE, DK, FI only. Cross-border PostNord shipments
-cannot use this endpoint; return `not_supported` in that case.
+Geographic limitation: domestic SE, DK, FI only. If `Address.Country` is
+supplied and is anything else (e.g. `NO`), the request is rejected
+client-side rather than sent to PostNord.
 
-The `/v4/sac/pickup/stopdate` endpoint can be used to validate `pickup.date`
-against PostNord's actual cutoff windows before submitting.
+`/v4/sac/pickup/stopdate` could validate `pickup.date` against PostNord's
+actual cutoff windows before submitting, but is not wired — see
+`docs/postnord-feature-mapping.md` for this remaining `GetCutoffTime` gap.
 
 ---
 
@@ -312,7 +317,7 @@ against PostNord's actual cutoff windows before submitting.
 | `fedex.go` | ✅ BookPickup, CancelPickup, CloseManifest, GetPickupAvailability wired; Update returns 501 |
 | `gls.go` | ❌ Not yet implemented |
 | `dhl_express.go` | ❌ Not yet implemented |
-| `postnord.go` | ❌ Not yet implemented |
+| `postnord.go` | ✅ BookPickup wired; Update/Cancel/CloseManifest/Availability return 501 (confirmed limitations) |
 | `dao.go` | ❌ Not yet implemented |
 | `hermes.go` | ❌ Not yet implemented |
 

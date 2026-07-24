@@ -154,6 +154,62 @@ func (m *MockPostNordAdapter) UpdateShipment(_ context.Context, req UpdateReques
 	return &UpdateResponse{TrackingNumber: req.TrackingNumber, Carrier: "postnord", Status: "updated", UpdatedFields: fields}, nil
 }
 
+// BookPickup returns a mock pickup confirmation, applying the same
+// validation as the real PostNordAdapter (tracking numbers and pickup date
+// are required) so tests catch input errors without a live API.
+func (m *MockPostNordAdapter) BookPickup(_ context.Context, req PickupRequest) (*PickupResponse, error) {
+	if len(req.TrackingNumbers) == 0 {
+		return nil, fmt.Errorf("postnord: book pickup: at least one tracking number (carrier item ID) is required")
+	}
+	if req.Pickup.Date == "" {
+		return nil, fmt.Errorf("postnord: book pickup: pickup.date is required")
+	}
+
+	zap.L().Info("MockPostNordAdapter: returning mock pickup response")
+
+	readyTime := req.Pickup.ReadyTime
+	if readyTime == "" {
+		readyTime = "09:00"
+	}
+	closeTime := req.Pickup.CloseTime
+	if closeTime == "" {
+		closeTime = "18:00"
+	}
+
+	return &PickupResponse{
+		Carrier:            "postnord",
+		ConfirmationNumber: fmt.Sprintf("mock-pickup-%d", rand.Intn(1000000000)), //nolint:gosec // mock data, not security-sensitive
+		Date:               req.Pickup.Date,
+		ReadyTime:          readyTime,
+		CloseTime:          closeTime,
+		Status:             "booked",
+	}, nil
+}
+
+// UpdatePickup returns unsupported for PostNord — no update endpoint exists
+// for /v3/pickups/ids.
+func (m *MockPostNordAdapter) UpdatePickup(_ context.Context, _ string, _ PickupRequest) (*PickupResponse, error) {
+	return nil, notSupported("PostNord", "pickup update", "no update endpoint exists for /v3/pickups/ids")
+}
+
+// CancelPickup returns unsupported for PostNord — no cancel endpoint exists
+// for /v3/pickups/ids.
+func (m *MockPostNordAdapter) CancelPickup(_ context.Context, _, _ string) error {
+	return notSupported("PostNord", "pickup cancellation", "no cancel endpoint exists for /v3/pickups/ids")
+}
+
+// CloseManifest returns unsupported for PostNord — no manifest / end-of-day
+// close endpoint exists; shipments are scanned at collection instead.
+func (m *MockPostNordAdapter) CloseManifest(_ context.Context, _ ManifestRequest) (*ManifestResponse, error) {
+	return nil, notSupported("PostNord", "close manifest", "PostNord has no manifest/end-of-day close endpoint — shipments are scanned at collection")
+}
+
+// GetPickupAvailability returns unsupported for PostNord — no endpoint
+// returns a list of bookable collection time slots.
+func (m *MockPostNordAdapter) GetPickupAvailability(_ context.Context, _ PickupAvailabilityRequest) (*PickupAvailabilityResponse, error) {
+	return nil, notSupported("PostNord", "pickup availability", "no slot-list endpoint exists — see /v4/sac/pickup/stopdate for cutoff-only info")
+}
+
 // NewMockPostNordAdapter returns a new MockPostNordAdapter with default behaviour.
 func NewMockPostNordAdapter() *MockPostNordAdapter {
 	return &MockPostNordAdapter{}
